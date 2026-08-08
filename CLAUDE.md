@@ -453,12 +453,16 @@ Common file types: `XX-analysis.md`, `XX-implementation-plan.md`, `XX-decisions-
 
 ---
 
-## 🚨 Git Rules (CRITICAL)
+## 🚨 Git Rules
 
-- **NEVER** commit, push, or perform any git write operation unless the user **explicitly** says "commit" / "push" / invokes `/ship`.
-- "It works" is **not** authorization to commit.
-- When the user does say commit: stage **all** modified files (`git add -A`), commit, push to the **current** branch (even `main`). Never create a new branch unless asked. Report branch + hash + files changed.
-- 🔒 Only exception: never stage `.env*`, `credentials.json`, or private keys. Unstage, warn, continue with the rest.
+**Standing authorization granted 2026-08-08: commit and push freely to the current branch as work completes.** This OVERRIDES the global default of asking first. No need to ask each time.
+
+- ✅ Stage everything (`git add -A`), commit with a descriptive message, push to the **current** branch (`main` is fine).
+- ✅ Report branch + hash + file count afterwards.
+- ❌ **NEVER** create a new branch unless explicitly asked.
+- ❌ **NEVER** force-push, rewrite history, or delete a branch. Those stay explicit-request-only.
+- 🚨 **The repo is PUBLIC** (`github.com/TheHero9/comedy-club-community`). Everything pushed is world-readable. Audit before every push: no `.env*`, no keys, no credentials, no verification screenshots, no absolute local paths.
+- 🔒 If a secret is ever staged: unstage it, warn loudly, and continue with the rest.
 
 ### Branch Naming
 

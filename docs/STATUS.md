@@ -186,7 +186,7 @@ cd apps/api && uv run python manage.py runserver
 
 | URL | What |
 |-----|------|
-| http://localhost:8000/admin/ | Moderation backend (`admin` / `admin`) |
+| http://localhost:8000/admin/ | Moderation backend (create your own: `manage.py createsuperuser`) |
 | http://localhost:8000/api/docs | All 38 endpoints, interactive |
 | http://localhost:8000/api/health | Dependency check |
 

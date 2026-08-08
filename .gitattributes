@@ -1,0 +1,16 @@
+# Normalize line endings so a Windows dev box and Linux CI do not churn diffs.
+* text=auto eol=lf
+
+# Binary - never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+
+# Generated. Collapsed in diffs; regenerate with `npm run generate:types`.
+packages/api-types/src/generated.ts linguist-generated=true
+apps/api/podcast/migrations/*.py linguist-generated=true
