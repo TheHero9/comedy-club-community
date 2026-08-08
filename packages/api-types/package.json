@@ -1,0 +1,25 @@
+{
+  "name": "@ccc/api-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript types generated from the Django-Ninja OpenAPI schema. Never hand-written.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "generate:types": "openapi-typescript http://localhost:8000/api/openapi.json --output ./src/generated.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.9.1",
+    "typescript": "^5"
+  }
+}

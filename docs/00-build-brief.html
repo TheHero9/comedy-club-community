@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Podcast Community — Build Brief</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --text: #e7e9ee;
+    --muted: #9aa3b2;
+    --accent: #6ea8fe;
+    --accent-2: #7ee0b8;
+    --border: #2a2f3a;
+    --warn: #ffd479;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    font-size: 16px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 48px 24px 96px; }
+  header.hero {
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border-radius: 16px;
+    padding: 32px 32px 28px;
+    margin-bottom: 32px;
+  }
+  .kicker { color: var(--accent); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: 12px; }
+  h1 { font-size: 30px; margin: 8px 0 6px; line-height: 1.2; }
+  .sub { color: var(--muted); margin: 0; }
+  h2 {
+    font-size: 20px; margin: 40px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 16px; margin: 22px 0 6px; color: var(--accent-2); }
+  p { margin: 8px 0; }
+  ul { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 6px; font-size: 13.5px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    color: #e7e9ee;
+  }
+  pre {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 13px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px; margin: 14px 0;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .tag {
+    display: inline-block; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 999px; padding: 2px 10px; font-size: 12px; margin: 2px 4px 2px 0;
+  }
+  .callout {
+    border-left: 3px solid var(--warn); background: rgba(255,212,121,.06);
+    padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 14px 0;
+  }
+  .callout.info { border-left-color: var(--accent); background: rgba(110,168,254,.07); }
+  .callout.good { border-left-color: var(--accent-2); background: rgba(126,224,184,.07); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .phase-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+    color: #0f1115; font-weight: 700; font-size: 13px; margin-right: 8px;
+  }
+  .muted { color: var(--muted); }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Build Brief · Handoff Spec</div>
+    <h1>Podcast Community Platform</h1>
+    <p class="sub">A searchable community hub for a group of Bulgarian YouTube podcast channels. This document is the single source of truth for building it — feature scope, tech stack, data model, and phased build plan.</p>
+  </header>
+
+  <div class="panel toc">
+    <strong>Contents</strong>
+    <ul>
+      <li><a href="#overview">1. Overview &amp; Goals</a></li>
+      <li><a href="#stack">2. Tech Stack (locked)</a></li>
+      <li><a href="#decisions">3. Key Decisions &amp; Defaults</a></li>
+      <li><a href="#features">4. Full Feature Set</a></li>
+      <li><a href="#data">5. Data Model</a></li>
+      <li><a href="#ingestion">6. Ingestion (YouTube → DB)</a></li>
+      <li><a href="#phases">7. Build Plan (phased)</a></li>
+      <li><a href="#constraints">8. Constraints &amp; Notes</a></li>
+    </ul>
+  </div>
+
+  <h2 id="overview">1. Overview &amp; Goals</h2>
+  <p>A web platform (mobile app likely later) where a podcast community can browse every episode across ~5 YouTube channels, rate them, track what they've watched, label what happened in each episode, and search across all of it far more effectively than YouTube's own search. Expected audience: ~1,000+ users.</p>
+  <div class="callout info">
+    <strong>Transcription is explicitly out of scope for v1.</strong> Searchability is achieved for now through community-contributed topic labels and timestamps. A transcription layer can attach to the <code>Episode</code> model later without reworking anything.
+  </div>
+  <p><strong>Scale reality:</strong> This is a small-data, low-traffic app by technical standards (~1k episodes, thousands of users). The architecture below is chosen for clean separation, a future mobile app, and strong AI-assisted development — <em>not</em> because raw scale demands it. Do not over-engineer (no microservices, no Kubernetes needed, no NoSQL).</p>
+
+  <h2 id="stack">2. Tech Stack (locked)</h2>
+  <div class="grid">
+    <div class="panel">
+      <h3>Frontend</h3>
+      <span class="tag">Next.js (App Router)</span>
+      <span class="tag">TypeScript</span>
+      <span class="tag">Tailwind CSS</span>
+      <span class="tag">shadcn/ui</span>
+      <p class="muted">Server components for SEO (content site — discoverability matters). Highest-quality stack for AI code generation.</p>
+    </div>
+    <div class="panel">
+      <h3>Backend</h3>
+      <span class="tag">Django</span>
+      <span class="tag">Django-Ninja (API)</span>
+      <span class="tag">Django Admin</span>
+      <p class="muted">API-first so web + future mobile share one backend. Django admin provides the entire moderation backend (verification, personas, reports) for free.</p>
+    </div>
+    <div class="panel">
+      <h3>Data &amp; Search</h3>
+      <span class="tag">PostgreSQL</span>
+      <span class="tag">Redis</span>
+      <span class="tag">Meilisearch</span>
+      <p class="muted">Postgres = source of truth. Redis = cache + Celery broker. Meilisearch = fast, typo-tolerant, Bulgarian-friendly search.</p>
+    </div>
+    <div class="panel">
+      <h3>Jobs, Media &amp; Infra</h3>
+      <span class="tag">Celery + Celery Beat</span>
+      <span class="tag">Cloudflare R2</span>
+      <span class="tag">Docker</span>
+      <span class="tag">Fly.io / Railway</span>
+      <span class="tag">Cloudflare CDN</span>
+      <span class="tag">Sentry</span>
+      <span class="tag">PostHog</span>
+      <p class="muted">Background sync + indexing via Celery. R2 for mirrored thumbnails &amp; verification screenshots. Cloudflare in front for CDN/cache/DDoS.</p>
+    </div>
+  </div>
+
+  <h2 id="decisions">3. Key Decisions &amp; Defaults</h2>
+  <p>Two decisions are annoying to change later. Recommended defaults below — override only with reason:</p>
+  <div class="callout good">
+    <strong>Auth → managed provider (Clerk recommended).</strong> Across API + web + future mobile, hand-rolled JWT is the classic place these apps get insecure. Clerk has the best DX and is AI-friendly; Supabase Auth is a fine alternative. Django maps the external user to a local <code>UserProfile</code>.
+  </div>
+  <div class="callout good">
+    <strong>Repo → monorepo (Turborepo).</strong> Web + API + shared TypeScript types in one repo keeps types in sync across web and mobile and lets AI tooling see the whole system at once.
+  </div>
+
+  <h2 id="features">4. Full Feature Set</h2>
+
+  <h3>Content ingestion</h3>
+  <ul>
+    <li>Sync multiple YouTube channels (~5 podcasts).</li>
+    <li>Per episode: title, thumbnail, upload date, duration, description, view/like counts.</li>
+    <li>Auto-extract chapters when the creator added timestamps in the description.</li>
+    <li>Daily background sync — new episodes appear automatically.</li>
+  </ul>
+
+  <h3>Users &amp; profiles</h3>
+  <ul>
+    <li>Sign up / log in; profile with avatar, display name, bio.</li>
+    <li>Channel memberships: which channels a user belongs to, since when, and tier — supports membership in multiple channels.</li>
+    <li>Membership verification by screenshot, reviewed by an admin.</li>
+  </ul>
+
+  <h3>Ratings &amp; scoring</h3>
+  <ul>
+    <li>Rate any episode 1–10.</li>
+    <li>Two derived scores per episode: <strong>Public score</strong> (all users) and <strong>Elite score</strong> (verified members of that episode's channel only).</li>
+    <li>Leaderboards: top-rated, top elite, most-watched, most-commented. <span class="muted">(secondary phase)</span></li>
+  </ul>
+
+  <h3>Personal tracking</h3>
+  <ul>
+    <li>Mark episodes watched, logged with a date — full rewatch history + "last watched" so users don't accidentally rewatch.</li>
+    <li>Favorite episodes.</li>
+    <li>Private personal tags/keywords for a user's own searching (never public).</li>
+  </ul>
+
+  <h3>Community content</h3>
+  <ul>
+    <li>Public comments on episodes (describe what happened, discuss). Spoiler flag supported.</li>
+    <li>Community topic labels — reusable canonical topics added by admins <em>or</em> members, enabling "find every episode about X".</li>
+    <li>Community timestamps / "moments" (e.g. "funny bit at 34:12").</li>
+    <li>Up/down voting on topic labels so good ones surface.</li>
+  </ul>
+
+  <h3>People / personas</h3>
+  <ul>
+    <li>Admin-managed personas (hosts, co-hosts, guests), optionally linked to a real user account.</li>
+    <li>Attach participants to each episode with a role.</li>
+    <li>Browse every episode a given person appeared in.</li>
+  </ul>
+
+  <h3>Search</h3>
+  <ul>
+    <li>Search across episodes by title, topic, community labels, and moments.</li>
+    <li>Meilisearch for fast, typo-tolerant, Bulgarian-friendly results (Postgres full-text is an acceptable v1 fallback).</li>
+  </ul>
+
+  <h3>Moderation</h3>
+  <ul>
+    <li>Generic report queue — flag bad labels, comments, or timestamps; states: pending / resolved / dismissed.</li>
+    <li>Admin &amp; moderator roles; Django admin handles verification, personas, and reports.</li>
+  </ul>
+
+  <h2 id="data">5. Data Model</h2>
+  <p>Core entities and their relationships. A complete Django <code>models.py</code> already exists as a companion file — treat it as the canonical schema; the summary below is orientation.</p>
+  <table>
+    <tr><th>Entity</th><th>Purpose</th><th>Key relationships</th></tr>
+    <tr><td><code>Channel</code></td><td>A podcast channel</td><td>has many Episodes</td></tr>
+    <tr><td><code>Episode</code></td><td>A video/episode + YouTube metadata</td><td>→ Channel; has ratings, comments, topics, moments, participants, chapters</td></tr>
+    <tr><td><code>Chapter</code></td><td>Description-based timestamps</td><td>→ Episode</td></tr>
+    <tr><td><code>Person</code></td><td>Host / co-host / guest persona</td><td>optional → User; appears in Episodes</td></tr>
+    <tr><td><code>EpisodeParticipant</code></td><td>Who took part, in what role</td><td>Episode ↔ Person</td></tr>
+    <tr><td><code>UserProfile</code></td><td>Extends auth user; app role</td><td>→ User (1:1)</td></tr>
+    <tr><td><code>ChannelMembership</code></td><td>Membership + verification</td><td>User ↔ Channel</td></tr>
+    <tr><td><code>Rating</code></td><td>1–10 score; feeds both scores</td><td>User ↔ Episode (unique)</td></tr>
+    <tr><td><code>WatchEvent</code></td><td>Watch log (not a flag)</td><td>User ↔ Episode (many)</td></tr>
+    <tr><td><code>Favorite</code></td><td>Favorite flag</td><td>User ↔ Episode (unique)</td></tr>
+    <tr><td><code>PersonalTag</code></td><td>Private per-user keywords</td><td>User ↔ Episode</td></tr>
+    <tr><td><code>Comment</code></td><td>Public comment</td><td>User → Episode</td></tr>
+    <tr><td><code>Topic</code></td><td>Canonical reusable label</td><td>linked to many Episodes</td></tr>
+    <tr><td><code>EpisodeTopic</code></td><td>Topic applied to an episode</td><td>Episode ↔ Topic; has votes</td></tr>
+    <tr><td><code>EpisodeTopicVote</code></td><td>Consensus voting on a label</td><td>→ EpisodeTopic, User</td></tr>
+    <tr><td><code>Moment</code></td><td>Community timestamp</td><td>→ Episode, User</td></tr>
+    <tr><td><code>Report</code></td><td>Generic moderation report</td><td>→ any target (generic FK)</td></tr>
+  </table>
+  <div class="callout">
+    <strong>Elite score is derived, not a separate vote.</strong> One <code>Rating</code> model; the elite score = average of ratings from users who are <em>verified members</em> of that episode's channel. When a user gets verified, their existing rating automatically starts counting toward elite.
+  </div>
+
+  <h2 id="ingestion">6. Ingestion (YouTube → DB)</h2>
+  <p><strong>Thumbnails need no API</strong> — they're at a deterministic URL from the video ID:</p>
+  <pre>https://img.youtube.com/vi/{VIDEO_ID}/maxresdefault.jpg   # best, not always present
+https://img.youtube.com/vi/{VIDEO_ID}/hqdefault.jpg       # always exists (fallback)</pre>
+  <p>Strategy: try <code>maxresdefault</code>, fall back to <code>hqdefault</code>. Store the video ID; build the URL. Optionally mirror images to R2.</p>
+  <p><strong>Metadata:</strong> use <code>yt-dlp</code> for the bulk backfill of all ~1,000 videos (no API key, richest data), and the official <strong>YouTube Data API v3</strong> for ongoing daily syncs (stable, TOS-blessed, free quota ~10k units/day). Example backfill call:</p>
+  <pre>yt-dlp --dump-json --skip-download "https://www.youtube.com/watch?v={VIDEO_ID}"</pre>
+  <p>Fields to capture: <code>id, title, description, upload_date, duration, thumbnails, view_count, like_count, chapters</code>. After each sync, push new/updated episodes into the Meilisearch index (Celery task).</p>
+
+  <h2 id="phases">7. Build Plan (phased)</h2>
+  <div class="panel"><span class="phase-num">0</span><strong>Scaffolding.</strong> Monorepo (Turborepo). Django + Django-Ninja backend, Next.js frontend, Postgres/Redis/Meilisearch via Docker Compose. Wire Clerk auth end-to-end. Sentry + PostHog stubs.</div>
+  <div class="panel"><span class="phase-num">1</span><strong>Ingestion.</strong> Channel + Episode models, yt-dlp backfill command, thumbnail handling, daily Celery Beat sync. Goal: episodes flowing into the DB and visible in Django admin.</div>
+  <div class="panel"><span class="phase-num">2</span><strong>Browse + profiles.</strong> Public episode/channel browsing on the frontend, user profiles, ratings, watch log, favorites.</div>
+  <div class="panel"><span class="phase-num">3</span><strong>Membership + scoring.</strong> Channel memberships, screenshot verification (admin), derived public + elite scores.</div>
+  <div class="panel"><span class="phase-num">4</span><strong>Community + search.</strong> Comments, canonical topics/labels, personal tags, community moments, Meilisearch-powered search.</div>
+  <div class="panel"><span class="phase-num">5</span><strong>People + moderation + leaderboards.</strong> Personas &amp; participants, report queue, leaderboards and user lists.</div>
+  <div class="panel"><span class="phase-num">6</span><strong>Later (optional).</strong> Transcription layer; mobile app (React Native/Expo, reuses the API).</div>
+
+  <h2 id="constraints">8. Constraints &amp; Notes</h2>
+  <ul>
+    <li><strong>No transcription in v1</strong> — searchability comes from community labels + moments for now.</li>
+    <li><strong>Don't over-engineer</strong> — no microservices, Kubernetes, or NoSQL. Cache reads (Cloudflare + Redis) and denormalize aggregate scores onto <code>Episode</code> with periodic recompute before reaching for anything fancier.</li>
+    <li><strong>SEO matters</strong> — this is a content site; use Next.js server rendering so episodes are discoverable via search engines.</li>
+    <li><strong>Language</strong> — content and much of the UI is Bulgarian; ensure search tokenization and any UI copy handle it. Meilisearch handles Bulgarian well.</li>
+    <li><strong>yt-dlp vs Data API</strong> — yt-dlp is scraping and can break on YouTube changes; the Data API is stable but quota-limited. Use yt-dlp for bulk backfill, Data API for ongoing sync.</li>
+    <li><strong>Companion file:</strong> the full Django <code>models.py</code> is the canonical schema; generate migrations from it.</li>
+  </ul>
+
+  <hr>
+  <p class="muted">Instruction to the building assistant: implement phase by phase, confirming each phase runs before moving on. Prefer boring, well-supported solutions. Keep shared types in the monorepo so web and future mobile stay in sync. Ask before making schema changes that deviate from the companion <code>models.py</code>.</p>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,51 @@
+# ---- Secrets (NEVER commit) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ---- Django ----
+media/
+staticfiles/
+*.sqlite3
+*.log
+
+# ---- Node ----
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+
+# ---- Generated ----
+# packages/api-types/src/generated.ts is intentionally COMMITTED. It is the
+# offline snapshot of the API's OpenAPI schema so `npm run build` works without
+# the Django server running. Refresh it with `npm run generate:types`.
+apps/api/openapi.json
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Tooling scratch ----
+tools/youtube-metadata/out/

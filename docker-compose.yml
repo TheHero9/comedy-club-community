@@ -1,0 +1,109 @@
+name: comedy-club
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ccc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-podcast}
+      # Bulgarian content: force a UTF-8 database from initdb, never the image default.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-podcast}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: ccc-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: ccc-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKeyForLocalDevOnly}
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "${MEILI_PORT:-7700}:7700"
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      # Verified 2026-08-08: the v1.11 image does ship /usr/bin/curl, so probe the
+      # real endpoint rather than just proving the binary exists.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:7700/health | grep -q available"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Celery. Opt-in via the "workers" profile:
+  #     docker compose --profile workers up -d
+  #
+  # Left out of the default `up` because dev runs CELERY_TASK_ALWAYS_EAGER=True,
+  # so tasks execute inline and a worker is not needed to develop.
+  #
+  # ⚠️ Run the worker in Docker, not on the Windows host: Celery's prefork pool
+  # does not work on Windows.
+  # ---------------------------------------------------------------------------
+
+  worker:
+    profiles: ["workers"]
+    build:
+      context: ./apps/api
+    container_name: ccc-worker
+    restart: unless-stopped
+    command: celery -A config worker -l info --concurrency 2
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-podcast}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "0"
+      MEILI_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKeyForLocalDevOnly}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      meilisearch: {condition: service_healthy}
+
+  beat:
+    profiles: ["workers"]
+    build:
+      context: ./apps/api
+    container_name: ccc-beat
+    restart: unless-stopped
+    command: celery -A config beat -l info
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.dev
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-podcast}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "0"
+    depends_on:
+      redis: {condition: service_healthy}
+
+volumes:
+  postgres_data:
+  redis_data:
+  meili_data:
