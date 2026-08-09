@@ -21,7 +21,7 @@ from ninja import Query, Router
 
 from podcast.models import Episode, EpisodeTopic
 
-from .schemas import SearchOut
+from .schemas import SearchOut, TranscriptSearchOut
 from .serializers import episode_brief, episode_list_queryset
 
 logger = logging.getLogger("podcast")
@@ -29,6 +29,13 @@ logger = logging.getLogger("podcast")
 router = Router(tags=["search"], auth=None)
 
 MAX_LIMIT = 50
+
+# Segment-level page size. Higher than MAX_LIMIT because several segments
+# routinely collapse into one episode after grouping.
+MAX_TRANSCRIPT_LIMIT = 100
+
+# Timestamps shown per episode before the UI would need a "show more".
+MAX_MATCHES_PER_EPISODE = 5
 
 # The only fields `_meilisearch_search` reads off a hit. Everything the response
 # actually renders is re-read from Postgres (the source of truth) by
@@ -231,6 +238,107 @@ def _postgres_search(query, channel, kind, members_only, limit, offset) -> dict:
         "offset": offset,
         "backend": "postgres",
         "processing_ms": int((time.monotonic() - started) * 1000),
+    }
+
+
+@router.get("/search/transcripts", response=TranscriptSearchOut)
+def search_transcripts(
+    request,
+    q: str = Query("", description="Query text. Bulgarian and typos are expected."),
+    channel: str | None = Query(None, description="Channel slug"),
+    episode: int | None = Query(None, description="Restrict to one episode id"),
+    members_only: bool | None = Query(None),
+    limit: int = Query(20, ge=1, le=MAX_TRANSCRIPT_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    """Find where a phrase was SPOKEN, with a timestamp.
+
+    🎯 The half of search community labels cannot cover. Labels answer "which
+    episodes are about X"; this answers "X was said at 45:12 in these episodes".
+
+    ⚠️ Coverage is PARTIAL and date-dependent - roughly the newer part of the
+    catalogue has captions, and members-only episodes have none. An episode
+    missing from these results has not been ruled out, it may simply have no
+    transcript. Never present this as exhaustive.
+    """
+    query = (q or "").strip()
+    empty = {
+        "query": query,
+        "hits": [],
+        "total_segments": 0,
+        "limit": limit,
+        "offset": offset,
+        "available": True,
+        "processing_ms": 0,
+    }
+    if not query:
+        return empty
+
+    from podcast.search.transcript_index import build_filter
+    from podcast.search.transcript_index import search as transcript_search
+
+    # 🔒 Escaped by build_filter. Never hand-interpolate a slug into a filter.
+    filters = build_filter(
+        episode_id=episode,
+        channel_slug=channel or None,
+        members_only=members_only,
+    )
+
+    result = transcript_search(
+        query, filters=filters or None, limit=limit, offset=offset, highlight=True
+    )
+    if not result.get("available", True):
+        # Meilisearch is down. Say so rather than silently returning "no matches",
+        # which would read as "this was never said".
+        return {**empty, "available": False}
+
+    raw_hits = result.get("hits", [])
+    episode_ids = list(dict.fromkeys(int(hit["episode_id"]) for hit in raw_hits))
+    if not episode_ids:
+        return {**empty, "processing_ms": result.get("processing_time_ms")}
+
+    # Postgres is the source of truth for everything rendered, so the documents
+    # deliberately carry no title/thumbnail/score to re-read here.
+    episodes = {
+        row.id: row for row in episode_list_queryset().filter(id__in=episode_ids)
+    }
+
+    grouped: dict[int, list[dict]] = {}
+    for hit in raw_hits:
+        episode_id = int(hit["episode_id"])
+        if episode_id not in episodes:
+            # Indexed but since deleted. Skip rather than 500.
+            continue
+        formatted = hit.get("_formatted") or {}
+        grouped.setdefault(episode_id, []).append(
+            {
+                "start_sec": hit["start_sec"],
+                "end_sec": hit["end_sec"],
+                # `_formatted` carries the cropped, <mark>-wrapped passage.
+                "text": formatted.get("text") or hit.get("text", ""),
+                "deep_link": (
+                    f"https://www.youtube.com/watch?v={hit['youtube_id']}&t={hit['start_sec']}"
+                ),
+            }
+        )
+
+    hits = [
+        {
+            "episode": episode_brief(episodes[episode_id]),
+            "matches": matches[:MAX_MATCHES_PER_EPISODE],
+        }
+        # dict preserves insertion order, so episodes stay in relevance order.
+        for episode_id, matches in grouped.items()
+    ]
+
+    return {
+        "query": query,
+        "hits": hits,
+        "total_segments": result.get("estimated_total_hits", len(raw_hits)),
+        "limit": limit,
+        "offset": offset,
+        "available": True,
+        "processing_ms": result.get("processing_time_ms"),
     }
 
 

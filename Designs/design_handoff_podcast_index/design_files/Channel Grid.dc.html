@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  body { margin:0; background:#0B0A09; color:#F7F4F0; font-family:'Onest',system-ui,sans-serif; }
+  a { color:#E4232C; text-decoration:none; }
+  a:hover { color:#F0463E; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#3D3935; border-radius:99px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+</style>
+</helmet>
+
+<div style="padding:56px 64px 120px;display:flex;flex-direction:column;gap:88px;background:#0B0A09;">
+
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:900px;">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.14em;color:#E4232C;text-transform:uppercase;">Tier 1 / Screens 1-3</div>
+    <h1 style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:40px;line-height:1.1;margin:0;letter-spacing:-.02em;">Channel detail and the ratings grid</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#ADA69F;max-width:760px;text-wrap:pretty;">The grid is transposed at 390px: episodes become rows, years become columns. Three years fit the screen, the page scrolls vertically like everything else, and each cell gets 44px of height and roughly 100px of width, which is enough room to lay the three markers out side by side instead of stacking them in corners.</p>
+  </div>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:8px;background:#E4232C;color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">1</span>
+      <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">Channel detail</h2>
+      <span style="font-size:14px;color:#7A736C;">/channels/ivan-kirkov</span>
+    </div>
+
+    <div style="display:flex;gap:56px;align-items:flex-start;flex-wrap:wrap;">
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Mobile 390 x 844</div>
+        <div style="width:390px;height:844px;position:relative;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+
+          <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#F7F4F0;">
+            <span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span>
+          </div>
+
+          <div style="height:56px;flex:none;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #2C2825;background:#191614;">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;margin-left:-6px;">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+              <div style="width:28px;height:28px;flex:none;border-radius:9px;background:#E4232C;display:flex;align-items:center;justify-content:center;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>
+              </div>
+              <span style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:13px;letter-spacing:-.01em;">Comedy Club</span>
+            </div>
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#23201D;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+            </div>
+            <div style="width:32px;height:32px;border-radius:99px;background:#35312D;border:1px solid #3D3935;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#ADA69F;">МХ</div>
+          </div>
+
+          <div style="flex:1;overflow-y:auto;overflow-x:hidden;">
+
+            <div style="padding:16px 16px 0;">
+              <div style="display:flex;gap:14px;align-items:flex-start;">
+                <div style="width:64px;height:64px;flex:none;border-radius:20px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:22px;">ИК</div>
+                <div style="flex:1;min-width:0;padding-top:2px;">
+                  <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:21px;line-height:1.2;letter-spacing:-.01em;">Иван Кирков</h1>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;color:#ADA69F;font-family:'JetBrains Mono',monospace;">
+                    <span>@ivankirkov1</span><span style="color:#4A4540;">/</span><span>74 episodes</span>
+                  </div>
+                </div>
+              </div>
+              <p style="margin:12px 0 0;font-size:14px;line-height:1.5;color:#ADA69F;text-wrap:pretty;">Подкаст за всичко, което се случва между два лоши вица. Нови епизоди всяка сряда.</p>
+              <div style="display:flex;gap:8px;margin-top:14px;">
+                <a href="#1a" style="flex:1;height:44px;border-radius:12px;background:#E4232C;color:#fff;display:flex;align-items:center;justify-content:center;gap:7px;font-size:14px;font-weight:600;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>
+                  YouTube
+                </a>
+                <a href="#1a" style="flex:1;height:44px;border-radius:12px;background:#23201D;border:1px solid #3D3935;color:#F7F4F0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;">Episodes</a>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:20px 16px 0;">
+              <div style="background:#23201D;border:1px solid #2C2825;border-radius:14px;padding:10px 12px;">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#F7F4F0;">7.4</div>
+                <div style="font-size:11px;color:#7A736C;margin-top:2px;">average</div>
+              </div>
+              <div style="background:#23201D;border:1px solid #2C2825;border-radius:14px;padding:10px 12px;">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#F7F4F0;">58<span style="color:#4A4540;">/</span>74</div>
+                <div style="font-size:11px;color:#7A736C;margin-top:2px;">rated</div>
+              </div>
+              <div style="background:#23201D;border:1px solid #2C2825;border-radius:14px;padding:10px 12px;">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#5CB8E8;">9.7</div>
+                <div style="font-size:11px;color:#7A736C;margin-top:2px;">best</div>
+              </div>
+            </div>
+
+            <div style="padding:22px 16px 0;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                <h2 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Ratings grid</h2>
+                <div style="display:flex;align-items:center;gap:6px;height:44px;">
+                  <button style="height:36px;padding:0 14px;border:0;border-radius:10px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:13px;font-weight:600;">Public</button>
+                  <button style="height:36px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:#ADA69F;font-family:'Onest',sans-serif;font-size:13px;font-weight:600;">Elite</button>
+                  <div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+                  </div>
+                </div>
+              </div>
+              <p style="margin:6px 0 0;font-size:12.5px;line-height:1.45;color:#7A736C;">Every episode by year. Tap a cell for details.</p>
+            </div>
+
+            <div style="padding:14px 0 0;">
+              <div style="overflow-x:auto;padding:0 16px 8px;">
+                <div style="min-width:100%;display:flex;flex-direction:column;gap:5px;">
+
+                  <div style="display:flex;gap:5px;position:sticky;top:0;z-index:3;background:#191614;padding:4px 0 6px;">
+                    <div style="width:38px;flex:none;position:sticky;left:0;background:#191614;"></div>
+                    <sc-for list="{{ years }}" as="y" hint-placeholder-count="3">
+                      <div style="flex:1;min-width:96px;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                        <span style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:14px;color:#F7F4F0;">{{ y.label }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;">avg {{ y.avg }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+
+                  <sc-for list="{{ mRows }}" as="row" hint-placeholder-count="12">
+                    <div style="display:flex;gap:5px;">
+                      <div style="width:38px;flex:none;position:sticky;left:0;background:#191614;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E5852;">{{ row.ep }}</div>
+                      <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="3">
+                        <div style="flex:1;min-width:96px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;padding:0 9px;background:{{ c.bg }};border:{{ c.border }};">
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:{{ c.fg }};">{{ c.score }}</span>
+                          <span style="display:flex;align-items:center;gap:4px;">
+                            <sc-if value="{{ c.prov }}" hint-placeholder-val="{{ false }}">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 10v3"></path><path d="M12 17h.01"></path></svg>
+                            </sc-if>
+                            <sc-if value="{{ c.members }}" hint-placeholder-val="{{ false }}">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>
+                            </sc-if>
+                            <sc-if value="{{ c.stream }}" hint-placeholder-val="{{ false }}">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg>
+                            </sc-if>
+                          </span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-for>
+
+                </div>
+              </div>
+            </div>
+
+            <div style="height:96px;"></div>
+          </div>
+
+          <div style="height:68px;flex:none;border-top:1px solid #2C2825;background:#1E1B19;display:flex;align-items:stretch;padding-bottom:6px;">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"></path></svg>
+              <span style="font-size:10.5px;color:#7A736C;">Home</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#E4232C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path></svg>
+              <span style="font-size:10.5px;color:#E4232C;font-weight:600;">Episodes</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+              <span style="font-size:10.5px;color:#7A736C;">Search</span>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-3.9 3.6-6 8-6s8 2.1 8 6"></path></svg>
+              <span style="font-size:10.5px;color:#7A736C;">Profile</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Desktop 1280 x 900</div>
+        <div style="width:1280px;height:900px;overflow:hidden;border-radius:16px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+
+          <div style="height:64px;flex:none;display:flex;align-items:center;gap:28px;padding:0 32px;border-bottom:1px solid #2C2825;background:#191614;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:32px;height:32px;border-radius:10px;background:#E4232C;display:flex;align-items:center;justify-content:center;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>
+              </div>
+              <span style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;letter-spacing:-.01em;">Comedy Club</span>
+            </div>
+            <nav style="display:flex;gap:4px;">
+              <a href="#1a" style="height:36px;padding:0 12px;display:flex;align-items:center;border-radius:9px;font-size:14px;font-weight:500;color:#F7F4F0;background:#23201D;">Channels</a>
+              <a href="#1a" style="height:36px;padding:0 12px;display:flex;align-items:center;border-radius:9px;font-size:14px;font-weight:500;color:#ADA69F;">Episodes</a>
+            </nav>
+            <div style="flex:1;max-width:440px;height:40px;border-radius:12px;background:#23201D;border:1px solid #3D3935;display:flex;align-items:center;gap:10px;padding:0 14px;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+              <span style="font-size:15px;color:#7A736C;">Търси момент, тема или гост</span>
+            </div>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+              <span style="font-size:14px;color:#ADA69F;">Мартин Христов</span>
+              <div style="width:34px;height:34px;border-radius:99px;background:#35312D;border:1px solid #3D3935;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#ADA69F;">МХ</div>
+            </div>
+          </div>
+
+          <div style="flex:1;overflow-y:auto;">
+            <div style="max-width:1216px;margin:0 auto;padding:28px 32px 60px;">
+
+              <div style="display:flex;gap:24px;align-items:flex-start;">
+                <div style="width:96px;height:96px;flex:none;border-radius:26px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:32px;">ИК</div>
+                <div style="flex:1;min-width:0;">
+                  <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:34px;line-height:1.1;letter-spacing:-.02em;">Иван Кирков</h1>
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#ADA69F;">
+                    <span>@ivankirkov1</span><span style="color:#4A4540;">/</span><span>74 episodes</span><span style="color:#4A4540;">/</span><span>128 хил. абонати</span>
+                  </div>
+                  <p style="margin:12px 0 0;font-size:15px;line-height:1.55;color:#ADA69F;max-width:640px;text-wrap:pretty;">Подкаст за всичко, което се случва между два лоши вица. Нови епизоди всяка сряда.</p>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <a href="#1a" style="height:44px;padding:0 18px;border-radius:12px;background:#E4232C;color:#fff;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>
+                    YouTube
+                  </a>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:28px;">
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:16px;padding:14px 16px;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;">7.4</div>
+                  <div style="font-size:12px;color:#7A736C;margin-top:3px;">overall average</div>
+                </div>
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:16px;padding:14px 16px;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;">58<span style="color:#4A4540;">/</span>74</div>
+                  <div style="font-size:12px;color:#7A736C;margin-top:3px;">episodes rated</div>
+                </div>
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:16px;padding:14px 16px;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:#5CB8E8;">9.7</div>
+                  <div style="font-size:12px;color:#7A736C;margin-top:3px;">best episode</div>
+                </div>
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:16px;padding:14px 16px;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;">2026</div>
+                  <div style="font-size:12px;color:#7A736C;margin-top:3px;">best year (7.9)</div>
+                </div>
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:16px;padding:14px 16px;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;">267</div>
+                  <div style="font-size:12px;color:#7A736C;margin-top:3px;">ratings given</div>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-top:36px;">
+                <div>
+                  <h2 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:22px;">Ratings grid</h2>
+                  <p style="margin:6px 0 0;font-size:14px;color:#7A736C;">Rows are years, columns are the episode's position in that year. Hover a cell for the episode.</p>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div style="display:flex;padding:4px;border-radius:14px;background:#23201D;border:1px solid #3D3935;">
+                    <button style="height:36px;padding:0 18px;border:0;border-radius:10px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Public</button>
+                    <button style="height:36px;padding:0 18px;border:0;border-radius:10px;background:transparent;color:#ADA69F;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Elite</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:16px;border:1px solid #2C2825;border-radius:20px;background:#1E1B19;padding:16px 0 16px 0;">
+                <div style="overflow-x:auto;padding:0 16px;">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:max-content;">
+
+                    <div style="display:flex;gap:4px;">
+                      <div style="width:88px;flex:none;position:sticky;left:0;z-index:2;background:#1E1B19;"></div>
+                      <sc-for list="{{ colHeads }}" as="h" hint-placeholder-count="20">
+                        <div style="width:54px;flex:none;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5E5852;padding-bottom:4px;">{{ h }}</div>
+                      </sc-for>
+                    </div>
+
+                    <sc-for list="{{ dRows }}" as="r" hint-placeholder-count="3">
+                      <div style="display:flex;gap:4px;align-items:center;">
+                        <div style="width:88px;flex:none;position:sticky;left:0;z-index:2;background:#1E1B19;padding-right:12px;">
+                          <div style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;">{{ r.year }}</div>
+                          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;margin-top:1px;">avg {{ r.avg }}</div>
+                        </div>
+                        <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="20">
+                          <div style="width:54px;height:44px;flex:none;border-radius:8px;background:{{ c.bg }};border:{{ c.border }};position:relative;display:flex;align-items:center;justify-content:center;">
+                            <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:{{ c.fg }};">{{ c.score }}</span>
+                            <span style="position:absolute;right:3px;bottom:2px;display:flex;gap:2px;">
+                              <sc-if value="{{ c.prov }}" hint-placeholder-val="{{ false }}">
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path></svg>
+                              </sc-if>
+                              <sc-if value="{{ c.members }}" hint-placeholder-val="{{ false }}">
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path></svg>
+                              </sc-if>
+                              <sc-if value="{{ c.stream }}" hint-placeholder-val="{{ false }}">
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg>
+                              </sc-if>
+                            </span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin-top:16px;padding:0 4px;">
+                <sc-for list="{{ bands }}" as="b" hint-placeholder-count="7">
+                  <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#ADA69F;">
+                    <span style="width:22px;height:14px;border-radius:4px;background:{{ b.bg }};"></span>{{ b.label }}
+                  </span>
+                </sc-for>
+                <span style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:#ADA69F;">
+                  <span style="width:22px;height:14px;border-radius:4px;background:#23201D;border:1px dashed #4A4540;"></span>Not rated
+                </span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:8px;background:#E4232C;color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">2</span>
+      <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">Cell states and legend</h2>
+    </div>
+
+    <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start;">
+
+      <div style="width:620px;background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <h3 style="margin:0 0 4px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Seven bands, three non-bands</h3>
+        <p style="margin:0 0 18px;font-size:13.5px;color:#7A736C;line-height:1.5;">Cell text is always near-black on the band fill, which clears 4.5:1 on all seven. The number is always present, so colour is never the only carrier.</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <sc-for list="{{ bandRows }}" as="b" hint-placeholder-count="10">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <div style="width:104px;height:44px;flex:none;border-radius:10px;background:{{ b.bg }};border:{{ b.border }};display:flex;align-items:center;justify-content:space-between;padding:0 9px;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:{{ b.fg }};">{{ b.score }}</span>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:14px;font-weight:600;">{{ b.label }}</div>
+                <div style="font-size:12.5px;color:#7A736C;">{{ b.note }}</div>
+              </div>
+              <code style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E5852;white-space:nowrap;">{{ b.token }}</code>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="width:520px;background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <h3 style="margin:0 0 4px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Markers</h3>
+        <p style="margin:0 0 18px;font-size:13.5px;color:#7A736C;line-height:1.5;">All three can land on one cell. At 390px they sit in a row on the right of a 100px wide cell, with 4px between them. On desktop they cluster bottom-right at 9px.</p>
+
+        <div style="display:flex;gap:10px;margin-bottom:20px;">
+          <div style="width:104px;height:44px;border-radius:10px;background:#E9BE4B;display:flex;align-items:center;justify-content:space-between;padding:0 9px;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#1A1614;">5.9</span>
+            <span style="display:flex;gap:4px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 10v3"></path><path d="M12 17h.01"></path></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg>
+            </span>
+          </div>
+          <div style="flex:1;font-size:12.5px;color:#7A736C;line-height:1.45;padding-top:3px;">All three markers on one cell, mobile size. No stacking, no overlap.</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="width:30px;height:30px;flex:none;border-radius:9px;background:#2C2825;display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 10v3"></path><path d="M12 17h.01"></path></svg></span>
+            <div><div style="font-size:14px;font-weight:600;">Provisional</div><div style="font-size:12.5px;color:#7A736C;line-height:1.45;">Under 3 ratings. Keeps its band colour, carries the marker, and the preview says so in words.</div></div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="width:30px;height:30px;flex:none;border-radius:9px;background:#2C2825;display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg></span>
+            <div><div style="font-size:14px;font-weight:600;">Members only</div><div style="font-size:12.5px;color:#7A736C;line-height:1.45;">Paywalled on YouTube. Listed, searchable and ratable here. No view count exists for these.</div></div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="width:30px;height:30px;flex:none;border-radius:9px;background:#2C2825;display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg></span>
+            <div><div style="font-size:14px;font-weight:600;">Stream</div><div style="font-size:12.5px;color:#7A736C;line-height:1.45;">A past live stream. Still an episode, never a separate category.</div></div>
+          </div>
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <span style="width:30px;height:30px;flex:none;border-radius:9px;background:#23201D;border:1px dashed #4A4540;"></span>
+            <div><div style="font-size:14px;font-weight:600;">Hole</div><div style="font-size:12.5px;color:#7A736C;line-height:1.45;">That year had fewer episodes. Rendered as a single faint rule, not a chip. Not a link, never a zero.</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:8px;background:#E4232C;color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">3</span>
+      <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">Cell preview</h2>
+      <span style="font-size:14px;color:#7A736C;">bottom sheet on mobile, hover card on desktop</span>
+    </div>
+
+    <div style="display:flex;gap:56px;align-items:flex-start;flex-wrap:wrap;">
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Mobile 390 x 844</div>
+        <div style="width:390px;height:844px;position:relative;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);">
+          <div style="position:absolute;inset:0;background:#191614;opacity:.35;"></div>
+          <div style="position:absolute;inset:0;background:rgba(11,10,9,.72);"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;background:#1E1B19;border-top:1px solid #3D3935;border-radius:26px 26px 0 0;padding:10px 16px 28px;">
+            <div style="width:40px;height:4px;border-radius:99px;background:#3D3935;margin:0 auto 16px;"></div>
+            <div style="border-radius:14px;overflow:hidden;background:#23201D;aspect-ratio:16/9;position:relative;display:flex;align-items:center;justify-content:center;">
+              <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 10px,#2C2825 10px 20px);"></div>
+              <span style="position:relative;font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E6862;letter-spacing:.05em;">thumbnail 1280x720</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+              <span style="height:26px;padding:0 10px;border-radius:8px;background:#46C68F;color:#1A1614;display:inline-flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">8.6</span>
+              <span style="font-size:12.5px;color:#ADA69F;">Awesome</span>
+              <span style="color:#4A4540;">/</span>
+              <span style="font-size:12.5px;color:#ADA69F;">14 ratings</span>
+              <span style="margin-left:auto;height:26px;padding:0 9px;border-radius:8px;background:#2C2825;color:#FFC93A;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>
+                Members
+              </span>
+            </div>
+            <h3 style="margin:12px 0 0;font-size:18px;line-height:1.3;font-weight:600;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-wrap:pretty;">Как да си купиш хладилник и да съжаляваш до края на живота си</h3>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">
+              <span>2025 / епизод 14</span><span style="color:#4A4540;">/</span><span>12 март 2025</span><span style="color:#4A4540;">/</span><span>2:14:07</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border-radius:12px;background:#23201D;border:1px solid #2C2825;">
+              <span style="font-size:12.5px;color:#ADA69F;">Elite</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:#6FD16A;">8.1</span>
+              <span style="font-size:12px;color:#7A736C;">from 4 verified members</span>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px;">
+              <a href="#1a" style="flex:1;height:48px;border-radius:13px;background:#E4232C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;">Open episode</a>
+              <a href="#1a" style="width:48px;height:48px;border-radius:13px;background:#23201D;border:1px solid #3D3935;display:flex;align-items:center;justify-content:center;">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Desktop hover card</div>
+        <div style="width:520px;height:844px;border-radius:16px;background:#1E1B19;border:1px solid #3D3935;padding:36px;display:flex;flex-direction:column;justify-content:center;gap:28px;">
+          <div style="display:flex;gap:4px;align-items:center;">
+            <sc-for list="{{ hoverStrip }}" as="c" hint-placeholder-count="6">
+              <div style="width:54px;height:44px;flex:none;border-radius:8px;background:{{ c.bg }};border:{{ c.border }};display:flex;align-items:center;justify-content:center;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:{{ c.fg }};">{{ c.score }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="width:340px;border-radius:16px;background:#23201D;border:1px solid #4A4540;box-shadow:0 20px 44px rgba(0,0,0,.6);overflow:hidden;">
+            <div style="aspect-ratio:16/9;position:relative;display:flex;align-items:center;justify-content:center;">
+              <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 10px,#2C2825 10px 20px);"></div>
+              <span style="position:relative;font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E6862;">thumbnail 1280x720</span>
+            </div>
+            <div style="padding:14px 16px 16px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="height:24px;padding:0 9px;border-radius:7px;background:#46C68F;color:#1A1614;display:inline-flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;">8.6</span>
+                <span style="font-size:12px;color:#ADA69F;">Awesome / 14 ratings</span>
+              </div>
+              <div style="margin-top:10px;font-size:15px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">Как да си купиш хладилник и да съжаляваш до края на живота си</div>
+              <div style="margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#7A736C;">12 март 2025 / 2:14:07</div>
+            </div>
+          </div>
+          <p style="margin:0;font-size:13.5px;line-height:1.55;color:#7A736C;">Hover opens after 120ms, closes instantly. The cell itself lifts 2px and takes a 2px brand ring. Under prefers-reduced-motion the lift is dropped and only the ring remains.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="max-width:1180px;background:#191614;border:1px solid #3D3935;border-radius:20px;padding:28px 32px;">
+    <h2 style="margin:0 0 16px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:20px;">Why the grid transposes on mobile</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:28px;">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#E4232C;margin-bottom:6px;">The problem with the desktop orientation at 390px</div>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#ADA69F;text-wrap:pretty;">Years as rows and episodes as columns makes a 2,100px strip for three years. To reach episode 30 of 2025 you scroll sideways past 29 cells with no landmarks, the sticky year column eats 90px of a 390px screen, and cells have to shrink to 56x36 to feel worth scrolling, which fails the 44px target. Three markers then have to stack in the corners of a chip smaller than a fingertip.</p>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:#FFC93A;margin-bottom:6px;">What transposing buys</div>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#ADA69F;text-wrap:pretty;">Episodes as rows and years as columns turns the wide axis into the short one. Three years is three columns of about 100px, so the grid fits with no horizontal scroll at all, and the long axis becomes ordinary vertical page scroll. Cells get 44px of height and enough width for the score plus all three markers in a row. At eight channels a year with more columns, the cell area scrolls inside its container while the episode number column stays pinned left, so the rule still holds: the page never moves sideways.</p>
+      </div>
+    </div>
+    <div style="margin-top:22px;padding-top:20px;border-top:1px solid #2C2825;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;">
+      <div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;margin-bottom:5px;">TOUCH TARGET</div><div style="font-size:14px;line-height:1.5;color:#ADA69F;">Mobile cell is 100 x 44. Desktop cell is 54 x 44 and stays pointer-driven.</div></div>
+      <div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;margin-bottom:5px;">PAYLOAD FIT</div><div style="font-size:14px;line-height:1.5;color:#ADA69F;">The API is episode-major already: rows[episodeIndex].cells[seasonIndex]. Mobile renders it untransposed, desktop transposes it.</div></div>
+      <div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;margin-bottom:5px;">SCROLL RULE</div><div style="font-size:14px;line-height:1.5;color:#ADA69F;">The cell area is the only overflow-x container on the page. Body stays overflow-x hidden.</div></div>
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1800,&quot;height&quot;:1200}}">
+const BANDS = {
+  masterpiece: { bg: '#5CB8E8', label: 'Absolute cinema', token: '--band-masterpiece', min: '9.5+' },
+  awesome:     { bg: '#46C68F', label: 'Awesome',         token: '--band-awesome',     min: '8.5+' },
+  great:       { bg: '#6FD16A', label: 'Great',           token: '--band-great',       min: '7.5+' },
+  good:        { bg: '#ABDC5F', label: 'Good',            token: '--band-good',        min: '6.5+' },
+  regular:     { bg: '#E9BE4B', label: 'Regular',         token: '--band-regular',     min: '5.5+' },
+  bad:         { bg: '#E2914F', label: 'Bad',             token: '--band-bad',         min: '4.0+' },
+  garbage:     { bg: '#D66A5B', label: 'Garbage',         token: '--band-garbage',     min: '0.0+' }
+};
+const INK = '#1A1614';
+
+function bandOf(s) {
+  if (s >= 9.5) return 'masterpiece';
+  if (s >= 8.5) return 'awesome';
+  if (s >= 7.5) return 'great';
+  if (s >= 6.5) return 'good';
+  if (s >= 5.5) return 'regular';
+  if (s >= 4.0) return 'bad';
+  return 'garbage';
+}
+
+// deterministic pseudo-random so the grid is stable across renders
+function rnd(i) {
+  const x = Math.sin(i * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+const YEAR_COUNTS = { 2024: 37, 2025: 30, 2026: 12 };
+const YEARS = [2024, 2025, 2026];
+
+function makeCell(year, idx) {
+  const n = YEAR_COUNTS[year];
+  if (idx >= n) return { kind: 'hole' };
+  const seed = year * 100 + idx;
+  const r = rnd(seed);
+  if (r < 0.18) return { kind: 'unrated' };
+  let score = 5.6 + rnd(seed + 7) * 4.2;
+  if (r > 0.965) score = 9.5 + rnd(seed + 3) * 0.4;
+  score = Math.round(score * 10) / 10;
+  return {
+    kind: 'rated',
+    score: score.toFixed(1),
+    band: bandOf(score),
+    prov: rnd(seed + 11) < 0.12,
+    members: rnd(seed + 19) < 0.1,
+    stream: rnd(seed + 29) < 0.05
+  };
+}
+
+function style(cell) {
+  if (cell.kind === 'hole') {
+    return { score: '', bg: 'transparent', fg: 'transparent', border: '0', prov: false, members: false, stream: false };
+  }
+  if (cell.kind === 'unrated') {
+    return { score: '?', bg: '#23201D', fg: '#6E6862', border: '1px dashed #4A4540', prov: false, members: false, stream: false };
+  }
+  return {
+    score: cell.score, bg: BANDS[cell.band].bg, fg: INK, border: '0',
+    prov: cell.prov, members: cell.members, stream: cell.stream
+  };
+}
+
+class Component extends DCLogic {
+  renderVals() {
+    const maxN = 37;
+
+    const mRows = [];
+    for (let i = 0; i < maxN; i++) {
+      mRows.push({
+        ep: 'E' + (i + 1),
+        cells: YEARS.map(y => style(makeCell(y, i)))
+      });
+    }
+
+    const dRows = YEARS.map((y, yi) => ({
+      year: String(y),
+      avg: ['7.2', '7.3', '7.9'][yi],
+      cells: Array.from({ length: maxN }, (_, i) => style(makeCell(y, i)))
+    }));
+
+    const colHeads = Array.from({ length: maxN }, (_, i) => String(i + 1));
+
+    const years = [
+      { label: '2024', avg: '7.2' },
+      { label: '2025', avg: '7.3' },
+      { label: '2026', avg: '7.9' }
+    ];
+
+    const bands = Object.keys(BANDS).map(k => ({ bg: BANDS[k].bg, label: BANDS[k].label }));
+
+    const notes = {
+      masterpiece: 'Rare. Two episodes in 74.',
+      awesome: 'The reliable favourites.',
+      great: 'The bulk of a good year.',
+      good: 'Solid, unremarkable.',
+      regular: 'Watchable if you are a completist.',
+      bad: 'Something went wrong.',
+      garbage: 'Distinct from the brand red: lower chroma, lighter, and it only ever appears inside a grid cell or a score chip.'
+    };
+    const scores = { masterpiece: '9.7', awesome: '8.6', great: '7.8', good: '6.9', regular: '5.9', bad: '4.4', garbage: '3.1' };
+
+    const bandRows = Object.keys(BANDS).map(k => ({
+      bg: BANDS[k].bg, fg: INK, border: '0', score: scores[k],
+      label: BANDS[k].label + '  ' + BANDS[k].min, note: notes[k], token: BANDS[k].token
+    }));
+    bandRows.push({ bg: '#23201D', fg: '#6E6862', border: '1px dashed #4A4540', score: '?', label: 'Not rated', note: 'Score is null. 16 of 74 episodes. Never a zero, never the garbage band.', token: 'muted' });
+    bandRows.push({ bg: 'transparent', fg: 'transparent', border: '0', score: '', label: 'Hole', note: 'The year had fewer episodes. Not a link, no border, no number.', token: 'none' });
+
+    const hoverStrip = ['7.2', '8.5', '8.6', '6.8', '?', '9.1'].map(s => {
+      if (s === '?') return { score: '?', bg: '#23201D', fg: '#6E6862', border: '1px dashed #4A4540' };
+      return { score: s, bg: BANDS[bandOf(parseFloat(s))].bg, fg: INK, border: s === '8.6' ? '2px solid #E4232C' : '0' };
+    });
+
+    return { years, mRows, dRows, colHeads, bands, bandRows, hoverStrip };
+  }
+}
+
+</script>
+</body>
+</html>

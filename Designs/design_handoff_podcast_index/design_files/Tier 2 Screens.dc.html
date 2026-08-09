@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  body { margin:0; background:#0B0A09; color:#F7F4F0; font-family:'Onest',system-ui,sans-serif; }
+  a { color:#E4232C; text-decoration:none; }
+  a:hover { color:#F0463E; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#3D3935; border-radius:99px; }
+</style>
+</helmet>
+
+<div style="padding:56px 64px 120px;display:flex;flex-direction:column;gap:80px;background:#0B0A09;">
+
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:900px;">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.14em;color:#E4232C;text-transform:uppercase;">Tier 2 and 3</div>
+    <h1 style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:40px;line-height:1.1;margin:0;letter-spacing:-.02em;">Channels, profile, leaderboard and the small pages</h1>
+  </div>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">13. Channels list, designed for one channel and for eight</h2>
+    <div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;">MOBILE 390 x 844</div>
+        <div style="width:390px;height:844px;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+          <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;"><span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span></div>
+          <div style="flex:1;overflow-y:auto;padding:8px 16px 0;">
+            <h1 style="margin:8px 0 0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;">Канали</h1>
+            <p style="margin:8px 0 0;font-size:14px;color:#ADA69F;line-height:1.5;">1 канал в индекса. Още 5 са на път.</p>
+
+            <div style="margin-top:18px;border-radius:20px;background:#23201D;border:1px solid #2C2825;overflow:hidden;">
+              <div style="padding:18px 16px;display:flex;gap:14px;align-items:flex-start;">
+                <div style="width:60px;height:60px;flex:none;border-radius:19px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:21px;">ИК</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:18px;">Иван Кирков</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;margin-top:4px;">@ivankirkov1 / 74 епизода</div>
+                </div>
+              </div>
+              <div style="padding:0 16px 14px;display:flex;gap:8px;">
+                <div style="flex:1;background:#1E1B19;border-radius:12px;padding:9px 11px;"><div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;">7.4</div><div style="font-size:11px;color:#7A736C;">средно</div></div>
+                <div style="flex:1;background:#1E1B19;border-radius:12px;padding:9px 11px;"><div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;">58<span style="color:#4A4540;">/</span>74</div><div style="font-size:11px;color:#7A736C;">оценени</div></div>
+                <div style="flex:1;background:#1E1B19;border-radius:12px;padding:9px 11px;"><div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:#5CB8E8;">9.7</div><div style="font-size:11px;color:#7A736C;">най-добър</div></div>
+              </div>
+              <div style="padding:0 16px 16px;">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.1em;color:#7A736C;margin-bottom:8px;">ПРЕГЛЕД ПО ГОДИНИ</div>
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                  <sc-for list="{{ miniGrid }}" as="row" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="width:34px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;">{{ row.year }}</span>
+                      <div style="flex:1;display:flex;gap:2px;">
+                        <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="24">
+                          <span style="flex:1;height:14px;border-radius:3px;background:{{ c }};"></span>
+                        </sc-for>
+                      </div>
+                      <span style="width:28px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:#ADA69F;">{{ row.avg }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="padding:0 16px 16px;">
+                <button style="width:100%;height:48px;border:0;border-radius:14px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:15px;font-weight:600;">Виж решетката</button>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;border-radius:20px;border:1px dashed #3D3935;padding:20px 16px;text-align:center;">
+              <div style="font-size:14.5px;font-weight:600;">Още канали скоро</div>
+              <p style="margin:6px 0 0;font-size:13px;line-height:1.45;color:#7A736C;">Индексът расте с по един канал. Всеки нов идва с цялата си история от епизоди.</p>
+            </div>
+            <div style="height:24px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;">DESKTOP 1280 x 900</div>
+        <div style="width:1280px;height:900px;overflow:hidden;border-radius:16px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+          <div style="height:64px;flex:none;display:flex;align-items:center;gap:28px;padding:0 32px;border-bottom:1px solid #2C2825;">
+            <div style="display:flex;align-items:center;gap:10px;"><div style="width:32px;height:32px;border-radius:10px;background:#E4232C;"></div><span style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;">Comedy Club</span></div>
+            <nav style="display:flex;gap:4px;"><a href="#13a" style="height:36px;padding:0 12px;display:flex;align-items:center;border-radius:9px;font-size:14px;color:#F7F4F0;background:#23201D;">Channels</a><a href="#13a" style="height:36px;padding:0 12px;display:flex;align-items:center;border-radius:9px;font-size:14px;color:#ADA69F;">Episodes</a></nav>
+            <div style="flex:1;max-width:420px;height:40px;border-radius:12px;background:#23201D;border:1px solid #3D3935;display:flex;align-items:center;padding:0 14px;"><span style="font-size:15px;color:#7A736C;">Търси момент, тема или гост</span></div>
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            <div style="max-width:1216px;margin:0 auto;padding:32px;">
+              <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:34px;letter-spacing:-.02em;">Канали</h1>
+              <p style="margin:10px 0 0;font-size:15px;color:#ADA69F;">1 канал в индекса, 74 епизода, 267 оценки.</p>
+              <div style="margin-top:26px;display:grid;grid-template-columns:1.6fr 1fr;gap:20px;align-items:start;">
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:22px;padding:26px;">
+                  <div style="display:flex;gap:20px;align-items:flex-start;">
+                    <div style="width:84px;height:84px;flex:none;border-radius:24px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:28px;">ИК</div>
+                    <div style="flex:1;">
+                      <div style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;">Иван Кирков</div>
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#7A736C;margin-top:6px;">@ivankirkov1 / 74 епизода / 128 хил. абонати</div>
+                      <p style="margin:10px 0 0;font-size:14.5px;line-height:1.55;color:#ADA69F;">Подкаст за всичко, което се случва между два лоши вица. Нови епизоди всяка сряда.</p>
+                    </div>
+                  </div>
+                  <div style="margin-top:22px;display:flex;flex-direction:column;gap:6px;">
+                    <sc-for list="{{ miniGrid }}" as="row" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:12px;">
+                        <span style="width:40px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">{{ row.year }}</span>
+                        <div style="flex:1;display:flex;gap:3px;">
+                          <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="24">
+                            <span style="flex:1;height:20px;border-radius:4px;background:{{ c }};"></span>
+                          </sc-for>
+                        </div>
+                        <span style="width:32px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;color:#ADA69F;">{{ row.avg }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <button style="margin-top:22px;height:44px;padding:0 20px;border:0;border-radius:12px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:14.5px;font-weight:600;">Виж пълната решетка</button>
+                </div>
+                <div style="border:1px dashed #3D3935;border-radius:22px;padding:26px;">
+                  <div style="font-size:16px;font-weight:600;">Още канали скоро</div>
+                  <p style="margin:8px 0 0;font-size:14px;line-height:1.55;color:#7A736C;">С един канал списъкът е една широка карта, а не мрежа с една клетка и празно място до нея. От два канала нагоре подредбата става решетка от 2 до 3 колони.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">14. Profile, 17. Leaderboard</h2>
+    <div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start;">
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;">PROFILE, MOBILE</div>
+        <div style="width:390px;height:844px;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+          <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;"><span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span></div>
+          <div style="flex:1;overflow-y:auto;padding:8px 16px 0;">
+            <div style="display:flex;gap:14px;align-items:center;margin-top:8px;">
+              <div style="width:64px;height:64px;flex:none;border-radius:99px;background:#35312D;border:1px solid #3D3935;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:20px;color:#ADA69F;">МХ</div>
+              <div style="flex:1;min-width:0;">
+                <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:20px;">Мартин Христов</h1>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:5px;">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">@martin</span>
+                  <span style="height:22px;padding:0 8px;border-radius:7px;background:#2C2825;color:#FFC93A;font-size:11px;font-weight:600;display:inline-flex;align-items:center;">Member</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;">
+              <sc-for list="{{ stats }}" as="s" hint-placeholder-count="3">
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:14px;padding:11px 12px;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;">{{ s.n }}</div>
+                  <div style="font-size:11px;color:#7A736C;margin-top:2px;">{{ s.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="margin-top:20px;background:#23201D;border:1px solid #2C2825;border-radius:18px;padding:16px;">
+              <div style="font-size:14.5px;font-weight:600;">Как оценяваш</div>
+              <div style="display:flex;align-items:flex-end;gap:5px;height:110px;margin-top:14px;">
+                <sc-for list="{{ histogram }}" as="h" hint-placeholder-count="10">
+                  <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;">
+                    <span style="width:100%;border-radius:5px 5px 2px 2px;background:{{ h.bg }};height:{{ h.h }};"></span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7A736C;">{{ h.n }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:12px;font-size:12.5px;color:#7A736C;line-height:1.45;">Средна твоя оценка 7.8, което е 0.4 над средното за сайта.</div>
+            </div>
+
+            <div style="margin-top:16px;background:#23201D;border:1px solid #2C2825;border-radius:18px;padding:16px;">
+              <div style="font-size:14.5px;font-weight:600;">Членства</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+                <div style="width:36px;height:36px;border-radius:12px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:12px;">ИК</div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:600;">Иван Кирков</div><div style="font-size:11.5px;color:#7A736C;">tier 2 / от март 2025</div></div>
+                <span style="height:26px;padding:0 9px;border-radius:8px;background:#46C68F;color:#1A1614;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1A1614" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>Verified
+                </span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid #2C2825;">
+                <div style="width:36px;height:36px;border-radius:12px;background:#35312D;"></div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:600;">Друг канал</div><div style="font-size:11.5px;color:#7A736C;">tier 1 / непотвърдено</div></div>
+                <button style="height:36px;padding:0 12px;border:1px solid #3D3935;border-radius:10px;background:transparent;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:12.5px;font-weight:600;">Изпрати доказателство</button>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+              <sc-for list="{{ profileLinks }}" as="p" hint-placeholder-count="4">
+                <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border-radius:14px;background:#23201D;border:1px solid #2C2825;">
+                  <span style="font-size:14.5px;flex:1;">{{ p.label }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#7A736C;">{{ p.count }}</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E5852" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+                </div>
+              </sc-for>
+            </div>
+            <div style="height:24px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;">LEADERBOARD, MOBILE</div>
+        <div style="width:390px;height:844px;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+          <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;"><span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span></div>
+          <div style="flex:1;overflow-y:auto;padding:8px 16px 0;">
+            <h1 style="margin:8px 0 0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;">Класация</h1>
+            <div style="display:flex;gap:6px;margin-top:12px;overflow-x:auto;">
+              <span style="height:38px;padding:0 14px;border-radius:11px;background:#E4232C;color:#fff;display:inline-flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap;">Най-високи</span>
+              <span style="height:38px;padding:0 14px;border-radius:11px;border:1px solid #3D3935;color:#ADA69F;display:inline-flex;align-items:center;font-size:13.5px;white-space:nowrap;">Elite</span>
+              <span style="height:38px;padding:0 14px;border-radius:11px;border:1px solid #3D3935;color:#ADA69F;display:inline-flex;align-items:center;font-size:13.5px;white-space:nowrap;">Най-оценявани</span>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:flex-end;margin-top:20px;">
+              <sc-for list="{{ podium }}" as="p" hint-placeholder-count="3">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;">
+                  <div style="width:100%;aspect-ratio:16/9;border-radius:11px;position:relative;overflow:hidden;">
+                    <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 7px,#2C2825 7px 14px);"></div>
+                  </div>
+                  <div style="width:100%;height:{{ p.h }};border-radius:12px 12px 6px 6px;background:{{ p.bg }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
+                    <span style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:20px;color:#1A1614;">{{ p.rank }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#1A1614;">{{ p.score }}</span>
+                  </div>
+                  <div style="font-size:11.5px;line-height:1.3;text-align:center;color:#ADA69F;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">{{ p.title }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:20px;">
+              <sc-for list="{{ ranked }}" as="r" hint-placeholder-count="6">
+                <div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 12px;border-radius:14px;background:#23201D;border:1px solid #2C2825;">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:#7A736C;min-width:22px;">{{ r.rank }}</span>
+                  <div style="width:60px;flex:none;aspect-ratio:16/9;border-radius:9px;position:relative;overflow:hidden;"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 7px,#2C2825 7px 14px);"></div></div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:13.5px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">{{ r.title }}</div>
+                    <div style="font-size:11.5px;color:#7A736C;margin-top:3px;">{{ r.count }} оценки</div>
+                  </div>
+                  <span style="height:30px;padding:0 9px;border-radius:9px;background:{{ r.bg }};color:#1A1614;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;display:inline-flex;align-items:center;">{{ r.score }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="height:24px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;">15. SEARCH ZERO RESULTS / 404 / STATUS</div>
+        <div style="width:390px;height:844px;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+          <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;"><span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span></div>
+          <div style="flex:1;overflow-y:auto;padding:8px 16px 0;">
+            <div style="height:52px;border-radius:15px;background:#23201D;border:1px solid #3D3935;display:flex;align-items:center;gap:10px;padding:0 14px;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+              <span style="font-size:16px;flex:1;">квантова физика</span>
+            </div>
+            <div style="margin-top:18px;border-radius:18px;background:#23201D;border:1px solid #2C2825;padding:20px 16px;">
+              <div style="font-size:16px;font-weight:600;">Нищо не съвпада</div>
+              <p style="margin:8px 0 0;font-size:13.5px;line-height:1.5;color:#7A736C;">Правописните грешки вече се прощават, така че думата най-вероятно още не е отбелязана от никого.</p>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;">
+                <sc-for list="{{ zeroChips }}" as="z" hint-placeholder-count="4">
+                  <span style="min-height:40px;padding:0 12px;border-radius:12px;background:#2C2825;display:inline-flex;align-items:center;font-size:13.5px;">{{ z }}</span>
+                </sc-for>
+              </div>
+              <button style="width:100%;height:48px;margin-top:16px;border:1px solid #4A4540;border-radius:14px;background:transparent;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:14.5px;font-weight:600;">Разгледай всички епизоди</button>
+            </div>
+
+            <div style="margin-top:24px;border-radius:18px;border:1px solid #2C2825;padding:24px 16px;text-align:center;">
+              <div style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:44px;color:#E4232C;line-height:1;">404</div>
+              <div style="font-size:16px;font-weight:600;margin-top:10px;">Няма такава страница</div>
+              <p style="margin:8px 0 0;font-size:13.5px;line-height:1.5;color:#7A736C;">Ако си стигнал дотук от стар линк към епизод, търсенето вероятно ще го намери.</p>
+              <div style="height:48px;margin-top:14px;border-radius:14px;background:#23201D;border:2px solid #E4232C;display:flex;align-items:center;gap:10px;padding:0 14px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E4232C" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+                <span style="font-size:16px;color:#7A736C;">Търси епизод</span>
+              </div>
+            </div>
+
+            <div style="margin-top:24px;border-radius:18px;background:#23201D;border:1px solid #2C2825;padding:18px 16px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span style="width:10px;height:10px;border-radius:99px;background:#E9BE4B;"></span>
+                <span style="font-size:16px;font-weight:600;">Degraded</span>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#7A736C;">преди 12 сек</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+                <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;background:#1E1B19;">
+                  <span style="width:8px;height:8px;border-radius:99px;background:#46C68F;"></span><span style="font-size:13.5px;flex:1;">Database</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">ok</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;background:#1E1B19;">
+                  <span style="width:8px;height:8px;border-radius:99px;background:#E9BE4B;"></span><span style="font-size:13.5px;flex:1;">Redis</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#E9BE4B;">не отговаря</span>
+                </div>
+              </div>
+              <button style="width:100%;height:44px;margin-top:14px;border:1px solid #3D3935;border-radius:12px;background:transparent;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Провери пак</button>
+            </div>
+            <div style="height:24px;"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1500,&quot;height&quot;:1100}}">
+const B = { masterpiece:'#5CB8E8', awesome:'#46C68F', great:'#6FD16A', good:'#ABDC5F', regular:'#E9BE4B', bad:'#E2914F', garbage:'#D66A5B', none:'#2C2825' };
+
+function rnd(i) { const x = Math.sin(i * 7.13) * 43758.5453; return x - Math.floor(x); }
+
+function bandFor(v) {
+  if (v >= 9.5) return B.masterpiece;
+  if (v >= 8.5) return B.awesome;
+  if (v >= 7.5) return B.great;
+  if (v >= 6.5) return B.good;
+  if (v >= 5.5) return B.regular;
+  if (v >= 4.0) return B.bad;
+  return B.garbage;
+}
+
+class Component extends DCLogic {
+  renderVals() {
+    const miniGrid = [
+      { year: '2024', avg: '7.2', n: 24 },
+      { year: '2025', avg: '7.3', n: 24 },
+      { year: '2026', avg: '7.9', n: 24 }
+    ].map((r, ri) => ({
+      year: r.year, avg: r.avg,
+      cells: Array.from({ length: r.n }, (_, i) => {
+        const v = rnd(ri * 50 + i);
+        if (v < 0.16) return '#2C2825';
+        if (ri === 2 && i > 14) return 'transparent';
+        return bandFor(5.4 + v * 4.4);
+      })
+    }));
+
+    const histCounts = [1, 2, 3, 5, 9, 14, 22, 31, 24, 11];
+    const max = Math.max.apply(null, histCounts);
+    const histogram = histCounts.map((c, i) => ({
+      n: String(i + 1),
+      h: Math.round((c / max) * 86) + 'px',
+      bg: bandFor(i + 1)
+    }));
+
+    return {
+      miniGrid, histogram,
+      stats: [
+        { n: '122', label: 'оценки' },
+        { n: '58', label: 'изгледани' },
+        { n: '14', label: 'любими' }
+      ],
+      profileLinks: [
+        { label: 'Моите оценки', count: '122' },
+        { label: 'История на гледане', count: '58' },
+        { label: 'Любими', count: '14' },
+        { label: 'Моите етикети', count: '0' }
+      ],
+      podium: [
+        { rank: '2', score: '9.1', bg: B.awesome, h: '64px', title: 'Гост: човекът, който е спал в 47 хотела' },
+        { rank: '1', score: '9.7', bg: B.masterpiece, h: '86px', title: 'Три часа за софийското метро' },
+        { rank: '3', score: '8.9', bg: B.awesome, h: '52px', title: 'Стендъп комиците не са добри хора' }
+      ],
+      ranked: [
+        { rank: '4', score: '8.6', bg: B.awesome, title: 'Как да си купиш хладилник и да съжаляваш до края на живота си', count: '14' },
+        { rank: '5', score: '8.2', bg: B.great, title: 'Защо всички български сериали свършват еднакво', count: '11' },
+        { rank: '6', score: '7.9', bg: B.great, title: 'Най-странните неща, които сме правили за пари', count: '18' },
+        { rank: '7', score: '7.4', bg: B.good, title: 'Пътуване до Гърция с кола без климатик', count: '9' },
+        { rank: '8', score: '6.8', bg: B.good, title: 'Разговор за детството, гумените ботуши и лятото на село', count: '13' }
+      ],
+      zeroChips: ['хладилници', 'пътувания', 'детство', 'стендъп']
+    };
+  }
+}
+
+</script>
+</body>
+</html>

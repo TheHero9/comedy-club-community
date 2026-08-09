@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 EPISODES_INDEX = "episodes"
 
+# 🚨 A SEPARATE index, never a field on an episode document. A 26,000-word
+# transcript next to a 60-character title makes every episode match almost every
+# common Bulgarian word, and a passing mention would outrank an episode actually
+# about the subject. See podcast/search/transcript_index.py.
+TRANSCRIPTS_INDEX = "transcript_segments"
+
 # Everything the meilisearch client can throw at us, plus the socket-level
 # failures that escape it. Catching MeilisearchError alone is not enough:
 # a DNS failure or a dropped connection can surface as a bare OSError.
@@ -104,6 +110,22 @@ def is_available(*, force: bool = False) -> bool:
 
     _health = (now, healthy)
     return healthy
+
+
+def task_uid(task: Any) -> int | None:
+    """Pull the task uid out of whatever the client handed back."""
+    uid = getattr(task, "task_uid", None)
+    if uid is None and isinstance(task, dict):
+        uid = task.get("taskUid")
+    return uid if isinstance(uid, int) else None
+
+
+def wait_for_task(task: Any, timeout_ms: int) -> None:
+    """Block until an enqueued Meilisearch task finishes. No-op for a task-less call."""
+    uid = task_uid(task)
+    if uid is None:
+        return
+    get_client().wait_for_task(uid, timeout_in_ms=timeout_ms)
 
 
 def graceful(

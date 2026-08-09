@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 🚫 Explicit Non-Goals for v1
 
-- ❌ **No transcription.** Searchability comes from community topic labels and moments. A `Transcript` model can attach to `Episode` later without reworking anything.
+- ❌ **No paid transcription.** We never run ASR. ✅ **We DO store YouTube's own Bulgarian auto-captions** (free, `bg-orig` via yt-dlp) as searchable `TranscriptSegment` rows - see § Transcripts. Community topic labels and moments remain the primary structure; transcripts are the long-tail fallback for "who said X".
 - ❌ **No mobile app yet.** The API is built API-first so React Native/Expo can be added later without a backend rewrite.
 - ❌ **No microservices, no Kubernetes, no NoSQL.** This is a small app. Cache reads and denormalize aggregates before reaching for anything fancier.
 
@@ -232,8 +232,22 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
 - ✅ **Run `npm run benchmark`** before and after anything touching a list, the grid, or a serializer. Budgets live in `scripts/perf-budgets.json` and are enforced by `apps/web/tests/perf-budget.spec.ts`.
 - ⚠️ A waived budget is a **ratchet**: it fails if the route regresses AND fails with `STALE WAIVER` once the route comes back inside budget, so the waiver must then be deleted.
 
+### Transcripts
+
+> 🔬 Built 2026-08-09. Full spec in `specs/06-transcripts/02-architecture.md`.
+
+- ✅ **Free, no ASR.** YouTube publishes a Bulgarian ASR track (`bg-orig`) for part of the catalogue; yt-dlp fetches it with no API key and no cost. `manage.py backfill_transcripts --since 2024-01-01`.
+- 🚨 **Transcript text NEVER goes in the `episodes` Meilisearch document.** A 26,000-word field next to a 60-character title makes every episode match every common Bulgarian word, and a passing mention outranks an episode actually about the subject. It lives in a **second index**, `transcript_segments`. Two indexes, two questions: `episodes` = "which episodes are ABOUT this", `transcript_segments` = "where was this SAID".
+- ✅ **Stored as ~60s windowed segments**, not one blob. A raw caption cue is ~2s / ~7 words - a phrase spanning two cues would match neither. `start_sec` is an exact YouTube deep link.
+- 🚨 **A degraded response looks EXACTLY like "no captions".** The same soft-block that strips `duration` also strips the caption list. `fetch_transcript` refuses to answer "none" without a `duration` and raises `TranscriptThrottled` instead, writing nothing. Recording a false "none" would be permanent - nothing would re-check that episode.
+- ✅ **`Transcript.status="unavailable"` is DATA, with a `checked_at`.** Most of the catalogue has no captions; without a negative record every run would re-fetch them forever. Re-checked after `TRANSCRIPT_RECHECK_DAYS` (90) because YouTube does add captions to older videos.
+- ⚠️ **Coverage is partial and date-dependent - never present transcript search as exhaustive.** Sampled 2024-2026: 9/9. 2019-2022: 0/12. 2023 mixed. Members-only: 0/5. An absent episode has not been ruled out; it may just have no transcript.
+- ⚠️ **Changing `TRANSCRIPT_SEGMENT_SECONDS` invalidates existing windowing.** Re-run with `--force`. The index deletes **by filter**, never by computed id, so a re-window cannot leave orphans.
+- 📊 **Budget Meilisearch, not Postgres.** ~1.2 MB of index per hour of audio (~2.0-2.5 GB for the full catalogue) versus ~56 MB of compressed Postgres text.
+
 ### Search
 
+- 🚨 **`minWordSizeForTypos` is measured in BYTES, not characters.** Cyrillic is 2 bytes/char, so every Bulgarian word crosses the threshold at HALF the word length you would assume. The episodes index sat at `{4, 8}` believing those were characters; they meant **2 and 4 characters**, and the query `пица` returned 100 hits of which **95 were false** (`пича`, `пичаги`, `пичове`). Proven by sweep 2026-08-09: false matches persisted to 8 and stopped dead at 9, the byte length of `пица`. Always write thresholds as `N * BYTES_PER_CYRILLIC_CHAR`.
 - ✅ Meilisearch index updates happen in **Celery tasks**, never inline in a request.
 - ✅ **Postgres is the source of truth.** A wiped Meilisearch index must be fully rebuildable from Postgres with one command (`manage.py reindex`).
 - ✅ Searchable document = episode title + description + channel name + topic labels + moment labels + participant names.
@@ -470,7 +484,11 @@ uv run python manage.py repair_metadata --probe 10               # 🚨 ALWAYS a
 uv run python manage.py repair_metadata --channel @handle        # re-fetch degraded rows
 uv run python manage.py refresh_channel_meta                     # avatars, banners, sub counts
 uv run python manage.py sync_channels                            # Data API daily
-uv run python manage.py reindex                                  # rebuild Meilisearch
+uv run python manage.py backfill_transcripts --probe 10          # free captions: is it worth it?
+uv run python manage.py backfill_transcripts --since 2024-01-01  # where the captions actually are
+uv run python manage.py backfill_transcripts --tracks <VIDEO_ID> # what tracks exist on one video
+uv run python manage.py reindex                                  # rebuild BOTH Meilisearch indexes
+uv run python manage.py reindex --only transcripts               # just the transcript index
 uv run pytest
 
 # Web (apps/web)

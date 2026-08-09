@@ -1,6 +1,6 @@
 # 📊 STATUS
 
-**Updated:** 2026-08-08
+**Updated:** 2026-08-09
 **Overall:** 🟢 **Waves 1-13 built and test-hardened.** 39 API paths / 48 operations, a live Next.js frontend with the IMDb-style ratings grid, and **723 automated tests** (350 pytest + 137 Vitest + 236 Playwright) that all run from `npm run test`.
 
 > Wave definitions live in [`specs/01-initial-build/01-waves.md`](../specs/01-initial-build/01-waves.md).
@@ -286,3 +286,8 @@ docker compose --profile workers down      # stop them
 | 2026-08-09 | 🗂️ **A `-column` index is `DESC NULLS FIRST`; every list endpoint sorts `DESC NULLS LAST`.** Postgres cannot use one for the other, so the `Episode` sort indexes were dead and every browse query was a seq scan + sort. Seven expression indexes now mirror the real `ORDER BY`, tiebreak included. See `docs/02-schema-decisions.md` § 10. |
 | 2026-08-09 | ⚡ `episode_list_queryset()` uses `.only(BRIEF_FIELDS)`. Reading any other field off a list row is one lazy SELECT **per row** - add the field to `BRIEF_FIELDS`, never drop the `only()`. |
 | 2026-08-09 | 🐛 The Postgres search fallback was N+1 (102 queries for a 50-hit page). Calling `.select_related()` on a related manager builds a **new** queryset and bypasses the prefetch cache - use `.all()`. Guarded by `podcast/tests/test_query_counts.py`. |
+| 2026-08-09 | 📝 **Transcripts stored, with zero ASR spend.** YouTube publishes a Bulgarian `bg-orig` ASR track for part of the catalogue; yt-dlp fetches it free. New `Transcript` + `TranscriptSegment` models, `manage.py backfill_transcripts`, and a **second** Meilisearch index. Verified on 3 real episodes: 523 segments, 86,870 words, Bulgarian search returning deep links in 4 ms. See `specs/06-transcripts/02-architecture.md`. |
+| 2026-08-09 | 🚨 **Transcript text must NEVER enter the `episodes` index.** 26,000 words next to a 60-character title makes every episode match every common Bulgarian word and lets a passing mention outrank an episode actually about the subject. Two indexes: `episodes` = "ABOUT this", `transcript_segments` = "SAID here". |
+| 2026-08-09 | 🚨 **A throttled response is indistinguishable from "no captions"** - the same soft-block strips both `duration` and the caption list. `fetch_transcript` refuses to answer "none" without a duration and writes nothing, because a false "none" would be permanent. |
+| 2026-08-09 | 🐛 **`minWordSizeForTypos` counts BYTES, not characters.** Cyrillic is 2 bytes/char, so the episodes index's `{4, 8}` actually meant **2 and 4 characters**: `пица` returned 100 hits of which **95 were false** (`пича`, `пичове`). Thresholds are now `N * BYTES_PER_CYRILLIC_CHAR`. The old test asserted `oneTypo <= 4` and passed the whole time - it encoded the misunderstanding, not the behaviour. |
+| 2026-08-09 | ⚠️ **Transcript coverage is partial and date-dependent** (2024-2026: 9/9; 2019-2022: 0/12; members-only: 0/5). Transcript search is never exhaustive - an absent episode may simply have no captions, and the UI needs to say so. |

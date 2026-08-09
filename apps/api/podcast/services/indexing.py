@@ -69,3 +69,30 @@ def schedule_channel_reindex(channel_id: int) -> None:
         reindex_channel.delay(channel_id)
     except Exception:
         logger.warning("Could not queue reindex for channel %s", channel_id, exc_info=True)
+
+
+def schedule_transcript_reindex(episode_id: int) -> None:
+    """Queue a re-index of one episode's transcript segments.
+
+    Separate from `schedule_episode_reindex` because they write to different
+    indexes: storing a transcript changes nothing in the `episodes` document.
+    """
+    if not indexing_enabled():
+        return
+    try:
+        from podcast.tasks import reindex_transcript
+
+        reindex_transcript.delay(episode_id)
+    except Exception:
+        logger.warning("Could not queue transcript reindex for %s", episode_id, exc_info=True)
+
+
+def schedule_transcript_removal(episode_id: int) -> None:
+    if not indexing_enabled():
+        return
+    try:
+        from podcast.tasks import remove_transcript_from_index
+
+        remove_transcript_from_index.delay(episode_id)
+    except Exception:
+        logger.warning("Could not queue transcript removal for %s", episode_id, exc_info=True)

@@ -25,6 +25,8 @@ from .models import (
     Rating,
     Report,
     Topic,
+    Transcript,
+    TranscriptSegment,
     UserProfile,
     WatchEvent,
 )
@@ -148,6 +150,70 @@ class ChapterAdmin(admin.ModelAdmin):
     search_fields = ("title", "episode__title")
     list_select_related = ("episode",)
     raw_id_fields = ("episode",)
+
+
+@admin.register(Transcript)
+class TranscriptAdmin(admin.ModelAdmin):
+    """Read-only. Transcripts are fetched, never authored here.
+
+    ⚠️ No segment inline. One episode is ~150 segments, so an inline would render
+    150 textareas per page load.
+    """
+
+    list_display = (
+        "episode", "status", "source", "track_id",
+        "segment_count", "word_count", "coverage", "checked_at",
+    )
+    list_filter = ("status", "source", "language", "episode__channel")
+    search_fields = ("episode__title", "episode__youtube_id")
+    list_select_related = ("episode",)
+    raw_id_fields = ("episode",)
+    readonly_fields = (
+        "episode", "status", "source", "language", "track_id",
+        "segment_count", "word_count", "covered_sec", "checked_at",
+        "created_at", "updated_at",
+    )
+    ordering = ("-updated_at",)
+
+    @admin.display(description="coverage")
+    def coverage(self, obj):
+        ratio = obj.coverage_ratio
+        if ratio is None:
+            return "-"
+        # ⚠️ Well under 100% means the caption track stopped early: a partial
+        # transcript that otherwise looks complete.
+        return format_html(
+            '<span style="color:{}">{:.0%}</span>',
+            "#b00" if ratio < 0.9 else "inherit",
+            ratio,
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(TranscriptSegment)
+class TranscriptSegmentAdmin(admin.ModelAdmin):
+    """Spot-checking one passage. Not a browsing surface - there are ~115k rows."""
+
+    list_display = ("transcript", "start_sec", "end_sec", "preview")
+    search_fields = ("text",)
+    list_select_related = ("transcript__episode",)
+    raw_id_fields = ("transcript",)
+    readonly_fields = ("transcript", "start_sec", "end_sec", "text")
+
+    @admin.display(description="text")
+    def preview(self, obj):
+        return obj.text[:120]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 # ---------------------------------------------------------------------------

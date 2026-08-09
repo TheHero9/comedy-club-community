@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  body { margin:0; background:#0B0A09; color:#F7F4F0; font-family:'Onest',system-ui,sans-serif; }
+  a { color:#E4232C; text-decoration:none; }
+  a:hover { color:#F0463E; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#3D3935; border-radius:99px; }
+</style>
+</helmet>
+
+<div style="padding:56px 64px 120px;display:flex;flex-direction:column;gap:72px;background:#0B0A09;max-width:1500px;">
+
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.14em;color:#E4232C;text-transform:uppercase;">Foundations</div>
+    <h1 style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:40px;line-height:1.1;margin:0;letter-spacing:-.02em;">Tokens, type and ladders</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#ADA69F;max-width:780px;text-wrap:pretty;">Brand direction taken from the club artwork: near-black ground, one signal red, one comedy yellow. Dark is the default and the priority. Every value is authored in oklch and shown with its hex equivalent for reference.</p>
+  </div>
+
+  <section style="display:flex;flex-direction:column;gap:22px;">
+    <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">1. Colour</h2>
+
+    <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px 28px;">
+      <h3 style="margin:0 0 4px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Brand</h3>
+      <p style="margin:0 0 18px;font-size:14px;color:#7A736C;line-height:1.5;max-width:820px;">Red is the interactive colour: buttons, active nav, focus ring, the logo mark. Yellow is the highlight colour: search match underlines, marker icons in legends, the channel avatar fallback. Neither is ever used as a filled score chip, which is what keeps them out of the band scale's way.</p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+        <sc-for list="{{ brand }}" as="t" hint-placeholder-count="4">
+          <div style="border-radius:16px;overflow:hidden;border:1px solid #2C2825;">
+            <div style="height:76px;background:{{ t.hex }};"></div>
+            <div style="padding:12px 14px;background:#1E1B19;">
+              <div style="font-size:14px;font-weight:600;">{{ t.name }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;margin-top:5px;">{{ t.oklch }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E5852;">{{ t.hex }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px 28px;">
+      <h3 style="margin:0 0 18px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Neutrals, dark theme</h3>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;">
+        <sc-for list="{{ neutrals }}" as="t" hint-placeholder-count="10">
+          <div style="border-radius:14px;overflow:hidden;border:1px solid #2C2825;">
+            <div style="height:56px;background:{{ t.hex }};"></div>
+            <div style="padding:10px 12px;background:#1E1B19;">
+              <div style="font-size:13px;font-weight:600;">{{ t.name }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7A736C;margin-top:4px;">{{ t.oklch }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5E5852;">{{ t.hex }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px 28px;">
+      <h3 style="margin:0 0 4px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Score bands</h3>
+      <p style="margin:0 0 18px;font-size:14px;color:#7A736C;line-height:1.5;max-width:820px;">All seven sit at lightness 0.66 to 0.87 with chroma held between 0.13 and 0.16, so they read as one family and always take near-black text. The brand red sits far below them at lightness 0.60 with chroma 0.225: darker, more saturated, and always paired with white text. That difference in weight is what stops garbage red and brand red from being confused.</p>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+        <sc-for list="{{ bandTokens }}" as="t" hint-placeholder-count="7">
+          <div style="border-radius:14px;overflow:hidden;border:1px solid #2C2825;">
+            <div style="height:64px;background:{{ t.hex }};display:flex;align-items:center;justify-content:space-between;padding:0 14px;">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:#1A1614;">{{ t.sample }}</span>
+              <span style="font-size:12px;font-weight:600;color:#1A1614;">{{ t.min }}</span>
+            </div>
+            <div style="padding:10px 12px;background:#1E1B19;">
+              <div style="font-size:13px;font-weight:600;">{{ t.name }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7A736C;margin-top:4px;">{{ t.oklch }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5E5852;">contrast {{ t.ratio }}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="border-radius:14px;overflow:hidden;border:1px dashed #4A4540;">
+          <div style="height:64px;background:#23201D;display:flex;align-items:center;padding:0 14px;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:#6E6862;">?</span>
+          </div>
+          <div style="padding:10px 12px;background:#1E1B19;">
+            <div style="font-size:13px;font-weight:600;">Not rated</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7A736C;margin-top:4px;">card + dashed border</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5E5852;">never 0, never garbage</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px 28px;">
+      <h3 style="margin:0 0 4px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Light theme, optional</h3>
+      <p style="margin:0 0 18px;font-size:14px;color:#7A736C;line-height:1.5;">Every dark token has a counterpart. Bands drop to lightness 0.62 to 0.72 so white text works, and the brand red lightens by 0.02 to hold its contrast on paper white.</p>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;">
+        <sc-for list="{{ light }}" as="t" hint-placeholder-count="6">
+          <div style="border-radius:14px;overflow:hidden;border:1px solid #2C2825;">
+            <div style="height:48px;background:{{ t.hex }};"></div>
+            <div style="padding:10px 12px;background:#1E1B19;">
+              <div style="font-size:12.5px;font-weight:600;">{{ t.name }}</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#7A736C;margin-top:4px;">{{ t.oklch }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:22px;">
+    <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">2. Type</h2>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+      <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <div style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:34px;line-height:1;">Аа Bb</div>
+        <div style="margin-top:14px;font-size:15px;font-weight:600;">Unbounded</div>
+        <div style="font-size:13px;color:#7A736C;margin-top:4px;line-height:1.5;">Display and headings, weights 600 and 700. Full Cyrillic. Geometric and slightly odd, which is the point: it reads as a club poster, not a dashboard.</div>
+        <div style="margin-top:12px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:17px;">Иван Кирков</div>
+      </div>
+      <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <div style="font-family:'Onest',sans-serif;font-weight:600;font-size:34px;line-height:1;">Аа Bb</div>
+        <div style="margin-top:14px;font-size:15px;font-weight:600;">Onest</div>
+        <div style="font-size:13px;color:#7A736C;margin-top:4px;line-height:1.5;">UI and body, weights 400 to 700. Full Cyrillic, designed with Cyrillic first, so Bulgarian titles do not fall back per glyph.</div>
+        <div style="margin-top:12px;font-size:17px;">Разговор за детството и лятото на село</div>
+      </div>
+      <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:34px;line-height:1;">7.4</div>
+        <div style="margin-top:14px;font-size:15px;font-weight:600;">JetBrains Mono</div>
+        <div style="font-size:13px;color:#7A736C;margin-top:4px;line-height:1.5;">Scores, timestamps, counts, dates. Tabular by default, which keeps a column of grid numbers from wobbling. Cyrillic included.</div>
+        <div style="margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:17px;">1:42:10</div>
+      </div>
+    </div>
+
+    <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px 28px;">
+      <h3 style="margin:0 0 18px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Scale</h3>
+      <div style="display:flex;flex-direction:column;">
+        <div style="display:grid;grid-template-columns:150px 1fr 130px 130px 120px;gap:16px;padding-bottom:10px;border-bottom:1px solid #2C2825;font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;letter-spacing:.06em;">
+          <span>TOKEN</span><span>SAMPLE</span><span>MOBILE 390</span><span>DESKTOP 1280</span><span>FAMILY</span>
+        </div>
+        <sc-for list="{{ typeScale }}" as="t" hint-placeholder-count="9">
+          <div style="display:grid;grid-template-columns:150px 1fr 130px 130px 120px;gap:16px;padding:14px 0;border-bottom:1px solid #211E1C;align-items:center;">
+            <code style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#ADA69F;">{{ t.token }}</code>
+            <span style="font-family:{{ t.family }};font-size:{{ t.px }};font-weight:{{ t.weight }};line-height:1.2;color:#F7F4F0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.sample }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">{{ t.mobile }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">{{ t.desktop }}</span>
+            <span style="font-size:12px;color:#7A736C;">{{ t.fam }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px 28px;">
+      <h3 style="margin:0 0 4px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Bulgarian titles: the clamp rules</h3>
+      <p style="margin:0 0 18px;font-size:14px;color:#7A736C;line-height:1.5;max-width:860px;">Every title slot below is shown at 390px with the longest real title in the set. All of them carry overflow-wrap: anywhere so a compound word breaks instead of overflowing, and a line-clamp so the surrounding layout never moves.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <sc-for list="{{ clamps }}" as="c" hint-placeholder-count="4">
+          <div style="width:340px;background:#1E1B19;border:1px solid #2C2825;border-radius:14px;padding:16px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#E4232C;letter-spacing:.08em;">{{ c.where }}</div>
+            <div style="margin-top:10px;font-size:{{ c.size }};font-weight:600;line-height:1.3;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:{{ c.lines }};overflow:hidden;">Как да си купиш хладилник и да съжаляваш до края на живота си, разказано от човек с опит</div>
+            <div style="margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;">{{ c.rule }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:22px;">
+    <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">3. Space, radius, elevation</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+
+      <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <h3 style="margin:0 0 14px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;">Spacing</h3>
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <sc-for list="{{ spacing }}" as="s" hint-placeholder-count="8">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <code style="width:52px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#7A736C;">{{ s.token }}</code>
+              <div style="height:12px;border-radius:3px;background:#E4232C;width:{{ s.px }};"></div>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#5E5852;">{{ s.px }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin:16px 0 0;font-size:12.5px;line-height:1.5;color:#7A736C;">Page gutter is 4 on mobile and 8 on desktop. Section rhythm is 8 on mobile, 10 on desktop. Card padding is 4 on mobile, 5 on desktop.</p>
+      </div>
+
+      <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <h3 style="margin:0 0 14px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;">Radius</h3>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <sc-for list="{{ radii }}" as="r" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="width:46px;height:32px;background:#2C2825;border:1px solid #4A4540;border-radius:{{ r.px }};"></div>
+              <code style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#ADA69F;width:64px;">{{ r.px }}</code>
+              <span style="font-size:12px;color:#7A736C;">{{ r.use }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin:16px 0 0;font-size:12.5px;line-height:1.5;color:#7A736C;">Radius scales with the element. Base token is 14px, which replaces shadcn's 10px default.</p>
+      </div>
+
+      <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:24px;">
+        <h3 style="margin:0 0 14px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;">Elevation</h3>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <sc-for list="{{ elevation }}" as="e" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <div style="width:64px;height:40px;border-radius:12px;background:#23201D;border:1px solid #2C2825;box-shadow:{{ e.shadow }};"></div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:600;">{{ e.name }}</div>
+                <div style="font-size:12px;color:#7A736C;line-height:1.4;">{{ e.use }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:22px;">
+    <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">4. Motion</h2>
+    <div style="background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px 28px;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px 32px;">
+        <sc-for list="{{ motion }}" as="m" hint-placeholder-count="8">
+          <div style="display:flex;gap:14px;padding:10px 0;border-bottom:1px solid #211E1C;">
+            <code style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#FFC93A;min-width:96px;">{{ m.timing }}</code>
+            <div><div style="font-size:13.5px;font-weight:600;">{{ m.what }}</div><div style="font-size:12.5px;color:#7A736C;line-height:1.45;margin-top:2px;">{{ m.note }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin:18px 0 0;font-size:14px;line-height:1.55;color:#ADA69F;">Under prefers-reduced-motion: reduce, every transform and every shimmer is dropped. Opacity and colour transitions stay, capped at 100ms. Nothing in the ratings grid animates its fill colour at any time, because a colour that moves reads as a value that changed.</p>
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1500,&quot;height&quot;:1100}}">
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      brand: [
+        { name: 'primary', hex: '#E4232C', oklch: 'oklch(0.600 0.225 27)' },
+        { name: 'primary-hover', hex: '#F0463E', oklch: 'oklch(0.665 0.205 27)' },
+        { name: 'accent', hex: '#FFC93A', oklch: 'oklch(0.855 0.165 88)' },
+        { name: 'accent-quiet', hex: '#8A6B1E', oklch: 'oklch(0.560 0.100 88)' }
+      ],
+      neutrals: [
+        { name: 'background', hex: '#191614', oklch: 'oklch(0.155 0.008 55)' },
+        { name: 'card', hex: '#23201D', oklch: 'oklch(0.205 0.010 55)' },
+        { name: 'popover', hex: '#2A2623', oklch: 'oklch(0.230 0.010 55)' },
+        { name: 'elevated', hex: '#2C2825', oklch: 'oklch(0.245 0.011 55)' },
+        { name: 'muted', hex: '#35312D', oklch: 'oklch(0.285 0.010 55)' },
+        { name: 'border', hex: '#3D3935', oklch: 'oklch(0.320 0.010 55)' },
+        { name: 'border-strong', hex: '#4A4540', oklch: 'oklch(0.375 0.010 55)' },
+        { name: 'foreground', hex: '#F7F4F0', oklch: 'oklch(0.970 0.004 85)' },
+        { name: 'muted-foreground', hex: '#ADA69F', oklch: 'oklch(0.745 0.008 60)' },
+        { name: 'subtle-foreground', hex: '#7A736C', oklch: 'oklch(0.575 0.008 60)' }
+      ],
+      bandTokens: [
+        { name: 'masterpiece', hex: '#5CB8E8', oklch: 'oklch(0.800 0.130 235)', sample: '9.7', min: '9.5+', ratio: '8.1:1' },
+        { name: 'awesome', hex: '#46C68F', oklch: 'oklch(0.800 0.150 155)', sample: '8.6', min: '8.5+', ratio: '8.0:1' },
+        { name: 'great', hex: '#6FD16A', oklch: 'oklch(0.830 0.160 140)', sample: '7.8', min: '7.5+', ratio: '8.9:1' },
+        { name: 'good', hex: '#ABDC5F', oklch: 'oklch(0.870 0.150 118)', sample: '6.9', min: '6.5+', ratio: '9.9:1' },
+        { name: 'regular', hex: '#E9BE4B', oklch: 'oklch(0.840 0.140 85)', sample: '5.9', min: '5.5+', ratio: '9.1:1' },
+        { name: 'bad', hex: '#E2914F', oklch: 'oklch(0.750 0.150 55)', sample: '4.4', min: '4.0+', ratio: '6.7:1' },
+        { name: 'garbage', hex: '#D66A5B', oklch: 'oklch(0.660 0.160 28)', sample: '3.1', min: '0.0+', ratio: '5.1:1' }
+      ],
+      light: [
+        { name: 'background', hex: '#FBF8F4', oklch: 'oklch(0.980 0.006 85)' },
+        { name: 'card', hex: '#FFFFFF', oklch: 'oklch(1.000 0 0)' },
+        { name: 'muted', hex: '#EDE8E1', oklch: 'oklch(0.930 0.008 78)' },
+        { name: 'border', hex: '#DCD5CB', oklch: 'oklch(0.870 0.010 78)' },
+        { name: 'foreground', hex: '#1A1614', oklch: 'oklch(0.190 0.008 55)' },
+        { name: 'primary', hex: '#D0202A', oklch: 'oklch(0.570 0.220 27)' }
+      ],
+      typeScale: [
+        { token: 'display', family: "'Unbounded',sans-serif", px: '30px', weight: '700', sample: 'Всеки епизод', mobile: '28 / 1.1', desktop: '40 / 1.05', fam: 'Unbounded' },
+        { token: 'h1', family: "'Unbounded',sans-serif", px: '24px', weight: '600', sample: 'Иван Кирков', mobile: '21 / 1.2', desktop: '34 / 1.1', fam: 'Unbounded' },
+        { token: 'h2', family: "'Unbounded',sans-serif", px: '19px', weight: '600', sample: 'Ratings grid', mobile: '17 / 1.25', desktop: '22 / 1.2', fam: 'Unbounded' },
+        { token: 'h3', family: "'Onest',sans-serif", px: '17px', weight: '600', sample: 'Моменти от епизода', mobile: '16 / 1.3', desktop: '18 / 1.3', fam: 'Onest' },
+        { token: 'title-card', family: "'Onest',sans-serif", px: '16px', weight: '600', sample: 'Разговор за детството и лятото', mobile: '15 / 1.3', desktop: '16 / 1.3', fam: 'Onest' },
+        { token: 'body', family: "'Onest',sans-serif", px: '15px', weight: '400', sample: 'Подкаст за всичко между два лоши вица.', mobile: '14.5 / 1.5', desktop: '15 / 1.55', fam: 'Onest' },
+        { token: 'small', family: "'Onest',sans-serif", px: '13px', weight: '400', sample: '58 от 74 епизода с оценка', mobile: '13 / 1.45', desktop: '13.5 / 1.5', fam: 'Onest' },
+        { token: 'micro', family: "'Onest',sans-serif", px: '11.5px', weight: '500', sample: 'MEMBERS ONLY', mobile: '11.5 / 1.3', desktop: '12 / 1.3', fam: 'Onest' },
+        { token: 'numeric', family: "'JetBrains Mono',monospace", px: '15px', weight: '700', sample: '8.6  /  1:42:10  /  267', mobile: '15 tabular', desktop: '14 tabular', fam: 'JetBrains Mono' },
+        { token: 'input', family: "'Onest',sans-serif", px: '16px', weight: '400', sample: 'Търси момент или тема', mobile: '16 minimum', desktop: '16', fam: 'Onest' }
+      ],
+      clamps: [
+        { where: 'EPISODE PAGE H1', size: '22px', lines: '3', rule: 'clamp 3 lines, 66px tall slot' },
+        { where: 'CARD TITLE', size: '15px', lines: '2', rule: 'clamp 2 lines, 40px reserved' },
+        { where: 'SEARCH RESULT', size: '16px', lines: '2', rule: 'clamp 2 lines, match rows below' },
+        { where: 'GRID PREVIEW SHEET', size: '18px', lines: '3', rule: 'clamp 3 lines, sheet grows' }
+      ],
+      spacing: [
+        { token: 'space-1', px: '4px' }, { token: 'space-2', px: '8px' }, { token: 'space-3', px: '12px' },
+        { token: 'space-4', px: '16px' }, { token: 'space-5', px: '20px' }, { token: 'space-6', px: '24px' },
+        { token: 'space-8', px: '32px' }, { token: 'space-10', px: '40px' }, { token: 'space-12', px: '48px' }
+      ],
+      radii: [
+        { px: '8px', use: 'chips, grid cell on desktop' },
+        { px: '10px', use: 'small buttons, segmented items' },
+        { px: '12px', use: 'inputs, mobile grid cell' },
+        { px: '14px', use: 'base token, cards' },
+        { px: '20px', use: 'panels, large cards' },
+        { px: '26px', use: 'bottom sheets, phone-scale surfaces' }
+      ],
+      elevation: [
+        { name: 'flat', shadow: 'none', use: 'cards and lists. Border only, no shadow. This is the default.' },
+        { name: 'raised', shadow: '0 1px 2px rgba(0,0,0,.45)', use: 'sticky header and bottom nav once the page scrolls.' },
+        { name: 'floating', shadow: '0 6px 16px rgba(0,0,0,.45)', use: 'dropdowns, popovers, toasts.' },
+        { name: 'overlay', shadow: '0 20px 44px rgba(0,0,0,.6)', use: 'bottom sheets, hover cards, dialogs.' }
+      ],
+      motion: [
+        { timing: '120ms ease-out', what: 'Hover and focus', note: 'Colour and ring only.' },
+        { timing: '160ms ease-out', what: 'Button press', note: 'Scale to 0.97, no shadow change.' },
+        { timing: '240ms cubic', what: 'Bottom sheet in', note: 'cubic-bezier(.32,.72,0,1), translateY from 100%.' },
+        { timing: '180ms ease-in', what: 'Bottom sheet out', note: 'Faster out than in.' },
+        { timing: '120ms delay', what: 'Grid hover card', note: 'Opens after 120ms, closes with no delay.' },
+        { timing: '1200ms loop', what: 'Skeleton shimmer', note: 'Opacity pulse 0.5 to 1, never a moving gradient.' },
+        { timing: '0ms', what: 'Band colours', note: 'Never transition. A moving colour reads as a changed score.' },
+        { timing: '200ms ease-out', what: 'Toast', note: 'Slide down from top-centre, auto-dismiss at 4s.' }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

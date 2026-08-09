@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  body { margin:0; background:#0B0A09; color:#F7F4F0; font-family:'Onest',system-ui,sans-serif; }
+  a { color:#E4232C; text-decoration:none; }
+  a:hover { color:#F0463E; }
+  button { font-family:'Onest',system-ui,sans-serif; cursor:pointer; }
+  h1,h2,h3 { text-wrap:pretty; }
+  @keyframes pulse { 0%,100% { opacity:.45 } 50% { opacity:.85 } }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#3D3935; border-radius:99px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  .noscroll::-webkit-scrollbar { height:0; }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#0B0A09;display:flex;flex-direction:column;align-items:center;padding:20px 20px 64px;gap:18px;">
+
+  <div style="width:100%;max-width:1340px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:9px;">
+      <div style="width:28px;height:28px;border-radius:9px;background:#E4232C;display:flex;align-items:center;justify-content:center;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>
+      </div>
+      <span style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:13px;color:#F7F4F0;">Prototype</span>
+    </div>
+
+    <div style="display:flex;padding:3px;border-radius:11px;background:#191614;border:1px solid #3D3935;">
+      <button onClick="{{ setMobile }}" style="height:30px;padding:0 12px;border:0;border-radius:8px;background:{{ mobileBtnBg }};color:{{ mobileBtnFg }};font-size:12.5px;font-weight:600;">Mobile</button>
+      <button onClick="{{ setDesktop }}" style="height:30px;padding:0 12px;border:0;border-radius:8px;background:{{ desktopBtnBg }};color:{{ desktopBtnFg }};font-size:12.5px;font-weight:600;">Desktop</button>
+    </div>
+
+    <div style="display:flex;padding:3px;border-radius:11px;background:#191614;border:1px solid #3D3935;">
+      <button onClick="{{ setDark }}" style="height:30px;padding:0 12px;border:0;border-radius:8px;background:{{ darkBtnBg }};color:{{ darkBtnFg }};font-size:12.5px;font-weight:600;">Dark</button>
+      <button onClick="{{ setLight }}" style="height:30px;padding:0 12px;border:0;border-radius:8px;background:{{ lightBtnBg }};color:{{ lightBtnFg }};font-size:12.5px;font-weight:600;">Light</button>
+    </div>
+
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+      <sc-for list="{{ routes }}" as="r" hint-placeholder-count="10">
+        <button onClick="{{ r.go }}" style="height:30px;padding:0 10px;border:1px solid {{ r.border }};border-radius:8px;background:{{ r.bg }};color:{{ r.fg }};font-size:12px;font-weight:500;">{{ r.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="--bg:{{ vBg }};--card:{{ vCard }};--card2:{{ vCard2 }};--elev:{{ vElev }};--bd:{{ vBd }};--bd2:{{ vBd2 }};--bd3:{{ vBd3 }};--fg:{{ vFg }};--fg2:{{ vFg2 }};--fg3:{{ vFg3 }};--fg4:{{ vFg4 }};--br:{{ vBr }};--ac:{{ vAc }};--th1:{{ vTh1 }};--th2:{{ vTh2 }};--ovl:{{ vOvl }};position:relative;width:{{ frameW }};height:{{ frameH }};border-radius:{{ frameR }};background:var(--bg,#191614);color:var(--fg,#F7F4F0);border:1px solid var(--bd2,#3D3935);box-shadow:0 30px 70px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;">
+
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+      <div style="height:42px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 5px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg,#F7F4F0);">
+        <span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span>
+      </div>
+    </sc-if>
+
+    <div style="height:{{ headerH }};flex:none;display:flex;align-items:center;gap:{{ headerGap }};padding:0 {{ headerPad }};border-bottom:1px solid var(--bd,#2C2825);background:var(--bg,#191614);">
+      <button onClick="{{ goHome }}" style="display:flex;align-items:center;gap:9px;flex:none;border:0;background:transparent;padding:0;">
+        <span style="width:{{ logoSize }};height:{{ logoSize }};border-radius:10px;background:var(--br,#E4232C);display:flex;align-items:center;justify-content:center;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>
+        </span>
+        <span style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ wordmarkSize }};white-space:nowrap;color:var(--fg,#F7F4F0);letter-spacing:-.01em;">Podcast Index</span>
+      </button>
+
+      <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+        <nav style="display:flex;gap:2px;flex:none;">
+          <sc-for list="{{ topNav }}" as="n" hint-placeholder-count="3">
+            <button onClick="{{ n.go }}" style="height:36px;padding:0 12px;border:0;border-radius:9px;background:{{ n.bg }};color:{{ n.fg }};font-size:14px;font-weight:500;">{{ n.label }}</button>
+          </sc-for>
+        </nav>
+      </sc-if>
+
+      <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ openSearchOverlay }}" style="flex:1;max-width:400px;height:40px;border-radius:12px;background:var(--card,#23201D);border:1px solid var(--bd2,#3D3935);display:flex;align-items:center;gap:10px;padding:0 14px;color:var(--fg3,#7A736C);font-size:15px;text-align:left;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+          <span style="flex:1;">Търси момент, тема или гост</span>
+        </button>
+      </sc-if>
+
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+        <button onClick="{{ toggleTheme }}" style="width:38px;height:38px;border:0;border-radius:11px;background:var(--elev,#2C2825);display:flex;align-items:center;justify-content:center;color:var(--fg2,#ADA69F);">
+          <sc-if value="{{ isDark }}" hint-placeholder-val="{{ true }}">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m5 5 1.5 1.5"></path><path d="M17.5 17.5 19 19"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M5 19l1.5-1.5"></path><path d="M17.5 6.5 19 5"></path></svg>
+          </sc-if>
+          <sc-if value="{{ isLight }}" hint-placeholder-val="{{ false }}">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path></svg>
+          </sc-if>
+        </button>
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ openSearchOverlay }}" style="width:38px;height:38px;border:0;border-radius:11px;background:var(--elev,#2C2825);display:flex;align-items:center;justify-content:center;color:var(--fg,#F7F4F0);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+          </button>
+        </sc-if>
+        <button onClick="{{ goProfile }}" style="width:34px;height:34px;flex:none;border-radius:99px;background:var(--elev,#2C2825);border:1px solid var(--bd2,#3D3935);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--fg2,#ADA69F);">МХ</button>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;overflow-x:hidden;">
+
+      <sc-if value="{{ rEpisode }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="max-width:{{ contentMax }};margin:0 auto;padding:{{ epHeadPad }};">
+            <div style="display:flex;align-items:flex-start;gap:16px;">
+              <div style="flex:1;min-width:0;">
+                <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ epTitleSize }};line-height:1.14;letter-spacing:-.02em;overflow-wrap:anywhere;">{{ ep.title }}</h1>
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:{{ epMetaSize }};color:var(--fg3,#7A736C);">
+                  <span>{{ ep.year }}</span><span style="opacity:.5;">.</span>
+                  <span>{{ ep.date }}</span><span style="opacity:.5;">.</span>
+                  <span>{{ ep.dur }}</span><span style="opacity:.5;">.</span>
+                  <span>Епизод {{ ep.number }}</span>
+                </div>
+              </div>
+              <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:20px;flex:none;padding-top:4px;">
+                  <div style="text-align:right;">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--fg3,#7A736C);">ОЦЕНКА</div>
+                    <div style="display:flex;align-items:baseline;gap:5px;justify-content:flex-end;margin-top:3px;">
+                      <span style="width:18px;height:18px;display:inline-flex;color:var(--ac,#FFC93A);"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg></span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--fg,#F7F4F0);">{{ ep.score }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--fg3,#7A736C);">/10</span>
+                    </div>
+                    <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:1px;">{{ ep.ratingsLabel }}</div>
+                  </div>
+                  <button onClick="{{ openRate }}" style="border:0;background:transparent;text-align:center;padding:0;color:var(--br,#E4232C);">
+                    <div style="display:flex;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="{{ myStarFill }}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg></div>
+                    <div style="font-size:12.5px;font-weight:600;margin-top:3px;">{{ myRatingCta }}</div>
+                  </button>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <div style="max-width:{{ contentMax }};margin:0 auto;padding:{{ epMediaPad }};">
+            <div style="display:grid;grid-template-columns:{{ epCols }};gap:{{ epGap }};align-items:start;">
+
+              <div style="min-width:0;">
+                <a href="https://www.youtube.com" target="_blank" style="display:block;border-radius:16px;overflow:hidden;position:relative;aspect-ratio:16/9;background:var(--th1,#26221F);">
+                  <span style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 11px,var(--th2,#2C2825) 11px 22px);"></span>
+                  <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+                    <span style="width:62px;height:62px;border-radius:99px;background:rgba(228,35,44,.94);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.4);">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff" stroke="none"><path d="M8 5.5v13l11-6.5Z"></path></svg>
+                    </span>
+                  </span>
+                  <span style="position:absolute;left:10px;top:10px;display:flex;gap:6px;">
+                    <sc-if value="{{ ep.members }}" hint-placeholder-val="{{ false }}">
+                      <span style="height:26px;padding:0 9px;border-radius:8px;background:rgba(20,17,15,.88);color:#FFC93A;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>Само за членове
+                      </span>
+                    </sc-if>
+                    <sc-if value="{{ ep.stream }}" hint-placeholder-val="{{ false }}">
+                      <span style="height:26px;padding:0 9px;border-radius:8px;background:rgba(20,17,15,.88);color:#FFC93A;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg>Стрийм
+                      </span>
+                    </sc-if>
+                  </span>
+                  <span style="position:absolute;right:10px;bottom:10px;height:24px;padding:0 8px;border-radius:7px;background:rgba(20,17,15,.88);color:#F7F4F0;font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;align-items:center;">{{ ep.dur }}</span>
+                </a>
+
+                <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:center;gap:14px;margin-top:16px;padding:14px;border-radius:16px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);">
+                    <div style="flex:1;min-width:0;">
+                      <div style="display:flex;align-items:baseline;gap:5px;">
+                        <span style="width:18px;height:18px;display:inline-flex;color:var(--ac,#FFC93A);align-self:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg></span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;">{{ ep.score }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--fg3,#7A736C);">/10</span>
+                      </div>
+                      <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:2px;">{{ ep.ratingsLabel }}</div>
+                    </div>
+                    <div style="width:1px;height:38px;background:var(--bd,#2C2825);"></div>
+                    <button onClick="{{ openRate }}" style="border:0;background:transparent;text-align:center;padding:0 4px;color:var(--br,#E4232C);">
+                      <div style="display:flex;justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" fill="{{ myStarFill }}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg></div>
+                      <div style="font-size:12px;font-weight:600;margin-top:3px;white-space:nowrap;">{{ myRatingCta }}</div>
+                    </button>
+                    <sc-if value="{{ ep.hasElite }}" hint-placeholder-val="{{ false }}">
+                      <div style="width:1px;height:38px;background:var(--bd,#2C2825);"></div>
+                    </sc-if>
+                    <sc-if value="{{ ep.hasElite }}" hint-placeholder-val="{{ false }}">
+                      <div style="text-align:center;">
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:{{ ep.eliteColor }};">{{ ep.elite }}</div>
+                        <div style="font-size:10.5px;color:var(--fg3,#7A736C);margin-top:2px;">Elite</div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+                <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:16px;">
+                  <sc-for list="{{ ep.topics }}" as="t" hint-placeholder-count="3">
+                    <button onClick="{{ t.go }}" style="height:34px;padding:0 13px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:transparent;color:var(--fg,#F7F4F0);font-size:13px;font-weight:500;">{{ t.name }}</button>
+                  </sc-for>
+                  <sc-if value="{{ ep.noTopics }}" hint-placeholder-val="{{ false }}">
+                    <button style="height:34px;padding:0 13px;border:1px dashed var(--bd3,#4A4540);border-radius:99px;background:transparent;color:var(--fg2,#ADA69F);font-size:13px;display:inline-flex;align-items:center;gap:6px;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>Добави първата тема
+                    </button>
+                  </sc-if>
+                </div>
+
+                <div style="margin-top:16px;">
+                  <p style="margin:0;font-size:{{ bodySize }};line-height:1.55;color:var(--fg2,#ADA69F);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:{{ descClamp }};overflow:hidden;">{{ ep.description }}</p>
+                  <sc-if value="{{ descToggleable }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ toggleDesc }}" style="margin-top:6px;border:0;background:transparent;padding:0;color:var(--br,#E4232C);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;">
+                      {{ descToggleLabel }}
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate({{ descArrow }});"><path d="m6 9 6 6 6-6"></path></svg>
+                    </button>
+                  </sc-if>
+                </div>
+
+                <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--bd,#2C2825);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:14px;font-weight:700;">Участници</span>
+                    <span style="font-size:12.5px;color:var(--fg3,#7A736C);">{{ ep.castCount }}</span>
+                  </div>
+                  <div class="noscroll" style="display:flex;gap:10px;margin-top:12px;overflow-x:auto;padding-bottom:2px;">
+                    <sc-for list="{{ ep.cast }}" as="c" hint-placeholder-count="3">
+                      <div style="width:92px;flex:none;text-align:center;">
+                        <div style="width:64px;height:64px;margin:0 auto;border-radius:99px;background:{{ c.avatarBg }};color:{{ c.avatarFg }};display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:19px;">{{ c.initials }}</div>
+                        <div style="font-size:12.5px;font-weight:600;margin-top:8px;line-height:1.25;">{{ c.name }}</div>
+                        <div style="font-size:11px;color:var(--fg3,#7A736C);margin-top:2px;">{{ c.role }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <sc-if value="{{ ep.hasMoments }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--bd,#2C2825);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                      <span style="font-size:14px;font-weight:700;">Моменти</span>
+                      <span style="font-size:12.5px;color:var(--fg3,#7A736C);">{{ ep.momentCount }}</span>
+                    </div>
+                    <div style="position:relative;height:32px;margin-top:12px;">
+                      <div style="position:absolute;left:0;right:0;top:13px;height:6px;border-radius:99px;background:var(--elev,#2C2825);"></div>
+                      <sc-for list="{{ ep.moments }}" as="m" hint-placeholder-count="3">
+                        <div style="position:absolute;top:7px;left:{{ m.left }};width:4px;height:18px;border-radius:99px;background:var(--ac,#FFC93A);"></div>
+                      </sc-for>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:7px;margin-top:4px;">
+                      <sc-for list="{{ ep.moments }}" as="m" hint-placeholder-count="3">
+                        <div style="display:flex;align-items:center;gap:11px;min-height:52px;padding:9px 12px;border-radius:13px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);">
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;color:var(--ac,#FFC93A);background:var(--elev,#2C2825);height:27px;padding:0 8px;border-radius:8px;display:inline-flex;align-items:center;flex:none;">{{ m.t }}</span>
+                          <div style="flex:1;min-width:0;">
+                            <div style="font-size:14px;line-height:1.35;overflow-wrap:anywhere;">{{ m.label }}</div>
+                            <div style="font-size:11px;color:var(--fg3,#7A736C);margin-top:2px;">{{ m.author }}</div>
+                          </div>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--fg2,#ADA69F);">{{ m.votes }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ ep.noMoments }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--bd,#2C2825);">
+                    <span style="font-size:14px;font-weight:700;">Моменти</span>
+                    <div style="margin-top:12px;border:1px dashed var(--bd3,#4A4540);border-radius:14px;padding:18px 16px;">
+                      <div style="font-size:14.5px;font-weight:600;">Още нищо не е отбелязано</div>
+                      <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:var(--fg3,#7A736C);max-width:440px;">Час плюс няколко думи. Това прави епизода намираем по-късно.</p>
+                      <button style="margin-top:13px;height:42px;padding:0 15px;border:1px solid var(--bd3,#4A4540);border-radius:12px;background:transparent;color:var(--fg,#F7F4F0);font-size:13.5px;font-weight:600;">Добави първия момент</button>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--bd,#2C2825);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:14px;font-weight:700;">Оценки от общността</span>
+                    <button style="border:0;background:transparent;color:var(--br,#E4232C);font-size:13px;font-weight:600;padding:0;">Напиши мнение</button>
+                  </div>
+                  <div style="display:flex;align-items:flex-end;gap:18px;margin-top:14px;">
+                    <div style="flex:none;">
+                      <div style="display:flex;align-items:baseline;gap:5px;">
+                        <span style="width:20px;height:20px;display:inline-flex;color:var(--ac,#FFC93A);align-self:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg></span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;">{{ ep.score }}</span>
+                      </div>
+                      <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:2px;">{{ ep.ratingsLabel }}</div>
+                    </div>
+                    <div style="flex:1;display:flex;align-items:flex-end;gap:4px;height:62px;">
+                      <sc-for list="{{ ep.breakdown }}" as="b" hint-placeholder-count="10">
+                        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+                          <span style="width:100%;border-radius:4px 4px 2px 2px;background:{{ b.bg }};height:{{ b.h }};"></span>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--fg3,#7A736C);">{{ b.n }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+                    <div style="display:flex;gap:11px;padding:12px;border-radius:14px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);">
+                      <div style="width:34px;height:34px;flex:none;border-radius:99px;background:var(--elev,#2C2825);display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;color:var(--fg2,#ADA69F);">ДП</div>
+                      <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                          <span style="font-size:13.5px;font-weight:600;">Даниел Петров</span>
+                          <span style="height:20px;padding:0 6px;border-radius:6px;background:var(--elev,#2C2825);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--fg,#F7F4F0);display:inline-flex;align-items:center;gap:3px;">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="color:var(--ac,#FFC93A);"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg>9
+                          </span>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg3,#7A736C);">преди 3 дни</span>
+                        </div>
+                        <p style="margin:6px 0 0;font-size:14px;line-height:1.45;color:var(--fg2,#ADA69F);">Най-смешният епизод от миналата година, спорно е само дали хладилникът заслужава толкова време.</p>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:11px;padding:12px;border-radius:14px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);">
+                      <div style="width:34px;height:34px;flex:none;border-radius:99px;background:var(--elev,#2C2825);display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;color:var(--fg2,#ADA69F);">МХ</div>
+                      <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                          <span style="font-size:13.5px;font-weight:600;">Мартин Христов</span>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg3,#7A736C);">преди 1 ден</span>
+                        </div>
+                        <sc-if value="{{ spoilerHidden }}" hint-placeholder-val="{{ true }}">
+                          <div style="margin-top:7px;border-radius:11px;border:1px solid var(--bd3,#4A4540);background:var(--elev,#2C2825);padding:10px 12px;display:flex;align-items:center;gap:10px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ac,#FFC93A);"><rect x="3" y="11" width="18" height="10" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                            <span style="flex:1;font-size:12.5px;color:var(--fg2,#ADA69F);">Съдържа спойлери</span>
+                            <button onClick="{{ revealSpoiler }}" style="height:32px;padding:0 12px;border:0;border-radius:9px;background:var(--bd2,#3D3935);color:var(--fg,#F7F4F0);font-size:12.5px;font-weight:600;">Покажи</button>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ spoilerShown }}" hint-placeholder-val="{{ false }}">
+                          <div style="margin-top:7px;">
+                            <p style="margin:0;font-size:14px;line-height:1.45;color:var(--fg2,#ADA69F);">Финалът с хладилника е най-доброто нещо, което са правили от три години насам.</p>
+                            <button onClick="{{ hideSpoiler }}" style="margin-top:8px;height:30px;padding:0 11px;border:1px solid var(--bd2,#3D3935);border-radius:9px;background:transparent;color:var(--fg2,#ADA69F);font-size:12px;">Скрий пак</button>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--bd,#2C2825);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:14px;font-weight:700;">Подобни епизоди</span>
+                    <span style="font-size:12.5px;color:var(--fg3,#7A736C);">{{ similarReason }}</span>
+                  </div>
+                  <div class="noscroll" style="display:flex;gap:12px;margin-top:12px;overflow-x:auto;padding-bottom:4px;">
+                    <sc-for list="{{ similar }}" as="s" hint-placeholder-count="5">
+                      <button onClick="{{ s.open }}" style="width:168px;flex:none;border:0;background:transparent;padding:0;text-align:left;">
+                        <div style="aspect-ratio:16/9;border-radius:12px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                          <span style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 9px,var(--th2,#2C2825) 9px 18px);"></span>
+                          <span style="position:absolute;left:6px;top:6px;height:23px;padding:0 7px;border-radius:6px;background:{{ s.bg }};color:{{ s.fg }};border:{{ s.border }};font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;display:inline-flex;align-items:center;">{{ s.score }}</span>
+                        </div>
+                        <div style="margin-top:8px;font-size:13px;font-weight:600;line-height:1.3;color:var(--fg,#F7F4F0);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;">{{ s.title }}</div>
+                        <div style="font-size:11px;color:var(--fg3,#7A736C);margin-top:3px;">{{ s.tag }}</div>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="height:{{ epBottomPad }};"></div>
+              </div>
+
+              <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:12px;position:sticky;top:0;">
+                  <button onClick="{{ toggleWatched }}" style="height:50px;border:0;border-radius:99px;background:{{ watchedBtnBg }};color:{{ watchedBtnFg }};font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:9px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                    {{ watchedLabel }}
+                  </button>
+                  <div style="display:flex;gap:8px;">
+                    <button onClick="{{ openLog }}" style="flex:1;height:46px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:var(--card,#23201D);color:var(--fg,#F7F4F0);font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>
+                      Запиши дата
+                    </button>
+                    <button onClick="{{ toggleFav }}" style="width:52px;height:46px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:var(--card,#23201D);display:flex;align-items:center;justify-content:center;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="{{ favFill }}" stroke="{{ favStroke }}" stroke-width="2.2" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.5 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z"></path></svg>
+                    </button>
+                  </div>
+
+                  <div style="border-radius:18px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);padding:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                      <span style="font-size:13.5px;font-weight:700;">Гледано от теб</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg3,#7A736C);">{{ watchCountLabel }}</span>
+                    </div>
+                    <sc-if value="{{ hasWatchLog }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;">
+                        <sc-for list="{{ watchLog }}" as="w" hint-placeholder-count="2">
+                          <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:11px;background:var(--card2,#1E1B19);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:#6FD16A;"><path d="M20 6 9 17l-5-5"></path></svg>
+                            <span style="flex:1;font-size:13px;">{{ w.date }}</span>
+                            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg3,#7A736C);">{{ w.rel }}</span>
+                            <button onClick="{{ w.remove }}" style="width:22px;height:22px;border:0;border-radius:99px;background:transparent;color:var(--fg3,#7A736C);display:flex;align-items:center;justify-content:center;">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                            </button>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ noWatchLog }}" hint-placeholder-val="{{ false }}">
+                      <p style="margin:10px 0 0;font-size:12.5px;line-height:1.5;color:var(--fg3,#7A736C);">Още нямаш записана дата. Може да добавиш и минали дати, включително за преслушвания.</p>
+                    </sc-if>
+                  </div>
+
+                  <div style="border-radius:18px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);padding:16px;">
+                    <div style="font-size:13.5px;font-weight:700;">Твоята оценка</div>
+                    <div style="display:flex;align-items:baseline;gap:9px;margin-top:6px;">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;">{{ myRatingLabel }}</span>
+                      <span style="font-size:12.5px;color:var(--fg3,#7A736C);">{{ myRatingNote }}</span>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                      <button onClick="{{ openRate }}" style="flex:1;height:42px;border:0;border-radius:99px;background:var(--br,#E4232C);color:#fff;font-size:13.5px;font-weight:600;">{{ rateCta }}</button>
+                      <sc-if value="{{ hasMyRating }}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{ clearRating }}" style="height:42px;padding:0 14px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:transparent;color:var(--fg2,#ADA69F);font-size:13px;">Изчисти</button>
+                      </sc-if>
+                    </div>
+                  </div>
+
+                  <a href="https://www.youtube.com" target="_blank" style="height:46px;border-radius:99px;border:1px solid var(--bd2,#3D3935);background:transparent;color:var(--fg,#F7F4F0);display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:600;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>
+                    Гледай в YouTube
+                  </a>
+                </div>
+              </sc-if>
+
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ notEpisode }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:{{ contentMax }};margin:0 auto;padding:{{ contentPad }};">
+
+          <sc-if value="{{ rHome }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:800;font-size:{{ heroSize }};line-height:1.06;letter-spacing:-.03em;">Всеки епизод.<br>Всеки момент.<br><span style="color:var(--br,#E4232C);">Намираем.</span></h1>
+              <p style="margin:14px 0 0;font-size:{{ bodySize }};line-height:1.55;color:var(--fg2,#ADA69F);max-width:520px;">74 епизода, обозначени от общността с теми, моменти и оценки.</p>
+              <button onClick="{{ openSearchOverlay }}" style="margin-top:18px;width:100%;max-width:560px;height:56px;border-radius:99px;background:var(--card,#23201D);border:2px solid var(--br,#E4232C);display:flex;align-items:center;gap:12px;padding:0 20px;color:var(--fg3,#7A736C);font-size:16px;text-align:left;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="color:var(--br,#E4232C);"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+                <span style="flex:1;">Търси момент, тема или гост</span>
+              </button>
+              <div style="display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;">
+                <sc-for list="{{ examples }}" as="e" hint-placeholder-count="4">
+                  <button onClick="{{ e.go }}" style="min-height:38px;padding:0 13px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:transparent;color:var(--fg2,#ADA69F);font-size:13.5px;">{{ e.label }}</button>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:36px;">
+                <h2 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h2Size }};letter-spacing:-.015em;">Най-високо оценени</h2>
+                <button onClick="{{ goLeaderboard }}" style="border:0;background:transparent;color:var(--br,#E4232C);font-size:13.5px;font-weight:600;">всички</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:7px;margin-top:14px;">
+                <sc-for list="{{ topRated }}" as="t" hint-placeholder-count="5">
+                  <button onClick="{{ t.open }}" style="display:flex;align-items:center;gap:12px;min-height:64px;padding:9px 12px;border-radius:14px;background:{{ t.rowBg }};border:1px solid var(--bd,#2C2825);text-align:left;width:100%;">
+                    <span style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ t.rankSize }};color:{{ t.rankColor }};min-width:24px;text-align:center;">{{ t.rank }}</span>
+                    <div style="width:70px;flex:none;aspect-ratio:16/9;border-radius:9px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 7px,var(--th2,#2C2825) 7px 14px);"></div>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:14px;font-weight:600;line-height:1.3;color:var(--fg,#F7F4F0);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;">{{ t.title }}</div>
+                      <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:3px;">{{ t.ratings }} оценки</div>
+                    </div>
+                    <span style="display:inline-flex;align-items:center;gap:4px;flex:none;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="color:var(--ac,#FFC93A);"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;">{{ t.score }}</span>
+                    </span>
+                  </button>
+                </sc-for>
+              </div>
+
+              <h2 style="margin:36px 0 0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h2Size }};letter-spacing:-.015em;">Най-нови</h2>
+              <div style="display:grid;grid-template-columns:{{ cardCols }};gap:{{ cardGap }};margin-top:14px;">
+                <sc-for list="{{ newest }}" as="n" hint-placeholder-count="6">
+                  <button onClick="{{ n.open }}" style="border:0;background:transparent;padding:0;text-align:left;">
+                    <div style="aspect-ratio:16/9;border-radius:13px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 9px,var(--th2,#2C2825) 9px 18px);"></div>
+                      <span style="position:absolute;left:7px;top:7px;height:24px;padding:0 8px;border-radius:7px;background:{{ n.bg }};color:{{ n.fg }};border:{{ n.border }};font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;">{{ n.score }}</span>
+                      <span style="position:absolute;right:7px;bottom:7px;font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(20,17,15,.86);padding:2px 5px;border-radius:5px;color:#F7F4F0;">{{ n.dur }}</span>
+                    </div>
+                    <div style="margin-top:9px;font-size:14px;font-weight:600;line-height:1.3;color:var(--fg,#F7F4F0);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;">{{ n.title }}</div>
+                    <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:4px;">{{ n.date }}</div>
+                  </button>
+                </sc-for>
+              </div>
+
+              <h2 style="margin:36px 0 0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h2Size }};letter-spacing:-.015em;">Канали</h2>
+              <button onClick="{{ goChannel }}" style="margin-top:14px;width:100%;display:flex;gap:14px;align-items:center;padding:14px;border-radius:18px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);text-align:left;">
+                <div style="width:56px;height:56px;flex:none;border-radius:18px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:19px;">ИК</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;color:var(--fg,#F7F4F0);">Иван Кирков</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg3,#7A736C);margin-top:4px;">74 епизода / 7.4 средно</div>
+                </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--fg4,#5E5852);"><path d="m9 18 6-6-6-6"></path></svg>
+              </button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rChannels }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h1Size }};letter-spacing:-.025em;">Канали</h1>
+              <p style="margin:10px 0 0;font-size:{{ bodySize }};color:var(--fg2,#ADA69F);">1 канал, 74 епизода, 267 оценки.</p>
+              <div style="margin-top:20px;border-radius:20px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);padding:18px;">
+                <div style="display:flex;gap:14px;align-items:flex-start;">
+                  <div style="width:64px;height:64px;flex:none;border-radius:20px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:21px;">ИК</div>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:19px;">Иван Кирков</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg3,#7A736C);margin-top:4px;">@ivankirkov1 / 74 епизода</div>
+                    <p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--fg2,#ADA69F);">Подкаст за всичко, което се случва между два лоши вица.</p>
+                  </div>
+                </div>
+                <div style="margin-top:16px;display:flex;flex-direction:column;gap:5px;">
+                  <sc-for list="{{ miniGrid }}" as="row" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <span style="width:38px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--fg3,#7A736C);">{{ row.year }}</span>
+                      <div style="flex:1;display:flex;gap:2px;">
+                        <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="24">
+                          <span style="flex:1;height:16px;border-radius:3px;background:{{ c }};"></span>
+                        </sc-for>
+                      </div>
+                      <span style="width:28px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--fg2,#ADA69F);">{{ row.avg }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <button onClick="{{ goChannel }}" style="margin-top:18px;width:100%;height:48px;border:0;border-radius:99px;background:var(--br,#E4232C);color:#fff;font-size:15px;font-weight:600;">Виж решетката</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rChannel }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:flex;gap:{{ chGap }};align-items:flex-start;">
+                <div style="width:{{ chAvatar }};height:{{ chAvatar }};flex:none;border-radius:24px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ chAvatarText }};">ИК</div>
+                <div style="flex:1;min-width:0;">
+                  <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h1Size }};line-height:1.12;letter-spacing:-.025em;">Иван Кирков</h1>
+                  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:7px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--fg3,#7A736C);">
+                    <span>@ivankirkov1</span><span style="opacity:.5;">.</span><span>74 епизода</span><span style="opacity:.5;">.</span><span>128 хил. абонати</span>
+                  </div>
+                  <p style="margin:10px 0 0;font-size:14.5px;line-height:1.5;color:var(--fg2,#ADA69F);max-width:620px;">Подкаст за всичко, което се случва между два лоши вица. Нови епизоди всяка сряда.</p>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:{{ statCols }};gap:10px;margin-top:20px;">
+                <sc-for list="{{ channelStats }}" as="s" hint-placeholder-count="3">
+                  <div style="background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);border-radius:14px;padding:12px 14px;">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:700;color:{{ s.color }};">{{ s.n }}</div>
+                    <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:2px;">{{ s.label }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:28px;flex-wrap:wrap;">
+                <h2 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h2Size }};letter-spacing:-.015em;">Решетка на оценките</h2>
+                <div style="display:flex;padding:3px;border-radius:99px;background:var(--card,#23201D);border:1px solid var(--bd2,#3D3935);">
+                  <button onClick="{{ setPublic }}" style="height:34px;padding:0 16px;border:0;border-radius:99px;background:{{ publicBg }};color:{{ publicFg }};font-size:13px;font-weight:600;">Public</button>
+                  <button onClick="{{ setElite }}" style="height:34px;padding:0 16px;border:0;border-radius:99px;background:{{ eliteBg }};color:{{ eliteFg }};font-size:13px;font-weight:600;">Elite</button>
+                </div>
+              </div>
+              <p style="margin:8px 0 0;font-size:12.5px;color:var(--fg3,#7A736C);">{{ gridHint }}</p>
+
+              <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:14px;overflow-x:auto;">
+                  <div style="min-width:100%;display:flex;flex-direction:column;gap:5px;">
+                    <div style="display:flex;gap:5px;position:sticky;top:0;z-index:3;background:var(--bg,#191614);padding:2px 0 6px;">
+                      <div style="width:36px;flex:none;position:sticky;left:0;background:var(--bg,#191614);"></div>
+                      <sc-for list="{{ years }}" as="y" hint-placeholder-count="3">
+                        <div style="flex:1;min-width:92px;display:flex;flex-direction:column;align-items:center;gap:1px;">
+                          <span style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:14px;">{{ y.label }}</span>
+                          <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--fg3,#7A736C);">{{ y.avg }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <sc-for list="{{ mRows }}" as="row" hint-placeholder-count="14">
+                      <div style="display:flex;gap:5px;">
+                        <div style="width:36px;flex:none;position:sticky;left:0;background:var(--bg,#191614);display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--fg4,#5E5852);">{{ row.ep }}</div>
+                        <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="3">
+                          <button onClick="{{ c.tap }}" style="flex:1;min-width:92px;height:44px;border-radius:10px;border:{{ c.border }};background:{{ c.bg }};display:flex;align-items:center;justify-content:space-between;padding:0 8px;">
+                            <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:{{ c.fg }};">{{ c.score }}</span>
+                            <span style="display:flex;align-items:center;gap:4px;">
+                              <sc-if value="{{ c.prov }}" hint-placeholder-val="{{ false }}">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 10v3"></path><path d="M12 17h.01"></path></svg>
+                              </sc-if>
+                              <sc-if value="{{ c.members }}" hint-placeholder-val="{{ false }}">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>
+                              </sc-if>
+                              <sc-if value="{{ c.stream }}" hint-placeholder-val="{{ false }}">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg>
+                              </sc-if>
+                            </span>
+                          </button>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:16px;border:1px solid var(--bd,#2C2825);border-radius:20px;background:var(--card2,#1E1B19);padding:16px 0;">
+                  <div style="overflow-x:auto;padding:0 16px;">
+                    <div style="display:flex;flex-direction:column;gap:4px;width:max-content;">
+                      <div style="display:flex;gap:4px;">
+                        <div style="width:88px;flex:none;position:sticky;left:0;z-index:2;background:var(--card2,#1E1B19);"></div>
+                        <sc-for list="{{ colHeads }}" as="h" hint-placeholder-count="20">
+                          <div style="width:54px;flex:none;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--fg4,#5E5852);padding-bottom:4px;">{{ h }}</div>
+                        </sc-for>
+                      </div>
+                      <sc-for list="{{ dRows }}" as="r" hint-placeholder-count="3">
+                        <div style="display:flex;gap:4px;align-items:center;">
+                          <div style="width:88px;flex:none;position:sticky;left:0;z-index:2;background:var(--card2,#1E1B19);padding-right:12px;">
+                            <div style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:15px;">{{ r.year }}</div>
+                            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg3,#7A736C);margin-top:1px;">avg {{ r.avg }}</div>
+                          </div>
+                          <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="20">
+                            <button onClick="{{ c.tap }}" style="width:54px;height:44px;flex:none;border-radius:8px;border:{{ c.border }};background:{{ c.bg }};position:relative;display:flex;align-items:center;justify-content:center;padding:0;">
+                              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:{{ c.fg }};">{{ c.score }}</span>
+                              <span style="position:absolute;right:3px;bottom:2px;display:flex;gap:2px;">
+                                <sc-if value="{{ c.prov }}" hint-placeholder-val="{{ false }}">
+                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path></svg>
+                                </sc-if>
+                                <sc-if value="{{ c.members }}" hint-placeholder-val="{{ false }}">
+                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path></svg>
+                                </sc-if>
+                                <sc-if value="{{ c.stream }}" hint-placeholder-val="{{ false }}">
+                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#2A211C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg>
+                                </sc-if>
+                              </span>
+                            </button>
+                          </sc-for>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <div style="display:flex;flex-wrap:wrap;gap:7px 14px;align-items:center;margin-top:14px;">
+                <sc-for list="{{ bands }}" as="b" hint-placeholder-count="7">
+                  <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2,#ADA69F);">
+                    <span style="width:18px;height:12px;border-radius:4px;background:{{ b.bg }};"></span>{{ b.label }}
+                  </span>
+                </sc-for>
+                <span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--fg2,#ADA69F);">
+                  <span style="width:18px;height:12px;border-radius:4px;background:var(--card,#23201D);border:1px dashed var(--bd3,#4A4540);"></span>Без оценка
+                </span>
+              </div>
+
+              <h2 style="margin:30px 0 0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h2Size }};letter-spacing:-.015em;">Скорошни епизоди</h2>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+                <sc-for list="{{ recent }}" as="e" hint-placeholder-count="5">
+                  <button onClick="{{ e.open }}" style="display:flex;gap:12px;align-items:center;padding:0;border:0;background:transparent;text-align:left;width:100%;">
+                    <div style="width:{{ rowThumb }};flex:none;aspect-ratio:16/9;border-radius:11px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 8px,var(--th2,#2C2825) 8px 16px);"></div>
+                      <span style="position:absolute;right:5px;bottom:5px;font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(20,17,15,.86);padding:1px 5px;border-radius:4px;color:#F7F4F0;">{{ e.dur }}</span>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:14.5px;font-weight:600;line-height:1.3;color:var(--fg,#F7F4F0);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;">{{ e.title }}</div>
+                      <div style="font-size:12px;color:var(--fg3,#7A736C);margin-top:5px;">{{ e.date }} / {{ e.ratingsLabel }}</div>
+                    </div>
+                    <span style="height:30px;padding:0 9px;border-radius:9px;background:{{ e.bg }};color:{{ e.fg }};border:{{ e.border }};font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:700;display:inline-flex;align-items:center;flex:none;">{{ e.score }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rSearch }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <button onClick="{{ openSearchOverlay }}" style="width:100%;height:54px;border-radius:99px;background:var(--card,#23201D);border:2px solid var(--br,#E4232C);display:flex;align-items:center;gap:12px;padding:0 20px;text-align:left;">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="color:var(--br,#E4232C);"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+                <span style="flex:1;font-size:16px;color:{{ queryColor }};">{{ queryLabel }}</span>
+              </button>
+
+              <sc-if value="{{ searchEmpty }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h1 style="margin:26px 0 0;font-family:'Unbounded',sans-serif;font-weight:800;font-size:{{ heroSize }};line-height:1.1;letter-spacing:-.03em;">Търси нещо, което се е случило</h1>
+                  <p style="margin:12px 0 0;font-size:{{ bodySize }};line-height:1.55;color:var(--fg2,#ADA69F);max-width:560px;">Не само заглавия. Търсенето минава през теми, моменти и гости.</p>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;">
+                    <sc-for list="{{ examples }}" as="e" hint-placeholder-count="4">
+                      <button onClick="{{ e.go }}" style="min-height:42px;padding:0 15px;border:0;border-radius:99px;background:var(--elev,#2C2825);color:var(--fg,#F7F4F0);font-size:14.5px;">{{ e.label }}</button>
+                    </sc-for>
+                  </div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--fg3,#7A736C);margin-top:28px;">ПОПУЛЯРНИ ТЕМИ</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+                    <sc-for list="{{ popularTopics }}" as="t" hint-placeholder-count="6">
+                      <button onClick="{{ t.go }}" style="min-height:38px;padding:0 13px;border-radius:99px;border:1px solid var(--bd2,#3D3935);background:transparent;color:var(--fg,#F7F4F0);display:inline-flex;align-items:center;gap:8px;font-size:13.5px;">
+                        {{ t.name }}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg3,#7A736C);">{{ t.count }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ searchHasHits }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="display:flex;align-items:baseline;gap:10px;margin-top:20px;flex-wrap:wrap;">
+                    <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h2Size }};letter-spacing:-.015em;">{{ hitCount }} за „{{ query }}"</h1>
+                    <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg4,#5E5852);">3ms</span>
+                  </div>
+                  <p style="margin:7px 0 0;font-size:13px;color:var(--fg3,#7A736C);">Думата не се среща в нито едно заглавие.</p>
+                  <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px;">
+                    <sc-for list="{{ hits }}" as="h" hint-placeholder-count="3">
+                      <div style="border-radius:16px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);overflow:hidden;">
+                        <button onClick="{{ h.open }}" style="width:100%;display:flex;gap:12px;padding:12px;border:0;background:transparent;text-align:left;">
+                          <div style="width:{{ hitThumb }};flex:none;aspect-ratio:16/9;border-radius:11px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 8px,var(--th2,#2C2825) 8px 16px);"></div>
+                          </div>
+                          <div style="flex:1;min-width:0;">
+                            <div style="font-size:15px;font-weight:600;line-height:1.3;color:var(--fg,#F7F4F0);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">{{ h.title }}</div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:7px;">
+                              <span style="height:24px;padding:0 8px;border-radius:7px;background:{{ h.bg }};color:{{ h.fg }};border:{{ h.border }};font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;">{{ h.score }}</span>
+                              <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg3,#7A736C);">{{ h.date }}</span>
+                            </div>
+                          </div>
+                        </button>
+                        <div style="border-top:1px solid var(--bd,#2C2825);background:var(--card2,#1E1B19);padding:10px 12px;display:flex;flex-direction:column;gap:8px;">
+                          <sc-for list="{{ h.reasons }}" as="r" hint-placeholder-count="2">
+                            <div style="display:flex;gap:9px;align-items:flex-start;">
+                              <span style="height:22px;padding:0 7px;border-radius:6px;background:var(--elev,#2C2825);color:var(--ac,#FFC93A);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;display:inline-flex;align-items:center;flex:none;margin-top:1px;white-space:nowrap;">{{ r.kind }}</span>
+                              <span style="font-size:13.5px;line-height:1.35;color:var(--fg2,#ADA69F);overflow-wrap:anywhere;">{{ r.before }}<span style="color:var(--ac,#FFC93A);font-weight:700;">{{ r.hit }}</span>{{ r.after }}</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ searchZero }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:20px;border-radius:18px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);padding:22px 18px;max-width:620px;">
+                  <div style="font-size:17px;font-weight:600;">Нищо не съвпада</div>
+                  <p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--fg3,#7A736C);">Правописните грешки вече се прощават, така че думата най-вероятно още не е отбелязана.</p>
+                  <button onClick="{{ goEpisodes }}" style="width:100%;height:46px;margin-top:16px;border:1px solid var(--bd3,#4A4540);border-radius:99px;background:transparent;color:var(--fg,#F7F4F0);font-size:14.5px;font-weight:600;">Разгледай всички епизоди</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rEpisodes }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+                <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h1Size }};letter-spacing:-.025em;">Епизоди</h1>
+                <span style="font-size:13.5px;color:var(--fg3,#7A736C);">{{ browseCount }}</span>
+              </div>
+
+              <div class="noscroll" style="display:flex;align-items:center;gap:7px;margin-top:14px;overflow-x:auto;padding-bottom:2px;">
+                <button onClick="{{ openFilters }}" style="height:40px;padding:0 14px;border:0;border-radius:99px;background:var(--br,#E4232C);color:#fff;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px;flex:none;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>{{ filterLabel }}
+                </button>
+                <sc-for list="{{ activeFilters }}" as="f" hint-placeholder-count="2">
+                  <button onClick="{{ f.clear }}" style="height:40px;padding:0 12px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:transparent;color:var(--fg,#F7F4F0);display:inline-flex;align-items:center;gap:7px;font-size:13px;flex:none;white-space:nowrap;">
+                    <span style="color:var(--fg3,#7A736C);">{{ f.group }}</span>{{ f.label }}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" style="color:var(--fg3,#7A736C);"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                  </button>
+                </sc-for>
+              </div>
+
+              <sc-if value="{{ browseEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:20px;border:1px solid var(--bd,#2C2825);border-radius:18px;background:var(--card,#23201D);padding:22px 18px;max-width:620px;">
+                  <div style="font-size:16px;font-weight:600;">Нищо не съвпада с филтрите</div>
+                  <p style="margin:8px 0 0;font-size:13.5px;line-height:1.5;color:var(--fg3,#7A736C);">Активни са {{ filterSummary }}.</p>
+                  <button onClick="{{ clearFilters }}" style="height:42px;margin-top:14px;padding:0 16px;border:1px solid var(--bd3,#4A4540);border-radius:99px;background:transparent;color:var(--fg,#F7F4F0);font-size:13.5px;font-weight:600;">Изчисти филтрите</button>
+                </div>
+              </sc-if>
+
+              <div style="display:grid;grid-template-columns:{{ cardCols }};gap:{{ cardGap }};margin-top:18px;">
+                <sc-for list="{{ browse }}" as="b" hint-placeholder-count="9">
+                  <button onClick="{{ b.open }}" style="border:0;background:transparent;padding:0;text-align:left;">
+                    <div style="aspect-ratio:16/9;border-radius:13px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 9px,var(--th2,#2C2825) 9px 18px);"></div>
+                      <span style="position:absolute;left:7px;top:7px;height:24px;padding:0 8px;border-radius:7px;background:{{ b.bg }};color:{{ b.fg }};border:{{ b.border }};font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;">{{ b.score }}</span>
+                      <span style="position:absolute;right:7px;bottom:7px;font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(20,17,15,.86);padding:2px 5px;border-radius:5px;color:#F7F4F0;">{{ b.dur }}</span>
+                    </div>
+                    <div style="margin-top:9px;font-size:14px;font-weight:600;line-height:1.3;color:var(--fg,#F7F4F0);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;">{{ b.title }}</div>
+                    <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:4px;">{{ b.date }} / {{ b.ratingsLabel }}</div>
+                  </button>
+                </sc-for>
+              </div>
+              <sc-if value="{{ showLoadMore }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ loadMore }}" style="width:100%;max-width:400px;height:46px;margin-top:20px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:transparent;color:var(--fg,#F7F4F0);font-size:14px;font-weight:600;">{{ loadMoreLabel }}</button>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rProfile }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:{{ profileCols }};gap:{{ epGap }};align-items:start;">
+              <div>
+                <div style="display:flex;gap:14px;align-items:center;">
+                  <div style="width:72px;height:72px;flex:none;border-radius:99px;background:var(--elev,#2C2825);border:1px solid var(--bd2,#3D3935);display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:22px;color:var(--fg2,#ADA69F);">МХ</div>
+                  <div style="flex:1;min-width:0;">
+                    <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h1Size }};letter-spacing:-.02em;">Мартин Христов</h1>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--fg3,#7A736C);">@martin</span>
+                      <span style="height:22px;padding:0 8px;border-radius:99px;background:var(--elev,#2C2825);color:var(--ac,#FFC93A);font-size:11px;font-weight:600;display:inline-flex;align-items:center;">Member</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px;">
+                  <sc-for list="{{ profileStats }}" as="s" hint-placeholder-count="3">
+                    <div style="background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);border-radius:14px;padding:12px 14px;">
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:700;">{{ s.n }}</div>
+                      <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:2px;">{{ s.label }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="margin-top:16px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);border-radius:18px;padding:16px;">
+                  <div style="font-size:14px;font-weight:700;">Как оценяваш</div>
+                  <div style="display:flex;align-items:flex-end;gap:6px;height:110px;margin-top:14px;">
+                    <sc-for list="{{ histogram }}" as="h" hint-placeholder-count="10">
+                      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;">
+                        <span style="width:100%;border-radius:5px 5px 2px 2px;background:{{ h.bg }};height:{{ h.h }};"></span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--fg3,#7A736C);">{{ h.n }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="margin-top:12px;font-size:12.5px;color:var(--fg3,#7A736C);">Средна твоя оценка 7.8, което е 0.4 над средното за сайта.</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+                  <sc-for list="{{ profileLinks }}" as="p" hint-placeholder-count="4">
+                    <div style="min-height:52px;display:flex;align-items:center;gap:12px;padding:0 14px;border-radius:14px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);">
+                      <span style="font-size:14.5px;flex:1;">{{ p.label }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--fg3,#7A736C);">{{ p.count }}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--fg4,#5E5852);"><path d="m9 18 6-6-6-6"></path></svg>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);border-radius:18px;padding:16px;">
+                <div style="font-size:14px;font-weight:700;">История на гледане</div>
+                <div style="display:flex;flex-direction:column;gap:7px;margin-top:12px;">
+                  <sc-for list="{{ historyFeed }}" as="h" hint-placeholder-count="4">
+                    <button onClick="{{ h.open }}" style="display:flex;gap:10px;align-items:center;padding:0;border:0;background:transparent;text-align:left;">
+                      <div style="width:58px;flex:none;aspect-ratio:16/9;border-radius:8px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                        <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 7px,var(--th2,#2C2825) 7px 14px);"></div>
+                      </div>
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-size:12.5px;font-weight:600;color:var(--fg,#F7F4F0);line-height:1.3;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">{{ h.title }}</div>
+                        <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--fg3,#7A736C);margin-top:3px;">{{ h.date }}</div>
+                      </div>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rLeaderboard }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h1Size }};letter-spacing:-.025em;">Класация</h1>
+              <div style="display:flex;gap:6px;margin-top:14px;flex-wrap:wrap;">
+                <sc-for list="{{ boardKinds }}" as="k" hint-placeholder-count="3">
+                  <button onClick="{{ k.go }}" style="height:38px;padding:0 15px;border:1px solid {{ k.border }};border-radius:99px;background:{{ k.bg }};color:{{ k.fg }};font-size:13px;font-weight:600;">{{ k.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-end;margin-top:22px;max-width:620px;">
+                <sc-for list="{{ podium }}" as="p" hint-placeholder-count="3">
+                  <button onClick="{{ p.open }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;border:0;background:transparent;padding:0;">
+                    <div style="width:100%;aspect-ratio:16/9;border-radius:11px;position:relative;overflow:hidden;background:var(--th1,#26221F);">
+                      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 7px,var(--th2,#2C2825) 7px 14px);"></div>
+                    </div>
+                    <div style="width:100%;height:{{ p.h }};border-radius:12px 12px 6px 6px;background:{{ p.bg }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
+                      <span style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:20px;color:#1A1614;">{{ p.rank }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#1A1614;">{{ p.score }}</span>
+                    </div>
+                    <div style="font-size:11.5px;line-height:1.3;text-align:center;color:var(--fg2,#ADA69F);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">{{ p.title }}</div>
+                  </button>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:7px;margin-top:20px;">
+                <sc-for list="{{ ranked }}" as="r" hint-placeholder-count="6">
+                  <button onClick="{{ r.open }}" style="display:flex;align-items:center;gap:12px;min-height:60px;padding:9px 12px;border-radius:14px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);text-align:left;width:100%;">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:13.5px;color:var(--fg3,#7A736C);min-width:22px;">{{ r.rank }}</span>
+                    <div style="width:66px;flex:none;aspect-ratio:16/9;border-radius:9px;position:relative;overflow:hidden;background:var(--th1,#26221F);"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 7px,var(--th2,#2C2825) 7px 14px);"></div></div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:14px;font-weight:600;line-height:1.3;color:var(--fg,#F7F4F0);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;">{{ r.title }}</div>
+                      <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:3px;">{{ r.ratings }} оценки</div>
+                    </div>
+                    <span style="height:30px;padding:0 9px;border-radius:9px;background:{{ r.bg }};color:#1A1614;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;display:inline-flex;align-items:center;">{{ r.score }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ rStatus }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:620px;">
+              <h1 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:700;font-size:{{ h1Size }};letter-spacing:-.025em;">Състояние</h1>
+              <div style="margin-top:20px;border-radius:18px;background:var(--card,#23201D);border:1px solid var(--bd,#2C2825);padding:18px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="width:10px;height:10px;border-radius:99px;background:#E9BE4B;"></span>
+                  <span style="font-size:17px;font-weight:600;">Degraded</span>
+                  <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--fg3,#7A736C);">преди 12 сек</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:var(--card2,#1E1B19);">
+                    <span style="width:8px;height:8px;border-radius:99px;background:#46C68F;"></span><span style="font-size:13.5px;flex:1;">Database</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg3,#7A736C);">ok</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;background:var(--card2,#1E1B19);">
+                    <span style="width:8px;height:8px;border-radius:99px;background:#E9BE4B;"></span><span style="font-size:13.5px;flex:1;">Redis</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#E9BE4B;">не отговаря</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ r404 }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:480px;margin:0 auto;text-align:center;padding:40px 0;">
+              <div style="font-family:'Unbounded',sans-serif;font-weight:800;font-size:58px;color:var(--br,#E4232C);line-height:1;">404</div>
+              <div style="font-size:19px;font-weight:600;margin-top:12px;">Няма такава страница</div>
+              <p style="margin:10px 0 0;font-size:14.5px;line-height:1.5;color:var(--fg3,#7A736C);">Ако си дошъл от стар линк, търсенето вероятно ще намери епизода.</p>
+              <button onClick="{{ openSearchOverlay }}" style="width:100%;height:50px;margin-top:18px;border-radius:99px;background:var(--card,#23201D);border:2px solid var(--br,#E4232C);display:flex;align-items:center;justify-content:center;gap:10px;color:var(--fg2,#ADA69F);font-size:15px;">Търси епизод</button>
+              <button onClick="{{ goHome }}" style="width:100%;height:46px;margin-top:10px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:transparent;color:var(--fg,#F7F4F0);font-size:14px;font-weight:600;">Обратно към началото</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:52px;padding-top:22px;border-top:1px solid var(--bd,#2C2825);display:flex;gap:40px;align-items:flex-start;">
+              <div style="max-width:320px;">
+                <div style="display:flex;align-items:center;gap:9px;"><div style="width:24px;height:24px;border-radius:8px;background:var(--br,#E4232C);"></div><span style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:13px;">Podcast Index</span></div>
+                <p style="margin:10px 0 0;font-size:12.5px;line-height:1.5;color:var(--fg3,#7A736C);">Общностен индекс на български подкаст епизоди. Видеата остават в YouTube.</p>
+              </div>
+              <div style="display:flex;gap:36px;font-size:13px;color:var(--fg2,#ADA69F);">
+                <div style="display:flex;flex-direction:column;gap:8px;"><span style="color:var(--fg4,#5E5852);font-family:'JetBrains Mono',monospace;font-size:10.5px;">BROWSE</span><button onClick="{{ goChannels }}" style="border:0;background:transparent;color:inherit;font-size:13px;padding:0;text-align:left;">Канали</button><button onClick="{{ goEpisodes }}" style="border:0;background:transparent;color:inherit;font-size:13px;padding:0;text-align:left;">Епизоди</button></div>
+                <div style="display:flex;flex-direction:column;gap:8px;"><span style="color:var(--fg4,#5E5852);font-family:'JetBrains Mono',monospace;font-size:10.5px;">SITE</span><button onClick="{{ goStatus }}" style="border:0;background:transparent;color:inherit;font-size:13px;padding:0;text-align:left;">Състояние</button><button onClick="{{ go404 }}" style="border:0;background:transparent;color:inherit;font-size:13px;padding:0;text-align:left;">404</button></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="height:{{ bottomPad }};"></div>
+        </div>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ showActionBar }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:none;border-top:1px solid var(--bd,#2C2825);background:var(--card2,#1E1B19);padding:9px 12px 14px;display:flex;gap:8px;align-items:center;">
+        <button onClick="{{ toggleWatched }}" style="flex:1;height:46px;border:0;border-radius:99px;background:{{ watchedBtnBg }};color:{{ watchedBtnFg }};font-size:14.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+          {{ watchedLabel }}
+        </button>
+        <button onClick="{{ openLog }}" style="width:46px;height:46px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:var(--card,#23201D);display:flex;align-items:center;justify-content:center;color:var(--fg,#F7F4F0);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>
+        </button>
+        <button onClick="{{ toggleFav }}" style="width:46px;height:46px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:var(--card,#23201D);display:flex;align-items:center;justify-content:center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="{{ favFill }}" stroke="{{ favStroke }}" stroke-width="2.2" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.5 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z"></path></svg>
+        </button>
+        <a href="https://www.youtube.com" target="_blank" style="width:46px;height:46px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:var(--card,#23201D);display:flex;align-items:center;justify-content:center;color:var(--fg,#F7F4F0);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>
+        </a>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showBottomNav }}" hint-placeholder-val="{{ true }}">
+      <div style="height:66px;flex:none;border-top:1px solid var(--bd,#2C2825);background:var(--card2,#1E1B19);display:flex;">
+        <sc-for list="{{ bottomNav }}" as="n" hint-placeholder-count="4">
+          <button onClick="{{ n.go }}" style="flex:1;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;color:{{ n.color }};">
+            <span style="width:20px;height:20px;border-radius:6px;background:{{ n.dot }};"></span>
+            <span style="font-size:10.5px;font-weight:{{ n.weight }};">{{ n.label }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ anySheet }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;inset:0;z-index:20;display:flex;align-items:{{ sheetAlign }};justify-content:center;">
+        <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:var(--ovl,rgba(11,10,9,.72));"></div>
+
+        <div style="position:relative;width:{{ sheetW }};max-width:100%;max-height:92%;overflow-y:auto;background:var(--card2,#1E1B19);border:1px solid var(--bd2,#3D3935);border-radius:{{ sheetRadius }};padding:10px 16px 24px;box-shadow:0 20px 44px rgba(0,0,0,.5);">
+          <div style="width:40px;height:4px;border-radius:99px;background:var(--bd2,#3D3935);margin:0 auto 14px;"></div>
+
+          <sc-if value="{{ sheetRate }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div style="min-width:0;">
+                  <div style="font-size:17px;font-weight:700;">Твоята оценка</div>
+                  <div style="font-size:12.5px;color:var(--fg3,#7A736C);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ep.title }}</div>
+                </div>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:{{ pickedColor }};flex:none;">{{ pickedLabel }}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:16px;">
+                <sc-for list="{{ scale }}" as="s" hint-placeholder-count="10">
+                  <button onClick="{{ s.pick }}" style="height:58px;border:{{ s.border }};border-radius:14px;background:{{ s.cell }};color:{{ s.fg }};font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+                    {{ s.n }}
+                    <span style="width:18px;height:3px;border-radius:99px;background:{{ s.bg }};"></span>
+                  </button>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:16px;">
+                <button onClick="{{ saveRating }}" style="flex:1;height:48px;border:0;border-radius:99px;background:var(--br,#E4232C);color:#fff;font-size:15px;font-weight:600;">Запази</button>
+                <button onClick="{{ clearRating }}" style="height:48px;padding:0 16px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:transparent;color:var(--fg2,#ADA69F);font-size:14px;">Премахни</button>
+              </div>
+              <div style="margin-top:12px;font-size:12.5px;color:var(--fg3,#7A736C);text-align:center;">{{ compareNote }}</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ sheetLog }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:17px;font-weight:700;">Кога го гледа</div>
+              <p style="margin:5px 0 0;font-size:13px;line-height:1.5;color:var(--fg3,#7A736C);">Всяко гледане се записва отделно, включително преслушвания месеци по-късно.</p>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">
+                <sc-for list="{{ quickDates }}" as="d" hint-placeholder-count="4">
+                  <button onClick="{{ d.add }}" style="min-height:44px;padding:0 14px;border:1px solid var(--bd2,#3D3935);border-radius:99px;background:var(--card,#23201D);color:var(--fg,#F7F4F0);font-size:14px;display:inline-flex;align-items:center;gap:8px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>{{ d.label }}
+                  </button>
+                </sc-for>
+              </div>
+              <div style="margin-top:18px;">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--fg3,#7A736C);">ИЗБЕРИ ДАТА</div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px;">
+                  <sc-for list="{{ calendar }}" as="c" hint-placeholder-count="28">
+                    <button onClick="{{ c.add }}" style="height:38px;border:{{ c.border }};border-radius:9px;background:{{ c.bg }};color:{{ c.fg }};font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:{{ c.weight }};">{{ c.d }}</button>
+                  </sc-for>
+                </div>
+                <div style="font-size:11.5px;color:var(--fg3,#7A736C);margin-top:8px;">{{ calendarMonth }}</div>
+              </div>
+              <sc-if value="{{ hasWatchLog }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--bd,#2C2825);">
+                  <div style="font-size:13.5px;font-weight:600;">Записани гледания {{ watchCountLabel }}</div>
+                  <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+                    <sc-for list="{{ watchLog }}" as="w" hint-placeholder-count="2">
+                      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:11px;background:var(--card,#23201D);">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="color:#6FD16A;"><path d="M20 6 9 17l-5-5"></path></svg>
+                        <span style="flex:1;font-size:13.5px;">{{ w.date }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg3,#7A736C);">{{ w.rel }}</span>
+                        <button onClick="{{ w.remove }}" style="width:26px;height:26px;border:0;border-radius:99px;background:transparent;color:var(--fg3,#7A736C);display:flex;align-items:center;justify-content:center;">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                        </button>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+              <button onClick="{{ closeSheet }}" style="width:100%;height:48px;margin-top:18px;border:0;border-radius:99px;background:var(--br,#E4232C);color:#fff;font-size:15px;font-weight:600;">Готово</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ sheetCell }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="border-radius:14px;overflow:hidden;aspect-ratio:16/9;position:relative;background:var(--th1,#26221F);">
+                <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,var(--th1,#26221F) 0 10px,var(--th2,#2C2825) 10px 20px);"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;">
+                <span style="height:26px;padding:0 10px;border-radius:8px;background:{{ cell.bg }};color:{{ cell.fg }};border:{{ cell.border }};display:inline-flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">{{ cell.score }}</span>
+                <span style="font-size:12.5px;color:var(--fg2,#ADA69F);">{{ cell.bandLabel }}</span>
+                <span style="opacity:.5;">.</span>
+                <span style="font-size:12.5px;color:var(--fg2,#ADA69F);">{{ cell.ratingsLabel }}</span>
+              </div>
+              <sc-if value="{{ cell.prov }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:10px;padding:10px 12px;border-radius:11px;background:var(--elev,#2C2825);display:flex;align-items:center;gap:9px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ac,#FFC93A);"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 10v3"></path><path d="M12 17h.01"></path></svg>
+                  <span style="font-size:12.5px;color:var(--fg2,#ADA69F);">Под 3 оценки, числото още не е надеждно.</span>
+                </div>
+              </sc-if>
+              <h3 style="margin:12px 0 0;font-size:18px;line-height:1.3;font-weight:600;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ cell.title }}</h3>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg3,#7A736C);flex-wrap:wrap;">
+                <span>{{ cell.position }}</span><span style="opacity:.5;">.</span><span>{{ cell.date }}</span><span style="opacity:.5;">.</span><span>{{ cell.dur }}</span>
+              </div>
+              <button onClick="{{ cell.open }}" style="width:100%;height:48px;margin-top:16px;border:0;border-radius:99px;background:var(--br,#E4232C);color:#fff;font-size:15px;font-weight:600;">Отвори епизода</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ sheetFilters }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:17px;font-weight:700;">Филтри</span>
+                <button onClick="{{ clearFilters }}" style="border:0;background:transparent;color:var(--br,#E4232C);font-size:13.5px;font-weight:600;">Изчисти</button>
+              </div>
+              <sc-for list="{{ filterGroups }}" as="g" hint-placeholder-count="5">
+                <div style="margin-top:18px;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--fg3,#7A736C);">{{ g.title }}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;">
+                    <sc-for list="{{ g.options }}" as="o" hint-placeholder-count="4">
+                      <button onClick="{{ o.pick }}" style="min-height:42px;padding:0 14px;border-radius:99px;background:{{ o.chipBg }};border:1px solid {{ o.chipBorder }};color:{{ o.chipFg }};display:inline-flex;align-items:center;gap:8px;font-size:13.5px;">
+                        {{ o.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:.7;">{{ o.count }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+              <button onClick="{{ closeSheet }}" style="width:100%;height:50px;margin-top:22px;border:0;border-radius:99px;background:var(--br,#E4232C);color:#fff;font-size:15px;font-weight:600;">{{ applyLabel }}</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ sheetSearch }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="height:50px;border-radius:99px;background:var(--card,#23201D);border:2px solid var(--br,#E4232C);display:flex;align-items:center;gap:10px;padding:0 18px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="color:var(--br,#E4232C);"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+                <span style="font-size:16px;color:var(--fg3,#7A736C);flex:1;">Търси момент, тема или гост</span>
+              </div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--fg3,#7A736C);margin-top:18px;">ПРЕДЛОЖЕНИЯ</div>
+              <div style="display:flex;flex-direction:column;margin-top:4px;">
+                <sc-for list="{{ overlaySuggestions }}" as="s" hint-placeholder-count="4">
+                  <button onClick="{{ s.go }}" style="min-height:50px;display:flex;align-items:center;gap:12px;border:0;border-bottom:1px solid var(--bd,#2C2825);background:transparent;text-align:left;padding:0;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="color:var(--fg3,#7A736C);"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+                    <span style="font-size:15px;flex:1;color:var(--fg,#F7F4F0);">{{ s.label }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg4,#5E5852);">{{ s.count }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;top:14px;left:0;right:0;z-index:30;display:flex;justify-content:center;pointer-events:none;">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:99px;background:var(--elev,#2C2825);border:1px solid var(--bd3,#4A4540);box-shadow:0 6px 16px rgba(0,0,0,.4);">
+          <span style="width:8px;height:8px;border-radius:99px;background:#46C68F;"></span>
+          <span style="font-size:13.5px;color:var(--fg,#F7F4F0);">{{ toastText }}</span>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:1050}}">
+const BANDS = {
+  masterpiece: { bg: '#5CB8E8', label: 'Absolute cinema' },
+  awesome:     { bg: '#46C68F', label: 'Awesome' },
+  great:       { bg: '#6FD16A', label: 'Great' },
+  good:        { bg: '#ABDC5F', label: 'Good' },
+  regular:     { bg: '#E9BE4B', label: 'Regular' },
+  bad:         { bg: '#E2914F', label: 'Bad' },
+  garbage:     { bg: '#D66A5B', label: 'Garbage' }
+};
+const INK = '#1A1614';
+const SCALE_BG = ['#D66A5B','#D66A5B','#D66A5B','#E2914F','#E2914F','#E9BE4B','#ABDC5F','#6FD16A','#46C68F','#5CB8E8'];
+
+const THEMES = {
+  dark: {
+    vBg:'#191614', vCard:'#23201D', vCard2:'#1E1B19', vElev:'#2C2825',
+    vBd:'#2C2825', vBd2:'#3D3935', vBd3:'#4A4540',
+    vFg:'#F7F4F0', vFg2:'#ADA69F', vFg3:'#7A736C', vFg4:'#5E5852',
+    vBr:'#E4232C', vAc:'#FFC93A', vTh1:'#26221F', vTh2:'#2C2825',
+    vOvl:'rgba(11,10,9,.72)'
+  },
+  light: {
+    vBg:'#FBF8F4', vCard:'#FFFFFF', vCard2:'#F6F2EC', vElev:'#EDE8E1',
+    vBd:'#E6DFD5', vBd2:'#D8D0C5', vBd3:'#C4BBAE',
+    vFg:'#1A1614', vFg2:'#57504A', vFg3:'#867E75', vFg4:'#9E968D',
+    vBr:'#D0202A', vAc:'#A8760C', vTh1:'#E9E3DA', vTh2:'#DDD5C9',
+    vOvl:'rgba(26,22,20,.45)'
+  }
+};
+
+const TITLES = [
+  'Как да си купиш хладилник и да съжаляваш до края на живота си',
+  'Най-странните неща, които сме правили за пари',
+  'Три часа за това защо софийското метро е шедьовър',
+  'Гост: човекът, който е спал в 47 хотела за една година',
+  'Разговор за детството, гумените ботуши и лятото на село',
+  'Стендъп комиците не са добри хора, ето защо',
+  'Пътуване до Гърция с кола без климатик',
+  'Защо всички български сериали свършват еднакво',
+  'На живо от студиото: въпроси от публиката',
+  'Историята с хладилника, разказана за последен път',
+  'Какво научихме от една година лоши решения',
+  'Кой плаща сметката, когато никой не помни кой е поръчал',
+  'Три вица, които вече не минават никъде',
+  'Гост, който не спря да говори за колата си',
+  'Как се прави подкаст без план и без бюджет',
+  'Спорът за баницата, който продължава седма година',
+  'Най-дългото мълчание в историята на предаването',
+  'Обаждането на майка му, записано случайно',
+  'Защо не отговаряме на коментари, обяснено бавно',
+  'Летен епизод, записан на балкона в 38 градуса'
+];
+
+const DESCRIPTIONS = [
+  'Записано на 10 март в новото студио. Благодарим на всички, които изпратиха въпроси предварително, стигнахме до около половината от тях и останалите остават за следващия път. Епизодът тръгва от една обикновена покупка и стига до места, които никой не беше планирал.',
+  'Дълъг разговор без монтаж. Има места, където звукът пада за секунда, извинявайте за това.',
+  'Без описание.',
+  'Гостът се съгласи да дойде след две години опити. Струваше си чакането, макар че на моменти става тежко.'
+];
+
+const PEOPLE = [
+  { name: 'Иван Кирков', initials: 'ИК', role: 'домакин', bg: '#FFC93A', fg: '#191614' },
+  { name: 'Даниел Петров', initials: 'ДП', role: 'гост', bg: '#5CB8E8', fg: '#0F1A20' },
+  { name: 'Мартин Христов', initials: 'МХ', role: 'гост', bg: '#46C68F', fg: '#0F1F17' }
+];
+
+const MONTHS = ['януари','февруари','март','април','май','юни','юли','август','септември','октомври','ноември','декември'];
+
+const ALL_TOPICS = ['хладилници','пътувания','детство','стендъп','храна','метро','коли','пари','лято'];
+
+function rnd(i) { const x = Math.sin(i * 12.9898) * 43758.5453; return x - Math.floor(x); }
+
+function bandKey(s) {
+  if (s >= 9.5) return 'masterpiece';
+  if (s >= 8.5) return 'awesome';
+  if (s >= 7.5) return 'great';
+  if (s >= 6.5) return 'good';
+  if (s >= 5.5) return 'regular';
+  if (s >= 4.0) return 'bad';
+  return 'garbage';
+}
+
+const YEARS = [2024, 2025, 2026];
+const COUNTS = { 2024: 37, 2025: 25, 2026: 12 };
+
+function buildEpisodes() {
+  const out = [];
+  let id = 0;
+  YEARS.forEach(year => {
+    for (let i = 0; i < COUNTS[year]; i++) {
+      const seed = year * 100 + i;
+      const r = rnd(seed);
+      let score = null;
+      if (r >= 0.18) {
+        score = 5.5 + rnd(seed + 7) * 4.1;
+        if (r > 0.965) score = 9.5 + rnd(seed + 3) * 0.4;
+        score = Math.round(score * 10) / 10;
+      }
+      const ratings = score === null ? 0 : 1 + Math.floor(rnd(seed + 13) * 30);
+      const mIdx = Math.min(11, Math.floor((i / COUNTS[year]) * 12));
+      const day = 1 + Math.floor(rnd(seed + 17) * 27);
+      const guestCount = rnd(seed + 61) < 0.35 ? 0 : (rnd(seed + 67) < 0.7 ? 1 : 2);
+      const cast = [PEOPLE[0]].concat(guestCount === 1 ? [PEOPLE[1]] : (guestCount === 2 ? [PEOPLE[1], PEOPLE[2]] : []));
+      const nTopics = Math.floor(rnd(seed + 71) * 4);
+      const topics = [];
+      for (let k = 0; k < nTopics; k++) topics.push(ALL_TOPICS[Math.floor(rnd(seed + 79 + k) * ALL_TOPICS.length)]);
+      out.push({
+        id: id++,
+        year, indexInYear: i,
+        title: TITLES[(year + i) % TITLES.length],
+        score, ratings,
+        provisional: score !== null && ratings < 3,
+        members: rnd(seed + 19) < 0.12,
+        stream: rnd(seed + 29) < 0.06,
+        elite: (score === null || rnd(seed + 31) < 0.27) ? null : Math.round((score - 0.3 + rnd(seed + 37) * 0.9) * 10) / 10,
+        dur: (1 + Math.floor(rnd(seed + 41) * 2)) + ':' + String(10 + Math.floor(rnd(seed + 43) * 49)) + ':' + String(10 + Math.floor(rnd(seed + 47) * 49)),
+        dateShort: day + ' ' + MONTHS[mIdx] + ' ' + year,
+        hasMoments: rnd(seed + 23) > 0.45,
+        cast,
+        topics: topics.filter((t, idx2) => topics.indexOf(t) === idx2),
+        description: DESCRIPTIONS[Math.floor(rnd(seed + 83) * DESCRIPTIONS.length)]
+      });
+    }
+  });
+  return out;
+}
+
+const EPISODES = buildEpisodes();
+
+const MOMENTS = [
+  { t: '0:12:44', label: 'спорът за баницата', author: 'Мартин Христов', votes: '+9', left: '9.5%' },
+  { t: '1:42:10', label: 'историята с хладилника', author: 'Даниел Петров', votes: '+21', left: '63.5%' },
+  { t: '2:03:18', label: 'обаждането на майка му', author: 'Мартин Христов', votes: '+4', left: '91%' }
+];
+
+class Component extends DCLogic {
+  state = {
+    device: 'mobile',
+    theme: 'dark',
+    route: 'home',
+    epId: EPISODES.findIndex(e => e.score !== null && e.hasMoments),
+    cellId: null,
+    sheet: null,
+    score: 'public',
+    query: '',
+    myRating: 9,
+    picked: 9,
+    watchLog: [{ date: '12 юли 2026', rel: 'преди 4 седмици' }, { date: '3 март 2026', rel: 'преди 5 месеца' }],
+    fav: false,
+    spoiler: false,
+    descOpen: false,
+    toast: '',
+    board: 'top',
+    filters: { sort: 'Най-нови', year: '', kind: '', channel: '', person: '' },
+    limit: 9
+  };
+
+  go = (route) => () => this.setState({ route, sheet: null, toast: '' });
+  openEpisode = (id) => () => this.setState({ route: 'episode', epId: id, sheet: null, spoiler: false, descOpen: false, toast: '' });
+  toast = (text) => {
+    this.setState({ toast: text });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: '' }), 2200);
+  };
+
+  chip(v) {
+    if (v === null || v === undefined) return { score: '?', bg: '#23201D', fg: '#6E6862', border: '1px dashed #4A4540' };
+    return { score: v.toFixed(1), bg: BANDS[bandKey(v)].bg, fg: INK, border: '0' };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isMobile = s.device === 'mobile';
+    const isDesktop = !isMobile;
+    const isDark = s.theme === 'dark';
+    const ep = EPISODES[s.epId] || EPISODES[0];
+    const useElite = s.score === 'elite';
+    const T = THEMES[s.theme];
+
+    const unratedChip = isDark
+      ? { bg: '#23201D', fg: '#6E6862', border: '1px dashed #4A4540' }
+      : { bg: '#F1ECE4', fg: '#8A8279', border: '1px dashed #C4BBAE' };
+    const chipOf = (v) => {
+      if (v === null || v === undefined) return { score: '?', bg: unratedChip.bg, fg: unratedChip.fg, border: unratedChip.border };
+      return { score: v.toFixed(1), bg: BANDS[bandKey(v)].bg, fg: INK, border: '0' };
+    };
+
+    // grid
+    const maxN = 37;
+    const byYear = {};
+    YEARS.forEach(y => { byYear[y] = EPISODES.filter(e => e.year === y); });
+    const cellData = (y, i) => byYear[y][i] || null;
+
+    const styleCell = (e) => {
+      if (!e) return { score: '', bg: 'transparent', fg: 'transparent', border: '0', prov: false, members: false, stream: false, tap: () => {} };
+      const v = useElite ? e.elite : e.score;
+      const c = chipOf(v);
+      return {
+        score: c.score, bg: c.bg, fg: c.fg, border: c.border,
+        prov: e.provisional && v !== null, members: e.members, stream: e.stream,
+        tap: () => this.setState({ sheet: 'cell', cellId: e.id })
+      };
+    };
+
+    const mRows = [];
+    for (let i = 0; i < maxN; i++) mRows.push({ ep: String(i + 1), cells: YEARS.map(y => styleCell(cellData(y, i))) });
+    const avgOf = (y) => {
+      const vals = byYear[y].map(e => useElite ? e.elite : e.score).filter(v => v !== null);
+      return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '-';
+    };
+    const years = YEARS.map(y => ({ label: String(y), avg: avgOf(y) }));
+    const dRows = YEARS.map(y => ({ year: String(y), avg: avgOf(y), cells: Array.from({ length: maxN }, (_, i) => styleCell(cellData(y, i))) }));
+    const colHeads = Array.from({ length: maxN }, (_, i) => String(i + 1));
+    const allScored = EPISODES.map(e => useElite ? e.elite : e.score).filter(v => v !== null);
+    const overall = (allScored.reduce((a, b) => a + b, 0) / allScored.length).toFixed(1);
+    const best = Math.max.apply(null, allScored).toFixed(1);
+
+    // lists
+    const sortedTop = EPISODES.filter(e => e.score !== null).sort((a, b) => b.score - a.score);
+    const topRated = sortedTop.slice(0, 5).map((e, i) => ({
+      rank: String(i + 1), title: e.title, ratings: String(e.ratings), score: e.score.toFixed(1),
+      rowBg: i === 0 ? (isDark ? '#2A2521' : '#FFF9EC') : 'transparent',
+      rankSize: i === 0 ? '21px' : (i < 3 ? '19px' : '16px'),
+      rankColor: i === 0 ? T.vAc : (i < 3 ? T.vFg2 : T.vFg3),
+      open: this.openEpisode(e.id)
+    }));
+    const newestList = EPISODES.slice().reverse().slice(0, isMobile ? 4 : 8).map(e => ({
+      ...chipOf(e.score), title: e.title, date: e.dateShort, dur: e.dur, open: this.openEpisode(e.id)
+    }));
+    const recent = EPISODES.slice().reverse().slice(0, 5).map(e => ({
+      ...chipOf(e.score), title: e.title, date: e.dateShort, dur: e.dur,
+      ratingsLabel: e.score === null ? 'без оценки' : e.ratings + ' оценки', open: this.openEpisode(e.id)
+    }));
+
+    // filters
+    let browseSource = EPISODES.slice().reverse();
+    const f = s.filters;
+    if (f.year) browseSource = browseSource.filter(e => String(e.year) === f.year);
+    if (f.kind === 'Стрийм') browseSource = browseSource.filter(e => e.stream);
+    if (f.kind === 'Видео') browseSource = browseSource.filter(e => !e.stream);
+    if (f.person) browseSource = browseSource.filter(e => e.cast.some(c => c.name === f.person));
+    if (f.sort === 'Най-стари') browseSource = browseSource.slice().reverse();
+    if (f.sort === 'Най-високо оценени') browseSource = browseSource.filter(e => e.score !== null).sort((a, b) => b.score - a.score);
+    if (f.sort === 'Най-ниско оценени') browseSource = browseSource.filter(e => e.score !== null).sort((a, b) => a.score - b.score);
+    if (f.sort === 'Най-много оценки') browseSource = browseSource.slice().sort((a, b) => b.ratings - a.ratings);
+
+    const browse = browseSource.slice(0, s.limit).map(e => ({
+      ...chipOf(e.score), title: e.title, date: e.dateShort, dur: e.dur,
+      ratingsLabel: e.score === null ? 'без оценки' : e.ratings + ' оценки', open: this.openEpisode(e.id)
+    }));
+
+    const mkOpt = (group, label, count) => {
+      const on = f[group] === label;
+      return {
+        label, count,
+        chipBg: on ? T.vBr : 'transparent',
+        chipBorder: on ? T.vBr : T.vBd2,
+        chipFg: on ? '#FFFFFF' : T.vFg,
+        pick: () => this.setState({ filters: Object.assign({}, f, { [group]: on && group !== 'sort' ? '' : label }), limit: 9 })
+      };
+    };
+    const filterGroups = [
+      { title: 'ПОДРЕДБА', options: ['Най-нови','Най-стари','Най-високо оценени','Най-ниско оценени','Най-много оценки'].map(l => mkOpt('sort', l, '')) },
+      { title: 'ВИД', options: [mkOpt('kind', 'Видео', String(EPISODES.filter(e => !e.stream).length)), mkOpt('kind', 'Стрийм', String(EPISODES.filter(e => e.stream).length))] },
+      { title: 'ГОДИНА', options: YEARS.slice().reverse().map(y => mkOpt('year', String(y), String(COUNTS[y]))) },
+      { title: 'КАНАЛ', options: [mkOpt('channel', 'Иван Кирков', '74')] },
+      { title: 'УЧАСТНИК', options: PEOPLE.map(p => mkOpt('person', p.name, String(EPISODES.filter(e => e.cast.some(c => c.name === p.name)).length))) }
+    ];
+    const groupLabel = { sort: '', year: 'година', kind: 'вид', channel: 'канал', person: 'с' };
+    const activeFilters = Object.keys(f).filter(k => f[k] && !(k === 'sort' && f[k] === 'Най-нови')).map(k => ({
+      label: f[k], group: groupLabel[k],
+      clear: () => this.setState({ filters: Object.assign({}, f, { [k]: k === 'sort' ? 'Най-нови' : '' }) })
+    }));
+
+    // search
+    const hitsRaw = [EPISODES[13], EPISODES[41], EPISODES[62]];
+    const reasonSets = [
+      [{ kind: 'МОМЕНТ 1:42:10', before: 'историята с ', hit: 'хладилника', after: '' }, { kind: 'ТЕМА', before: '', hit: 'хладилници', after: ' / 12 гласа' }],
+      [{ kind: 'МОМЕНТ 0:48:02', before: 'продаде ', hit: 'хладилника', after: ' на съседа' }],
+      [{ kind: 'ТЕМА', before: '', hit: 'хладилници', after: ' / 3 гласа' }, { kind: 'МОМЕНТ 2:05:30', before: 'старият ', hit: 'хладилник', after: ' на баба' }]
+    ];
+    const hits = hitsRaw.map((e, i) => ({
+      ...chipOf(e.score), title: e.title, date: e.dateShort, dur: e.dur, reasons: reasonSets[i], open: this.openEpisode(e.id)
+    }));
+    const setQuery = (q) => () => this.setState({ route: 'search', query: q, sheet: null });
+    const examples = ['счупен хладилник', 'баница', 'историята с колата', 'квантова физика'].map(l => ({ label: l, go: setQuery(l) }));
+
+    // rating scale
+    const scale = SCALE_BG.map((bg, i) => {
+      const n = i + 1;
+      const picked = s.picked === n;
+      return {
+        n: String(n), bg,
+        cell: picked ? BANDS[bandKey(n)].bg : (isDark ? '#23201D' : '#FFFFFF'),
+        fg: picked ? INK : T.vFg,
+        border: picked ? '2px solid ' + T.vFg : '1px solid ' + T.vBd2,
+        pick: () => this.setState({ picked: n })
+      };
+    });
+
+    // episode vm
+    const epScoreLabel = ep.score === null ? '-' : ep.score.toFixed(1);
+    const breakdownCounts = [0, 1, 1, 2, 3, 6, 11, 18, 14, 5].map((c, i) => c + Math.floor(rnd(ep.id * 7 + i) * 4));
+    const bmax = Math.max.apply(null, breakdownCounts);
+    const descLong = ep.description.length > 90;
+    const epVm = {
+      title: ep.title, dur: ep.dur, date: ep.dateShort, year: String(ep.year), number: String(ep.indexInYear + 1),
+      members: ep.members, stream: ep.stream,
+      score: epScoreLabel,
+      ratingsLabel: ep.score === null ? 'още няма оценки' : ep.ratings + ' оценки',
+      hasElite: ep.elite !== null,
+      elite: ep.elite === null ? '-' : ep.elite.toFixed(1),
+      eliteColor: ep.elite === null ? T.vFg3 : BANDS[bandKey(ep.elite)].bg,
+      hasMoments: ep.hasMoments, noMoments: !ep.hasMoments,
+      moments: MOMENTS, momentCount: '3',
+      topics: ep.topics.map(t => ({ name: t, go: setQuery(t) })),
+      noTopics: ep.topics.length === 0,
+      description: ep.description,
+      cast: ep.cast.map(c => ({ name: c.name, initials: c.initials, role: c.role, avatarBg: c.bg, avatarFg: c.fg })),
+      castCount: String(ep.cast.length),
+      breakdown: breakdownCounts.map((c, i) => ({
+        n: String(i + 1), h: Math.max(3, Math.round((c / bmax) * 56)) + 'px', bg: BANDS[bandKey(i + 1)].bg
+      }))
+    };
+
+    // similar
+    const similarPool = EPISODES.filter(e => e.id !== ep.id && (
+      e.cast.some(c => ep.cast.some(c2 => c2.name === c.name && c.role === 'гост')) ||
+      e.topics.some(t => ep.topics.indexOf(t) >= 0)
+    ));
+    const similarList = (similarPool.length >= 4 ? similarPool : EPISODES.filter(e => e.id !== ep.id)).slice(0, 8).map(e => {
+      const sharedTopic = e.topics.filter(t => ep.topics.indexOf(t) >= 0)[0];
+      const sharedGuest = e.cast.filter(c => c.role === 'гост' && ep.cast.some(c2 => c2.name === c.name))[0];
+      return {
+        ...chipOf(e.score), title: e.title,
+        tag: sharedTopic ? ('тема: ' + sharedTopic) : (sharedGuest ? ('с ' + sharedGuest.name) : e.dateShort),
+        open: this.openEpisode(e.id)
+      };
+    });
+    const similarReason = ep.topics.length ? 'по тема и участници' : 'от същия канал';
+
+    // watch log
+    const watchLog = s.watchLog.map((w, i) => ({
+      date: w.date, rel: w.rel,
+      remove: () => this.setState({ watchLog: s.watchLog.filter((_, j) => j !== i) })
+    }));
+    const addDate = (label, rel) => () => {
+      if (s.watchLog.some(w => w.date === label)) { this.toast('Вече е записано за тази дата'); return; }
+      this.setState({ watchLog: [{ date: label, rel }].concat(s.watchLog) });
+      this.toast('Записано: ' + label);
+    };
+    const quickDates = [
+      { label: 'Днес', add: addDate('9 август 2026', 'днес') },
+      { label: 'Вчера', add: addDate('8 август 2026', 'вчера') },
+      { label: 'Тази седмица', add: addDate('5 август 2026', 'преди 4 дни') },
+      { label: 'Миналия месец', add: addDate('14 юли 2026', 'преди месец') }
+    ];
+    const calendar = Array.from({ length: 31 }, (_, i) => {
+      const d = i + 1;
+      const label = d + ' август 2026';
+      const logged = s.watchLog.some(w => w.date === label);
+      const future = d > 9;
+      return {
+        d: String(d),
+        bg: logged ? '#46C68F' : (future ? 'transparent' : (isDark ? '#23201D' : '#FFFFFF')),
+        fg: logged ? INK : (future ? T.vFg4 : T.vFg),
+        border: logged ? '0' : '1px solid ' + (future ? 'transparent' : T.vBd2),
+        weight: logged ? '700' : '500',
+        add: future ? (() => this.toast('Не може да запишеш бъдеща дата')) : addDate(label, d === 9 ? 'днес' : 'преди ' + (9 - d) + ' дни')
+      };
+    });
+
+    const histCounts = [1, 2, 3, 5, 9, 14, 22, 31, 24, 11];
+    const hmax = Math.max.apply(null, histCounts);
+    const histogram = histCounts.map((c, i) => ({ n: String(i + 1), h: Math.round((c / hmax) * 92) + 'px', bg: BANDS[bandKey(i + 1)].bg }));
+
+    const miniGrid = YEARS.map(y => ({
+      year: String(y), avg: avgOf(y),
+      cells: Array.from({ length: 24 }, (_, i) => {
+        const e = cellData(y, i);
+        if (!e) return 'transparent';
+        if (e.score === null) return T.vElev;
+        return BANDS[bandKey(e.score)].bg;
+      })
+    }));
+
+    const podium = [sortedTop[1], sortedTop[0], sortedTop[2]].map(e => {
+      const rank = sortedTop.indexOf(e) + 1;
+      return {
+        rank: String(rank), score: e.score.toFixed(1), bg: BANDS[bandKey(e.score)].bg,
+        h: rank === 1 ? '84px' : (rank === 2 ? '62px' : '50px'),
+        title: e.title, open: this.openEpisode(e.id)
+      };
+    });
+    const ranked = sortedTop.slice(3, 10).map((e, i) => ({
+      rank: String(i + 4), title: e.title, ratings: String(e.ratings),
+      score: e.score.toFixed(1), bg: BANDS[bandKey(e.score)].bg, open: this.openEpisode(e.id)
+    }));
+
+    const historyFeed = EPISODES.slice(4, 10).map(e => ({
+      title: e.title, date: e.dateShort, open: this.openEpisode(e.id)
+    }));
+
+    const routeDefs = [
+      ['home', 'Home'], ['channels', 'Channels'], ['channel', 'Channel'],
+      ['episode', 'Episode'], ['search', 'Search'], ['episodes', 'Browse'],
+      ['profile', 'Profile'], ['leaderboard', 'Board'], ['status', 'Status'], ['404', '404']
+    ];
+    const routes = routeDefs.map(([r, label]) => ({
+      label, go: this.go(r),
+      bg: s.route === r ? '#E4232C' : '#191614',
+      fg: s.route === r ? '#FFFFFF' : '#ADA69F',
+      border: s.route === r ? '#E4232C' : '#3D3935'
+    }));
+    const bottomNav = [['home','Начало'],['episodes','Епизоди'],['search','Търсене'],['profile','Профил']].map(([r, label]) => ({
+      label, go: this.go(r),
+      dot: s.route === r ? T.vBr : T.vBd2,
+      color: s.route === r ? T.vBr : T.vFg3,
+      weight: s.route === r ? '600' : '400'
+    }));
+    const topNav = [['channels','Канали'],['episodes','Епизоди'],['leaderboard','Класация']].map(([r, label]) => ({
+      label, go: this.go(r),
+      bg: s.route === r ? T.vCard : 'transparent',
+      fg: s.route === r ? T.vFg : T.vFg2
+    }));
+    const boardKinds = [['top','Най-високи'],['elite','Elite'],['most','Най-оценявани']].map(([k, label]) => ({
+      label, go: () => this.setState({ board: k }),
+      bg: s.board === k ? T.vBr : 'transparent',
+      fg: s.board === k ? '#FFFFFF' : T.vFg2,
+      border: s.board === k ? T.vBr : T.vBd2
+    }));
+
+    const cellEp = s.cellId === null ? ep : EPISODES[s.cellId];
+    const cellVal = useElite ? cellEp.elite : cellEp.score;
+    const cell = {
+      ...chipOf(cellVal),
+      bandLabel: cellVal === null ? 'Без оценка' : BANDS[bandKey(cellVal)].label,
+      ratingsLabel: cellEp.score === null ? 'никой още не е гласувал' : cellEp.ratings + ' оценки',
+      prov: cellEp.provisional && cellVal !== null,
+      title: cellEp.title,
+      position: cellEp.year + ' / епизод ' + (cellEp.indexInYear + 1),
+      date: cellEp.dateShort, dur: cellEp.dur,
+      open: this.openEpisode(cellEp.id)
+    };
+
+    const q = s.query;
+    const zero = q === 'квантова физика';
+    const watched = s.watchLog.length > 0;
+
+    return Object.assign({}, T, {
+      isMobile, isDesktop, isDark, isLight: !isDark,
+      setMobile: () => this.setState({ device: 'mobile', sheet: null }),
+      setDesktop: () => this.setState({ device: 'desktop', sheet: null }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setLight: () => this.setState({ theme: 'light' }),
+      toggleTheme: () => this.setState({ theme: isDark ? 'light' : 'dark' }),
+      mobileBtnBg: isMobile ? '#E4232C' : 'transparent',
+      mobileBtnFg: isMobile ? '#FFFFFF' : '#ADA69F',
+      desktopBtnBg: isDesktop ? '#E4232C' : 'transparent',
+      desktopBtnFg: isDesktop ? '#FFFFFF' : '#ADA69F',
+      darkBtnBg: isDark ? '#E4232C' : 'transparent',
+      darkBtnFg: isDark ? '#FFFFFF' : '#ADA69F',
+      lightBtnBg: isDark ? 'transparent' : '#E4232C',
+      lightBtnFg: isDark ? '#ADA69F' : '#FFFFFF',
+      routes,
+
+      frameW: isMobile ? '390px' : '1280px',
+      frameH: isMobile ? '844px' : '900px',
+      frameR: isMobile ? '34px' : '16px',
+      headerH: isMobile ? '54px' : '64px',
+      headerGap: isMobile ? '10px' : '22px',
+      headerPad: isMobile ? '12px' : '32px',
+      logoSize: isMobile ? '28px' : '32px',
+      wordmarkSize: isMobile ? '13px' : '15px',
+      contentMax: isMobile ? '100%' : '1216px',
+      contentPad: isMobile ? '16px' : '28px 32px 40px',
+      epHeadPad: isMobile ? '16px 16px 12px' : '24px 32px 16px',
+      epMediaPad: isMobile ? '0 16px' : '0 32px 40px',
+      epBottomPad: isMobile ? '20px' : '0px',
+      bottomPad: isMobile ? '20px' : '8px',
+      heroSize: isMobile ? '30px' : '52px',
+      h1Size: isMobile ? '23px' : '34px',
+      h2Size: isMobile ? '18px' : '22px',
+      epTitleSize: isMobile ? '24px' : '36px',
+      epMetaSize: isMobile ? '12px' : '13px',
+      bodySize: isMobile ? '14.5px' : '16px',
+      cardCols: isMobile ? '1fr 1fr' : 'repeat(4,1fr)',
+      cardGap: isMobile ? '10px' : '16px',
+      statCols: isMobile ? 'repeat(3,1fr)' : 'repeat(5,1fr)',
+      chGap: isMobile ? '14px' : '24px',
+      chAvatar: isMobile ? '64px' : '96px',
+      chAvatarText: isMobile ? '21px' : '32px',
+      epCols: isMobile ? '1fr' : '1fr 320px',
+      epGap: isMobile ? '0px' : '32px',
+      profileCols: isMobile ? '1fr' : '1fr 320px',
+      rowThumb: isMobile ? '120px' : '180px',
+      hitThumb: isMobile ? '112px' : '220px',
+
+      rHome: s.route === 'home', rChannels: s.route === 'channels', rChannel: s.route === 'channel',
+      rEpisode: s.route === 'episode', notEpisode: s.route !== 'episode',
+      rSearch: s.route === 'search', rEpisodes: s.route === 'episodes',
+      rProfile: s.route === 'profile', rLeaderboard: s.route === 'leaderboard',
+      rStatus: s.route === 'status', r404: s.route === '404',
+      goHome: this.go('home'), goChannels: this.go('channels'), goChannel: this.go('channel'),
+      goEpisodes: this.go('episodes'), goSearch: this.go('search'), goProfile: this.go('profile'),
+      goLeaderboard: this.go('leaderboard'), goStatus: this.go('status'), go404: this.go('404'),
+      topNav, bottomNav,
+      showBottomNav: isMobile && s.route !== 'episode',
+      showActionBar: isMobile && s.route === 'episode',
+
+      years, mRows, dRows, colHeads,
+      bands: Object.keys(BANDS).map(k => ({ bg: BANDS[k].bg, label: BANDS[k].label })),
+      gridHint: isMobile ? 'Редовете са епизоди, колоните са години.' : 'Редовете са години, колоните са позицията в годината.',
+      setPublic: () => this.setState({ score: 'public' }),
+      setElite: () => this.setState({ score: 'elite' }),
+      publicBg: useElite ? 'transparent' : T.vBr,
+      publicFg: useElite ? T.vFg2 : '#FFFFFF',
+      eliteBg: useElite ? T.vBr : 'transparent',
+      eliteFg: useElite ? '#FFFFFF' : T.vFg2,
+      channelStats: [
+        { n: overall, label: useElite ? 'elite средно' : 'средна оценка', color: T.vFg },
+        { n: '58/74', label: 'оценени', color: T.vFg },
+        { n: best, label: 'най-добър', color: '#5CB8E8' },
+        { n: '2026', label: 'най-добра година', color: T.vFg },
+        { n: '267', label: 'дадени оценки', color: T.vFg }
+      ],
+      recent, miniGrid,
+      topRated, newest: newestList, examples,
+      popularTopics: [
+        { name: 'хладилници', count: '12', go: setQuery('хладилници') },
+        { name: 'пътувания', count: '9', go: setQuery('пътувания') },
+        { name: 'детство', count: '8', go: setQuery('детство') },
+        { name: 'стендъп', count: '7', go: setQuery('стендъп') },
+        { name: 'храна', count: '6', go: setQuery('храна') },
+        { name: 'метро', count: '4', go: setQuery('метро') }
+      ],
+
+      ep: epVm,
+      similar: similarList, similarReason,
+      descClamp: s.descOpen ? '99' : '2',
+      descToggleable: descLong,
+      descToggleLabel: s.descOpen ? 'по-малко' : 'още',
+      descArrow: s.descOpen ? '180deg' : '0deg',
+      toggleDesc: () => this.setState({ descOpen: !s.descOpen }),
+
+      myRatingLabel: s.myRating === null ? '-' : String(s.myRating),
+      hasMyRating: s.myRating !== null,
+      myRatingCta: s.myRating === null ? 'Оцени' : ('Твоята ' + s.myRating),
+      myStarFill: s.myRating === null ? 'none' : 'currentColor',
+      myRatingNote: s.myRating === null ? 'още не си оценил' : (ep.score === null ? 'първата оценка' : ((s.myRating - ep.score) > 0 ? '+' : '') + (s.myRating - ep.score).toFixed(1) + ' спрямо публичната'),
+      rateCta: s.myRating === null ? 'Оцени' : 'Промени',
+      compareNote: ep.score === null ? 'Няма публична оценка все още.' : 'Публична оценка ' + ep.score.toFixed(1) + ' / твоята ' + s.picked,
+      pickedLabel: String(s.picked),
+      pickedColor: BANDS[bandKey(s.picked)].bg,
+      scale,
+      openRate: () => this.setState({ sheet: 'rate', picked: s.myRating || 8 }),
+      saveRating: () => { this.setState({ myRating: s.picked, sheet: null }); this.toast('Оценката е запазена'); },
+      clearRating: () => { this.setState({ myRating: null, sheet: null }); this.toast('Оценката е премахната'); },
+
+      openLog: () => this.setState({ sheet: 'log' }),
+      quickDates, calendar, calendarMonth: 'август 2026',
+      watchLog, hasWatchLog: watched, noWatchLog: !watched,
+      watchCountLabel: s.watchLog.length + 'x',
+      watchedLabel: watched ? ('Гледано ' + s.watchLog.length + 'x') : 'Отбележи като гледано',
+      watchedBtnBg: watched ? (isDark ? '#2C2825' : '#EDE8E1') : T.vBr,
+      watchedBtnFg: watched ? T.vFg : '#FFFFFF',
+      toggleWatched: () => {
+        if (watched) { this.setState({ watchLog: [] }); this.toast('Изчистено от гледаните'); }
+        else { this.setState({ watchLog: [{ date: '9 август 2026', rel: 'днес' }] }); this.toast('Записано: днес'); }
+      },
+      toggleFav: () => { this.setState({ fav: !s.fav }); this.toast(s.fav ? 'Махнато от любими' : 'Добавено в любими'); },
+      favFill: s.fav ? T.vBr : 'none',
+      favStroke: s.fav ? T.vBr : T.vFg2,
+      spoilerHidden: !s.spoiler, spoilerShown: s.spoiler,
+      revealSpoiler: () => this.setState({ spoiler: true }),
+      hideSpoiler: () => this.setState({ spoiler: false }),
+
+      query: q, queryLabel: q || 'Търси момент, тема или гост',
+      queryColor: q ? T.vFg : T.vFg3,
+      searchEmpty: !q, searchHasHits: !!q && !zero, searchZero: zero,
+      hits, hitCount: '3 епизода',
+
+      browse,
+      browseCount: 'показани ' + Math.min(s.limit, browseSource.length) + ' от ' + browseSource.length,
+      browseEmpty: browseSource.length === 0,
+      showLoadMore: browseSource.length > s.limit,
+      loadMore: () => this.setState({ limit: s.limit + 9 }),
+      loadMoreLabel: 'Зареди още',
+      filterLabel: activeFilters.length ? 'Филтри ' + activeFilters.length : 'Филтри',
+      activeFilters, filterGroups,
+      filterSummary: activeFilters.map(x => x.label).join(' и ') || 'няколко филтъра',
+      applyLabel: 'Покажи ' + browseSource.length + ' епизода',
+      clearFilters: () => this.setState({ filters: { sort: 'Най-нови', year: '', kind: '', channel: '', person: '' }, limit: 9 }),
+      openFilters: () => this.setState({ sheet: 'filters' }),
+
+      profileStats: [{ n: '122', label: 'оценки' }, { n: '58', label: 'изгледани' }, { n: '14', label: 'любими' }],
+      profileLinks: [
+        { label: 'Моите оценки', count: '122' },
+        { label: 'История на гледане', count: '58' },
+        { label: 'Любими', count: '14' },
+        { label: 'Моите етикети', count: '0' }
+      ],
+      histogram, historyFeed,
+      boardKinds, podium, ranked,
+
+      anySheet: !!s.sheet,
+      sheetRate: s.sheet === 'rate', sheetCell: s.sheet === 'cell',
+      sheetFilters: s.sheet === 'filters', sheetSearch: s.sheet === 'search',
+      sheetLog: s.sheet === 'log',
+      closeSheet: () => this.setState({ sheet: null }),
+      sheetAlign: isMobile ? 'flex-end' : 'center',
+      sheetW: isMobile ? '100%' : '460px',
+      sheetRadius: isMobile ? '26px 26px 0 0' : '20px',
+      cell,
+      openSearchOverlay: () => this.setState({ sheet: 'search' }),
+      overlaySuggestions: [
+        { label: 'хладилник', count: '4', go: setQuery('хладилник') },
+        { label: 'хладилници', count: '12', go: setQuery('хладилници') },
+        { label: 'баница', count: '6', go: setQuery('баница') },
+        { label: 'квантова физика', count: '0', go: setQuery('квантова физика') }
+      ],
+
+      toastOn: !!s.toast, toastText: s.toast
+    });
+  }
+}
+
+</script>
+</body>
+</html>

@@ -240,13 +240,38 @@ def test_index_settings_are_bulgarian_aware():
     assert "nonSeparatorTokens" not in settings_payload
 
 
-def test_typo_tolerance_is_loosened_for_long_bulgarian_words():
+def test_typo_tolerance_thresholds_are_expressed_in_bytes():
+    """🚨 `minWordSizeForTypos` counts BYTES, and Cyrillic is 2 bytes per char.
+
+    This test previously asserted `oneTypo <= 4` believing the unit was
+    characters. It was passing while the index actually allowed one typo from 2
+    Bulgarian characters and two typos from 4 - which made the query "пица"
+    (8 bytes) match "пича", "пичаги" and "пичове". Measured 2026-08-09: 95 of
+    100 hits were false, and the behaviour flipped exactly at a threshold of 9,
+    the query's byte length.
+
+    The invariant is therefore stated in characters and converted, so a future
+    edit cannot silently reintroduce the character/byte confusion.
+    """
     typo = search_index.TYPO_TOLERANCE
+    one = typo["minWordSizeForTypos"]["oneTypo"]
+    two = typo["minWordSizeForTypos"]["twoTypos"]
 
     assert typo["enabled"] is True
-    one, two = typo["minWordSizeForTypos"]["oneTypo"], typo["minWordSizeForTypos"]["twoTypos"]
     assert one < two
-    assert one <= 4, "Bulgarian words need typo tolerance below Meilisearch's default of 5"
+
+    one_chars = one / search_index.BYTES_PER_CYRILLIC_CHAR
+    two_chars = two / search_index.BYTES_PER_CYRILLIC_CHAR
+
+    # Still looser than Meilisearch's English-tuned default of 5/9 CHARACTERS...
+    assert one_chars <= 4, "Bulgarian needs typo tolerance below the 5-character default"
+    # ...but not so loose that a short word reaches an unrelated one.
+    assert one_chars >= 3, (
+        "One typo on a word shorter than 3 characters matches unrelated words - "
+        "this is the bug that made 'пица' match 'пичове'"
+    )
+    assert two_chars >= 6, "Two typos below 6 characters is not a typo, it is a different word"
+
     # An id or a slug must never be typo-corrected into a different record.
     assert "youtube_id" in typo["disableOnAttributes"]
 

@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  body { margin:0; background:#0B0A09; color:#F7F4F0; font-family:'Onest',system-ui,sans-serif; }
+  a { color:#E4232C; text-decoration:none; }
+  a:hover { color:#F0463E; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#3D3935; border-radius:99px; }
+</style>
+</helmet>
+
+<div style="padding:56px 64px 120px;display:flex;flex-direction:column;gap:80px;background:#0B0A09;">
+
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:900px;">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.14em;color:#E4232C;text-transform:uppercase;">Tier 1 / Screens 4-6</div>
+    <h1 style="font-family:'Unbounded',sans-serif;font-weight:700;font-size:40px;line-height:1.1;margin:0;letter-spacing:-.02em;">Episode detail and the rating control</h1>
+    <p style="margin:0;font-size:17px;line-height:1.55;color:#ADA69F;max-width:780px;text-wrap:pretty;">Two versions of the same page: one fully populated, one with nothing on it except a title, a thumbnail and a 44 character description. The sparse one is the common case, so it gets the same structure rather than a collapsed version of it.</p>
+  </div>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:8px;background:#E4232C;color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">4</span>
+      <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">Episode detail, populated</h2>
+      <span style="font-size:14px;color:#7A736C;">/e/utcF7etPyyk</span>
+    </div>
+
+    <div style="display:flex;gap:56px;align-items:flex-start;flex-wrap:wrap;">
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Mobile 390 x 844</div>
+        <div style="width:390px;height:844px;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+
+          <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;">
+            <span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span>
+          </div>
+
+          <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:0 8px;">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(35,32,29,.9);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+            </div>
+            <div style="flex:1;"></div>
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(35,32,29,.9);">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+            </div>
+          </div>
+
+          <div style="flex:1;overflow-y:auto;overflow-x:hidden;">
+
+            <div style="padding:0 16px;">
+              <div style="border-radius:16px;overflow:hidden;position:relative;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 10px,#2C2825 10px 20px);"></div>
+                <span style="position:relative;font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E6862;">thumbnail 1280x720</span>
+                <div style="position:absolute;left:10px;top:10px;display:flex;gap:6px;">
+                  <span style="height:26px;padding:0 9px;border-radius:8px;background:rgba(25,22,20,.86);color:#FFC93A;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>Members
+                  </span>
+                </div>
+                <div style="position:absolute;right:10px;bottom:10px;height:24px;padding:0 8px;border-radius:7px;background:rgba(25,22,20,.86);font-family:'JetBrains Mono',monospace;font-size:12px;display:flex;align-items:center;">2:14:07</div>
+              </div>
+
+              <h1 style="margin:14px 0 0;font-size:22px;line-height:1.3;font-weight:600;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;text-wrap:pretty;">Как да си купиш хладилник и да съжаляваш до края на живота си</h1>
+
+              <div style="display:flex;align-items:center;gap:9px;margin-top:12px;">
+                <div style="width:30px;height:30px;border-radius:10px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:12px;">ИК</div>
+                <span style="font-size:14px;font-weight:600;">Иван Кирков</span>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">12 март 2025</span>
+              </div>
+
+              <div style="display:flex;gap:8px;margin-top:16px;">
+                <div style="flex:1;background:#23201D;border:1px solid #2C2825;border-radius:16px;padding:12px 14px;">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="height:34px;padding:0 11px;border-radius:10px;background:#46C68F;color:#1A1614;display:inline-flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;">8.6</span>
+                    <div style="line-height:1.25;">
+                      <div style="font-size:12.5px;font-weight:600;">Awesome</div>
+                      <div style="font-size:11.5px;color:#7A736C;">14 ratings</div>
+                    </div>
+                  </div>
+                  <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2C2825;display:flex;align-items:center;gap:7px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>
+                    <span style="font-size:11.5px;color:#ADA69F;">Elite</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:#6FD16A;">8.1</span>
+                    <span style="font-size:11px;color:#7A736C;">from 4</span>
+                  </div>
+                </div>
+                <div style="width:118px;background:#23201D;border:1px solid #2C2825;border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;">
+                  <div style="font-size:11.5px;color:#7A736C;">Your score</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:#F7F4F0;">9</div>
+                  <div style="font-size:11px;color:#7A736C;">above average</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:6px;padding:20px 16px 0;overflow-x:auto;">
+              <span style="height:36px;padding:0 14px;border-radius:11px;background:#E4232C;color:#fff;display:inline-flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap;">Moments 3</span>
+              <span style="height:36px;padding:0 14px;border-radius:11px;background:#23201D;border:1px solid #2C2825;color:#ADA69F;display:inline-flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap;">Topics 3</span>
+              <span style="height:36px;padding:0 14px;border-radius:11px;background:#23201D;border:1px solid #2C2825;color:#ADA69F;display:inline-flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap;">Comments 12</span>
+              <span style="height:36px;padding:0 14px;border-radius:11px;background:#23201D;border:1px solid #2C2825;color:#ADA69F;display:inline-flex;align-items:center;font-size:13.5px;font-weight:600;white-space:nowrap;">About</span>
+            </div>
+
+            <div style="padding:18px 16px 0;">
+              <div style="position:relative;height:34px;">
+                <div style="position:absolute;left:0;right:0;top:14px;height:6px;border-radius:99px;background:#2C2825;"></div>
+                <sc-for list="{{ marks }}" as="m" hint-placeholder-count="3">
+                  <div style="position:absolute;top:8px;left:{{ m.left }};width:4px;height:18px;border-radius:99px;background:#FFC93A;"></div>
+                </sc-for>
+                <span style="position:absolute;left:0;top:0;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5E5852;">0:00</span>
+                <span style="position:absolute;right:0;top:0;font-family:'JetBrains Mono',monospace;font-size:10px;color:#5E5852;">2:14:07</span>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                <sc-for list="{{ moments }}" as="m" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px;min-height:56px;padding:10px 12px;border-radius:14px;background:#23201D;border:1px solid #2C2825;">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#FFC93A;background:#2C2825;height:28px;padding:0 8px;border-radius:8px;display:inline-flex;align-items:center;flex:none;">{{ m.t }}</span>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:14px;line-height:1.35;overflow-wrap:anywhere;">{{ m.label }}</div>
+                      <div style="font-size:11.5px;color:#7A736C;margin-top:2px;">{{ m.author }}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:center;min-width:38px;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 15 7-7 7 7"></path></svg>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#ADA69F;margin-top:1px;">{{ m.votes }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+                <button style="height:48px;border-radius:14px;background:transparent;border:1px dashed #4A4540;color:#ADA69F;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+                  Add a moment
+                </button>
+              </div>
+            </div>
+
+            <div style="padding:20px 16px 0;">
+              <h2 style="margin:0 0 10px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Topics</h2>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <sc-for list="{{ topics }}" as="t" hint-placeholder-count="3">
+                  <span style="height:36px;padding:0 6px 0 12px;border-radius:11px;background:#2C2825;display:inline-flex;align-items:center;gap:8px;font-size:13.5px;">
+                    {{ t.name }}
+                    <span style="height:24px;min-width:30px;padding:0 6px;border-radius:7px;background:#191614;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#ADA69F;display:inline-flex;align-items:center;justify-content:center;">{{ t.votes }}</span>
+                  </span>
+                </sc-for>
+                <span style="height:36px;padding:0 12px;border-radius:11px;border:1px dashed #4A4540;display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:#ADA69F;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>Suggest
+                </span>
+              </div>
+            </div>
+
+            <div style="padding:20px 16px 0;">
+              <h2 style="margin:0 0 10px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Comments</h2>
+              <div style="display:flex;gap:10px;padding:12px;border-radius:14px;background:#23201D;border:1px solid #2C2825;">
+                <div style="width:32px;height:32px;flex:none;border-radius:99px;background:#35312D;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#ADA69F;">ДП</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:13.5px;font-weight:600;">Даниел Петров</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;">преди 3 дни</span></div>
+                  <p style="margin:5px 0 0;font-size:14px;line-height:1.45;color:#DDD6CE;">Това е най-смешният епизод от миналата година, спорно е само дали хладилникът заслужава толкова време.</p>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;padding:12px;border-radius:14px;background:#23201D;border:1px solid #2C2825;margin-top:8px;">
+                <div style="width:32px;height:32px;flex:none;border-radius:99px;background:#35312D;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#ADA69F;">МХ</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:13.5px;font-weight:600;">Мартин Христов</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A736C;">преди 1 ден</span></div>
+                  <div style="margin-top:6px;border-radius:11px;border:1px solid #4A4540;background:#2A2623;padding:10px 12px;display:flex;align-items:center;gap:10px;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    <span style="flex:1;font-size:12.5px;color:#ADA69F;">Contains spoilers</span>
+                    <button style="height:32px;padding:0 12px;border:0;border-radius:9px;background:#3D3935;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:12.5px;font-weight:600;">Show</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="padding:20px 16px 0;">
+              <h2 style="margin:0 0 8px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">About</h2>
+              <p style="margin:0;font-size:14px;line-height:1.5;color:#ADA69F;">Записано на 10 март. Благодарим на всички, които изпратиха въпроси.</p>
+              <div style="display:flex;gap:16px;margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">
+                <span>2:14:07</span><span>12.03.2025</span><span>без данни за гледания</span>
+              </div>
+            </div>
+
+            <div style="height:120px;"></div>
+          </div>
+
+          <div style="flex:none;border-top:1px solid #2C2825;background:#1E1B19;padding:10px 12px 16px;display:flex;gap:8px;align-items:center;">
+            <button style="flex:1;height:48px;border:0;border-radius:14px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8Z"></path></svg>
+              Rate
+            </button>
+            <button style="width:48px;height:48px;border:1px solid #3D3935;border-radius:14px;background:#23201D;display:flex;align-items:center;justify-content:center;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#6FD16A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
+            </button>
+            <button style="width:48px;height:48px;border:1px solid #3D3935;border-radius:14px;background:#23201D;display:flex;align-items:center;justify-content:center;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.5 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z"></path></svg>
+            </button>
+            <a href="#4a" style="width:48px;height:48px;border:1px solid #3D3935;border-radius:14px;background:#23201D;display:flex;align-items:center;justify-content:center;">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Desktop 1280 x 900</div>
+        <div style="width:1280px;height:900px;overflow:hidden;border-radius:16px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+
+          <div style="height:64px;flex:none;display:flex;align-items:center;gap:28px;padding:0 32px;border-bottom:1px solid #2C2825;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:32px;height:32px;border-radius:10px;background:#E4232C;display:flex;align-items:center;justify-content:center;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg>
+              </div>
+              <span style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;">Comedy Club</span>
+            </div>
+            <nav style="display:flex;gap:4px;">
+              <a href="#4a" style="height:36px;padding:0 12px;display:flex;align-items:center;border-radius:9px;font-size:14px;color:#ADA69F;">Channels</a>
+              <a href="#4a" style="height:36px;padding:0 12px;display:flex;align-items:center;border-radius:9px;font-size:14px;color:#ADA69F;">Episodes</a>
+            </nav>
+            <div style="flex:1;max-width:440px;height:40px;border-radius:12px;background:#23201D;border:1px solid #3D3935;display:flex;align-items:center;gap:10px;padding:0 14px;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+              <span style="font-size:15px;color:#7A736C;">Търси момент, тема или гост</span>
+            </div>
+            <div style="margin-left:auto;width:34px;height:34px;border-radius:99px;background:#35312D;border:1px solid #3D3935;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#ADA69F;">МХ</div>
+          </div>
+
+          <div style="flex:1;overflow-y:auto;">
+            <div style="max-width:1216px;margin:0 auto;padding:24px 32px 60px;display:grid;grid-template-columns:1fr 340px;gap:32px;align-items:start;">
+
+              <div>
+                <div style="border-radius:18px;overflow:hidden;position:relative;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                  <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 12px,#2C2825 12px 24px);"></div>
+                  <span style="position:relative;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E6862;">thumbnail 1280x720</span>
+                  <div style="position:absolute;left:14px;top:14px;height:28px;padding:0 10px;border-radius:9px;background:rgba(25,22,20,.86);color:#FFC93A;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>Members only
+                  </div>
+                  <div style="position:absolute;right:14px;bottom:14px;height:26px;padding:0 9px;border-radius:8px;background:rgba(25,22,20,.86);font-family:'JetBrains Mono',monospace;font-size:13px;display:flex;align-items:center;">2:14:07</div>
+                </div>
+
+                <h1 style="margin:20px 0 0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:30px;line-height:1.2;letter-spacing:-.015em;overflow-wrap:anywhere;text-wrap:pretty;">Как да си купиш хладилник и да съжаляваш до края на живота си</h1>
+
+                <div style="display:flex;align-items:center;gap:12px;margin-top:14px;">
+                  <div style="width:32px;height:32px;border-radius:10px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:12px;">ИК</div>
+                  <span style="font-size:15px;font-weight:600;">Иван Кирков</span>
+                  <span style="color:#4A4540;">/</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#7A736C;">12 март 2025</span>
+                  <span style="color:#4A4540;">/</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#7A736C;">2:14:07</span>
+                </div>
+
+                <div style="margin-top:28px;">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                    <h2 style="margin:0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:20px;">Moments</h2>
+                    <span style="font-size:13px;color:#7A736C;">3 from the community</span>
+                  </div>
+                  <div style="position:relative;height:38px;margin-top:14px;">
+                    <div style="position:absolute;left:0;right:0;top:16px;height:6px;border-radius:99px;background:#2C2825;"></div>
+                    <sc-for list="{{ marks }}" as="m" hint-placeholder-count="3">
+                      <div style="position:absolute;top:10px;left:{{ m.left }};width:4px;height:18px;border-radius:99px;background:#FFC93A;"></div>
+                    </sc-for>
+                    <span style="position:absolute;left:0;top:0;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E5852;">0:00</span>
+                    <span style="position:absolute;right:0;top:0;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E5852;">2:14:07</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+                    <sc-for list="{{ moments }}" as="m" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:14px;min-height:56px;padding:12px 16px;border-radius:14px;background:#23201D;border:1px solid #2C2825;">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:#FFC93A;background:#2C2825;height:30px;padding:0 10px;border-radius:9px;display:inline-flex;align-items:center;flex:none;">{{ m.t }}</span>
+                        <span style="flex:1;font-size:15px;">{{ m.label }}</span>
+                        <span style="font-size:12.5px;color:#7A736C;">{{ m.author }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#ADA69F;min-width:34px;text-align:right;">{{ m.votes }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="margin-top:32px;">
+                  <h2 style="margin:0 0 14px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:20px;">Comments</h2>
+                  <div style="display:flex;gap:12px;padding:14px 16px;border-radius:14px;background:#23201D;border:1px solid #2C2825;">
+                    <div style="width:36px;height:36px;flex:none;border-radius:99px;background:#35312D;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#ADA69F;">ДП</div>
+                    <div style="flex:1;">
+                      <div style="display:flex;align-items:baseline;gap:10px;"><span style="font-size:14px;font-weight:600;">Даниел Петров</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">преди 3 дни</span></div>
+                      <p style="margin:6px 0 0;font-size:15px;line-height:1.5;color:#DDD6CE;">Това е най-смешният епизод от миналата година, спорно е само дали хладилникът заслужава толкова време.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:18px;padding:18px;">
+                  <div style="display:flex;align-items:center;gap:12px;">
+                    <span style="height:48px;padding:0 14px;border-radius:12px;background:#46C68F;color:#1A1614;display:inline-flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;">8.6</span>
+                    <div>
+                      <div style="font-size:14px;font-weight:600;">Awesome</div>
+                      <div style="font-size:12.5px;color:#7A736C;">public score, 14 ratings</div>
+                    </div>
+                  </div>
+                  <div style="margin-top:14px;padding-top:14px;border-top:1px solid #2C2825;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7Z"></path><path d="M2 20h20"></path></svg>
+                      <span style="font-size:13.5px;font-weight:600;">Elite</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:#6FD16A;margin-left:auto;">8.1</span>
+                    </div>
+                    <p style="margin:8px 0 0;font-size:12.5px;line-height:1.45;color:#7A736C;">What the 4 verified paying members of this channel gave it. A different lens, not a better one.</p>
+                  </div>
+                </div>
+
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:18px;padding:18px;">
+                  <div style="font-size:13px;color:#7A736C;">Your rating</div>
+                  <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px;">
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;">9</span>
+                    <span style="font-size:13px;color:#7A736C;">0.4 above the public score</span>
+                  </div>
+                  <div style="display:flex;gap:8px;margin-top:14px;">
+                    <button style="flex:1;height:44px;border:0;border-radius:12px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Change</button>
+                    <button style="height:44px;padding:0 14px;border:1px solid #3D3935;border-radius:12px;background:transparent;color:#ADA69F;font-family:'Onest',sans-serif;font-size:14px;">Clear</button>
+                  </div>
+                  <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button style="flex:1;height:44px;border:1px solid #3D3935;border-radius:12px;background:#2C2825;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:7px;">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6FD16A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>Watched 2x
+                    </button>
+                    <button style="width:48px;height:44px;border:1px solid #3D3935;border-radius:12px;background:#2C2825;display:flex;align-items:center;justify-content:center;">
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="#E4232C" stroke="#E4232C" stroke-width="2" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.5 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z"></path></svg>
+                    </button>
+                  </div>
+                  <a href="#4a" style="margin-top:8px;height:44px;border-radius:12px;background:transparent;border:1px solid #3D3935;color:#F7F4F0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:600;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>Watch on YouTube
+                  </a>
+                </div>
+
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:18px;padding:18px;">
+                  <div style="font-size:13.5px;font-weight:600;margin-bottom:10px;">Topics</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                    <sc-for list="{{ topics }}" as="t" hint-placeholder-count="3">
+                      <span style="height:32px;padding:0 5px 0 10px;border-radius:10px;background:#2C2825;display:inline-flex;align-items:center;gap:7px;font-size:13px;">
+                        {{ t.name }}
+                        <span style="height:22px;min-width:26px;padding:0 5px;border-radius:6px;background:#191614;font-family:'JetBrains Mono',monospace;font-size:11px;color:#ADA69F;display:inline-flex;align-items:center;justify-content:center;">{{ t.votes }}</span>
+                      </span>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:18px;padding:18px;">
+                  <div style="font-size:13.5px;font-weight:600;margin-bottom:12px;">In this episode</div>
+                  <div style="display:flex;flex-direction:column;gap:10px;">
+                    <div style="display:flex;align-items:center;gap:10px;"><div style="width:34px;height:34px;border-radius:99px;background:#35312D;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#ADA69F;">ИК</div><div><div style="font-size:13.5px;font-weight:600;">Иван Кирков</div><div style="font-size:11.5px;color:#7A736C;">домакин</div></div></div>
+                    <div style="display:flex;align-items:center;gap:10px;"><div style="width:34px;height:34px;border-radius:99px;background:#35312D;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#ADA69F;">ДП</div><div><div style="font-size:13.5px;font-weight:600;">Даниел Петров</div><div style="font-size:11.5px;color:#7A736C;">гост</div></div></div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:8px;background:#E4232C;color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">5</span>
+      <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">Episode detail, sparse</h2>
+      <span style="font-size:14px;color:#7A736C;">unrated, no moments, no topics, 44 character description</span>
+    </div>
+
+    <div style="display:flex;gap:56px;align-items:flex-start;flex-wrap:wrap;">
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Mobile 390 x 844</div>
+        <div style="width:390px;height:844px;overflow:hidden;border-radius:34px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+          <div style="height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 22px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;"><span>9:41</span><span style="letter-spacing:.1em;">. .ıl</span></div>
+          <div style="height:52px;flex:none;display:flex;align-items:center;padding:0 8px;">
+            <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(35,32,29,.9);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+            </div>
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            <div style="padding:0 16px;">
+              <div style="border-radius:16px;overflow:hidden;position:relative;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 10px,#2C2825 10px 20px);"></div>
+                <span style="position:relative;font-family:'JetBrains Mono',monospace;font-size:11px;color:#6E6862;">thumbnail 1280x720</span>
+                <div style="position:absolute;left:10px;top:10px;height:26px;padding:0 9px;border-radius:8px;background:rgba(25,22,20,.86);color:#FFC93A;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"></circle><path d="M7.8 16.2a6 6 0 0 1 0-8.4"></path><path d="M16.2 7.8a6 6 0 0 1 0 8.4"></path></svg>Stream
+                </div>
+              </div>
+              <h1 style="margin:14px 0 0;font-size:22px;line-height:1.3;font-weight:600;overflow-wrap:anywhere;text-wrap:pretty;">На живо от студиото: въпроси от публиката</h1>
+              <div style="display:flex;align-items:center;gap:9px;margin-top:12px;">
+                <div style="width:30px;height:30px;border-radius:10px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:12px;">ИК</div>
+                <span style="font-size:14px;font-weight:600;">Иван Кирков</span>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">4 юни 2026</span>
+              </div>
+
+              <div style="margin-top:16px;border:1px dashed #4A4540;border-radius:16px;padding:18px 16px;text-align:center;">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:#6E6862;">?</div>
+                <div style="font-size:15px;font-weight:600;margin-top:6px;">No ratings yet</div>
+                <p style="margin:6px 0 0;font-size:13px;line-height:1.45;color:#7A736C;">16 of 74 episodes are still waiting for a first score. Yours becomes the public score until someone else votes.</p>
+                <button style="margin-top:14px;width:100%;height:48px;border:0;border-radius:14px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:15px;font-weight:600;">Rate it first</button>
+              </div>
+            </div>
+
+            <div style="padding:20px 16px 0;">
+              <h2 style="margin:0 0 10px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Moments</h2>
+              <div style="border:1px solid #2C2825;border-radius:16px;background:#23201D;padding:20px 16px;display:flex;flex-direction:column;align-items:center;text-align:center;">
+                <span style="width:42px;height:42px;border-radius:13px;background:#2C2825;display:flex;align-items:center;justify-content:center;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+                </span>
+                <div style="font-size:15px;font-weight:600;margin-top:10px;">Nothing marked yet</div>
+                <p style="margin:6px 0 0;font-size:13px;line-height:1.45;color:#7A736C;">A moment is a timestamp plus a few words. It is what makes this episode findable later.</p>
+                <button style="margin-top:14px;width:100%;height:48px;border:1px solid #4A4540;border-radius:14px;background:transparent;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:14.5px;font-weight:600;">Add the first moment</button>
+              </div>
+            </div>
+
+            <div style="padding:20px 16px 0;">
+              <h2 style="margin:0 0 10px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">Topics</h2>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                <span style="height:36px;padding:0 12px;border-radius:11px;border:1px dashed #4A4540;display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:#ADA69F;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>Add the first topic
+                </span>
+              </div>
+            </div>
+
+            <div style="padding:20px 16px 0;">
+              <h2 style="margin:0 0 8px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:16px;">About</h2>
+              <p style="margin:0;font-size:14px;line-height:1.5;color:#ADA69F;">Стрийм от 4 юни. Без монтаж.</p>
+              <div style="display:flex;gap:16px;margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A736C;">
+                <span>1:38:22</span><span>04.06.2026</span><span>12 хил. гледания</span>
+              </div>
+            </div>
+            <div style="height:110px;"></div>
+          </div>
+          <div style="flex:none;border-top:1px solid #2C2825;background:#1E1B19;padding:10px 12px 16px;display:flex;gap:8px;">
+            <button style="flex:1;height:48px;border:0;border-radius:14px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:15px;font-weight:600;">Rate</button>
+            <button style="width:48px;height:48px;border:1px solid #3D3935;border-radius:14px;background:#23201D;display:flex;align-items:center;justify-content:center;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></button>
+            <button style="width:48px;height:48px;border:1px solid #3D3935;border-radius:14px;background:#23201D;display:flex;align-items:center;justify-content:center;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.5 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z"></path></svg></button>
+            <a href="#5a" style="width:48px;height:48px;border:1px solid #3D3935;border-radius:14px;background:#23201D;display:flex;align-items:center;justify-content:center;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg></a>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Desktop 1280 x 900</div>
+        <div style="width:1280px;height:900px;overflow:hidden;border-radius:16px;background:#191614;border:1px solid #3D3935;box-shadow:0 30px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;">
+          <div style="height:64px;flex:none;display:flex;align-items:center;gap:28px;padding:0 32px;border-bottom:1px solid #2C2825;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:32px;height:32px;border-radius:10px;background:#E4232C;display:flex;align-items:center;justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><path d="M12 18v4"></path></svg></div>
+              <span style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:15px;">Comedy Club</span>
+            </div>
+            <div style="flex:1;max-width:440px;height:40px;border-radius:12px;background:#23201D;border:1px solid #3D3935;display:flex;align-items:center;gap:10px;padding:0 14px;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#7A736C" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.9-3.9"></path></svg>
+              <span style="font-size:15px;color:#7A736C;">Търси момент, тема или гост</span>
+            </div>
+            <div style="margin-left:auto;width:34px;height:34px;border-radius:99px;background:#35312D;border:1px solid #3D3935;display:flex;align-items:center;justify-content:center;font-size:12px;color:#ADA69F;">МХ</div>
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            <div style="max-width:1216px;margin:0 auto;padding:24px 32px 60px;display:grid;grid-template-columns:1fr 340px;gap:32px;align-items:start;">
+              <div>
+                <div style="border-radius:18px;overflow:hidden;position:relative;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                  <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#26221F 0 12px,#2C2825 12px 24px);"></div>
+                  <span style="position:relative;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6E6862;">thumbnail 1280x720</span>
+                </div>
+                <h1 style="margin:20px 0 0;font-family:'Unbounded',sans-serif;font-weight:600;font-size:30px;line-height:1.2;letter-spacing:-.015em;">На живо от студиото: въпроси от публиката</h1>
+                <div style="display:flex;align-items:center;gap:12px;margin-top:14px;">
+                  <div style="width:32px;height:32px;border-radius:10px;background:#FFC93A;color:#191614;display:flex;align-items:center;justify-content:center;font-family:'Unbounded',sans-serif;font-weight:700;font-size:12px;">ИК</div>
+                  <span style="font-size:15px;font-weight:600;">Иван Кирков</span><span style="color:#4A4540;">/</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#7A736C;">4 юни 2026</span><span style="color:#4A4540;">/</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#7A736C;">1:38:22</span>
+                </div>
+
+                <div style="margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                  <div style="border:1px solid #2C2825;border-radius:18px;background:#23201D;padding:22px;">
+                    <span style="width:42px;height:42px;border-radius:13px;background:#2C2825;display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
+                    <div style="font-size:16px;font-weight:600;margin-top:12px;">No moments yet</div>
+                    <p style="margin:6px 0 0;font-size:13.5px;line-height:1.5;color:#7A736C;">A timestamp plus a few words. It is what makes this episode findable when nobody remembers the title.</p>
+                    <button style="margin-top:14px;height:44px;padding:0 16px;border:1px solid #4A4540;border-radius:12px;background:transparent;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Add the first moment</button>
+                  </div>
+                  <div style="border:1px solid #2C2825;border-radius:18px;background:#23201D;padding:22px;">
+                    <span style="width:42px;height:42px;border-radius:13px;background:#2C2825;display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFC93A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"></path><path d="m2 17 10 5 10-5"></path></svg></span>
+                    <div style="font-size:16px;font-weight:600;margin-top:12px;">No topics yet</div>
+                    <p style="margin:6px 0 0;font-size:13.5px;line-height:1.5;color:#7A736C;">Topics are shared across the whole site. Suggest one and it resolves to the canonical name.</p>
+                    <button style="margin-top:14px;height:44px;padding:0 16px;border:1px solid #4A4540;border-radius:12px;background:transparent;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Suggest a topic</button>
+                  </div>
+                </div>
+
+                <div style="margin-top:28px;">
+                  <h2 style="margin:0 0 10px;font-family:'Unbounded',sans-serif;font-weight:600;font-size:20px;">About</h2>
+                  <p style="margin:0;font-size:15px;line-height:1.55;color:#ADA69F;max-width:560px;">Стрийм от 4 юни. Без монтаж.</p>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="border:1px dashed #4A4540;border-radius:18px;padding:22px;text-align:center;">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;color:#6E6862;">?</div>
+                  <div style="font-size:16px;font-weight:600;margin-top:6px;">No ratings yet</div>
+                  <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:#7A736C;">Yours becomes the public score until someone else votes. It shows as provisional until three people have rated.</p>
+                  <button style="margin-top:16px;width:100%;height:44px;border:0;border-radius:12px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Rate it first</button>
+                </div>
+                <div style="background:#23201D;border:1px solid #2C2825;border-radius:18px;padding:18px;">
+                  <a href="#5a" style="height:44px;border-radius:12px;background:transparent;border:1px solid #3D3935;color:#F7F4F0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:600;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F7F4F0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"></path></svg>Watch on YouTube
+                  </a>
+                  <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button style="flex:1;height:44px;border:1px solid #3D3935;border-radius:12px;background:#2C2825;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Mark watched</button>
+                    <button style="width:48px;height:44px;border:1px solid #3D3935;border-radius:12px;background:#2C2825;display:flex;align-items:center;justify-content:center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ADA69F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.5 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z"></path></svg></button>
+                  </div>
+                </div>
+                <div style="border:1px solid #2C2825;border-radius:18px;background:#23201D;padding:18px;">
+                  <div style="font-size:13.5px;font-weight:600;">Why this page looks quiet</div>
+                  <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:#7A736C;">Most episodes have no labels yet. Rather than collapsing the page, every empty section keeps its slot and turns into an invitation.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;border-radius:8px;background:#E4232C;color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">6</span>
+      <h2 style="font-family:'Unbounded',sans-serif;font-weight:600;font-size:24px;margin:0;">The 1-10 rating control</h2>
+    </div>
+
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Mobile sheet, empty</div>
+        <div style="width:390px;height:520px;overflow:hidden;border-radius:34px 34px 26px 26px;background:#191614;border:1px solid #3D3935;position:relative;">
+          <div style="position:absolute;inset:0;background:rgba(11,10,9,.7);"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;background:#1E1B19;border-top:1px solid #3D3935;border-radius:26px 26px 0 0;padding:10px 16px 24px;">
+            <div style="width:40px;height:4px;border-radius:99px;background:#3D3935;margin:0 auto 14px;"></div>
+            <div style="font-size:17px;font-weight:600;">Your rating</div>
+            <div style="font-size:13px;color:#7A736C;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Как да си купиш хладилник и да съжаляваш...</div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:18px;">
+              <sc-for list="{{ scale }}" as="s" hint-placeholder-count="10">
+                <button style="height:60px;border:1px solid #3D3935;border-radius:14px;background:#23201D;color:#F7F4F0;font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+                  {{ s.n }}
+                  <span style="width:18px;height:3px;border-radius:99px;background:{{ s.bg }};"></span>
+                </button>
+              </sc-for>
+            </div>
+            <p style="margin:14px 0 0;font-size:12.5px;line-height:1.45;color:#7A736C;">Ten targets at 68 x 60. A slider would need a drag and hide the discrete steps, so the scale folds into two rows instead. The stripe under each number is its band colour.</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Mobile sheet, picked</div>
+        <div style="width:390px;height:520px;overflow:hidden;border-radius:34px 34px 26px 26px;background:#191614;border:1px solid #3D3935;position:relative;">
+          <div style="position:absolute;inset:0;background:rgba(11,10,9,.7);"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;background:#1E1B19;border-top:1px solid #3D3935;border-radius:26px 26px 0 0;padding:10px 16px 24px;">
+            <div style="width:40px;height:4px;border-radius:99px;background:#3D3935;margin:0 auto 14px;"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="font-size:17px;font-weight:600;">Your rating</div>
+              <div style="display:flex;align-items:baseline;gap:8px;">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:#46C68F;">9</span>
+                <span style="font-size:12.5px;color:#7A736C;">Awesome</span>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:16px;">
+              <sc-for list="{{ scalePicked }}" as="s" hint-placeholder-count="10">
+                <button style="height:60px;border:{{ s.border }};border-radius:14px;background:{{ s.cell }};color:{{ s.fg }};font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+                  {{ s.n }}
+                  <span style="width:18px;height:3px;border-radius:99px;background:{{ s.bg }};"></span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px;">
+              <button style="flex:1;height:48px;border:0;border-radius:14px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:15px;font-weight:600;">Save</button>
+              <button style="height:48px;padding:0 16px;border:1px solid #3D3935;border-radius:14px;background:transparent;color:#ADA69F;font-family:'Onest',sans-serif;font-size:14px;">Remove</button>
+            </div>
+            <div style="margin-top:12px;font-size:12.5px;color:#7A736C;text-align:center;">Public score 8.6 / your 9 is 0.4 above</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Mobile sheet, signed out</div>
+        <div style="width:390px;height:520px;overflow:hidden;border-radius:34px 34px 26px 26px;background:#191614;border:1px solid #3D3935;position:relative;">
+          <div style="position:absolute;inset:0;background:rgba(11,10,9,.7);"></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;background:#1E1B19;border-top:1px solid #3D3935;border-radius:26px 26px 0 0;padding:10px 16px 24px;">
+            <div style="width:40px;height:4px;border-radius:99px;background:#3D3935;margin:0 auto 14px;"></div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;opacity:.35;">
+              <sc-for list="{{ scale }}" as="s" hint-placeholder-count="10">
+                <div style="height:60px;border:1px solid #3D3935;border-radius:14px;background:#23201D;color:#F7F4F0;font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;">{{ s.n }}</div>
+              </sc-for>
+            </div>
+            <div style="margin-top:18px;border:1px solid #3D3935;border-radius:16px;background:#23201D;padding:18px 16px;">
+              <div style="font-size:16px;font-weight:600;">Sign in to rate</div>
+              <p style="margin:8px 0 0;font-size:13.5px;line-height:1.5;color:#ADA69F;">An account keeps your scores, your watch history and your own private tags. It takes about twenty seconds.</p>
+              <div style="display:flex;gap:8px;margin-top:14px;">
+                <button style="flex:1;height:48px;border:0;border-radius:14px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:15px;font-weight:600;">Sign in</button>
+                <button style="flex:1;height:48px;border:1px solid #3D3935;border-radius:14px;background:transparent;color:#F7F4F0;font-family:'Onest',sans-serif;font-size:15px;font-weight:600;">Create account</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7A736C;text-transform:uppercase;">Desktop popover + states</div>
+        <div style="width:560px;background:#191614;border:1px solid #3D3935;border-radius:20px;padding:26px;">
+          <div style="background:#23201D;border:1px solid #4A4540;border-radius:16px;padding:18px;box-shadow:0 20px 44px rgba(0,0,0,.6);">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:15px;font-weight:600;">Your rating</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:#46C68F;">9</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:14px;">
+              <sc-for list="{{ scalePicked }}" as="s" hint-placeholder-count="10">
+                <button style="flex:1;height:48px;border:{{ s.border }};border-radius:11px;background:{{ s.cell }};color:{{ s.fg }};font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+                  {{ s.n }}
+                  <span style="width:14px;height:3px;border-radius:99px;background:{{ s.bg }};"></span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:14px;">
+              <button style="flex:1;height:40px;border:0;border-radius:11px;background:#E4232C;color:#fff;font-family:'Onest',sans-serif;font-size:14px;font-weight:600;">Save</button>
+              <button style="height:40px;padding:0 14px;border:1px solid #3D3935;border-radius:11px;background:transparent;color:#ADA69F;font-family:'Onest',sans-serif;font-size:13.5px;">Remove</button>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;">
+            <sc-for list="{{ widgetStates }}" as="w" hint-placeholder-count="5">
+              <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:13px;background:#1E1B19;border:1px solid #2C2825;">
+                <span style="height:32px;padding:0 12px;border-radius:9px;background:{{ w.chipBg }};color:{{ w.chipFg }};display:inline-flex;align-items:center;font-size:13px;font-weight:600;min-width:96px;justify-content:center;">{{ w.state }}</span>
+                <span style="font-size:13px;color:#ADA69F;line-height:1.4;">{{ w.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <p style="margin:20px 0 0;font-size:13.5px;line-height:1.6;color:#7A736C;">Why 5 x 2 rather than a slider or a row of ten. Ten 44px targets need 440px, so a single row cannot exist at 390. A slider turns a discrete ten-point judgement into a drag, which is imprecise with a thumb and gives no target for the value you already know you want. Two rows of five keeps every value one tap away, keeps the numbers legible at 20px, and leaves room under each for its band stripe, so the score you are about to give is visibly connected to the colour it will take in the grid.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1800,&quot;height&quot;:1200}}">
+const BAND_HEX = ['#D66A5B','#D66A5B','#D66A5B','#E2914F','#E2914F','#E9BE4B','#ABDC5F','#6FD16A','#46C68F','#5CB8E8'];
+
+class Component extends DCLogic {
+  renderVals() {
+    const scale = BAND_HEX.map((bg, i) => ({ n: String(i + 1), bg }));
+    const scalePicked = BAND_HEX.map((bg, i) => {
+      const n = i + 1;
+      const picked = n === 9;
+      return {
+        n: String(n), bg,
+        cell: picked ? '#46C68F' : '#23201D',
+        fg: picked ? '#1A1614' : '#F7F4F0',
+        border: picked ? '2px solid #F7F4F0' : '1px solid #3D3935'
+      };
+    });
+
+    return {
+      scale, scalePicked,
+      marks: [{ left: '9.5%' }, { left: '63.5%' }, { left: '91%' }],
+      moments: [
+        { t: '0:12:44', label: 'спорът за баницата', author: 'Мартин Христов', votes: '+9' },
+        { t: '1:42:10', label: 'историята с хладилника', author: 'Даниел Петров', votes: '+21' },
+        { t: '2:03:18', label: 'обаждането на майка му', author: 'Мартин Христов', votes: '+4' }
+      ],
+      topics: [
+        { name: 'хладилници', votes: '12' },
+        { name: 'пазаруване', votes: '7' },
+        { name: 'истории от детството', votes: '5' }
+      ],
+      widgetStates: [
+        { state: 'Saving', chipBg: '#2C2825', chipFg: '#ADA69F', note: 'Buttons lock, the picked number keeps its fill, a 2px progress line runs under the sheet handle.' },
+        { state: 'Saved', chipBg: '#46C68F', chipFg: '#1A1614', note: 'Sheet closes after 400ms, a toast confirms, the score card updates in place.' },
+        { state: 'Failed', chipBg: '#E4232C', chipFg: '#FFFFFF', note: 'Sheet stays open, the picked value is kept, an inline retry appears above Save.' },
+        { state: 'Changing', chipBg: '#2C2825', chipFg: '#ADA69F', note: 'The existing score is pre-selected. Picking another replaces it, it never creates a second rating.' },
+        { state: 'Removed', chipBg: '#35312D', chipFg: '#ADA69F', note: 'Episode returns to the unrated treatment for this user, public score recalculates.' }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

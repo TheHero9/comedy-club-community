@@ -395,6 +395,57 @@ class SearchOut(Schema):
 
 
 # ---------------------------------------------------------------------------
+# Transcript search
+# ---------------------------------------------------------------------------
+
+
+class TranscriptMatchOut(Schema):
+    """One passage where the query was spoken."""
+
+    start_sec: int
+    end_sec: int
+    text: str = Field(
+        ...,
+        description=(
+            "The passage, cropped around the match, with <mark> around the matched "
+            "terms. 🔒 Escape on output - this is auto-caption text, not trusted HTML "
+            "beyond the <mark> tags the client is expected to render."
+        ),
+    )
+    deep_link: str = Field(..., description="YouTube URL seeked to start_sec")
+
+
+class TranscriptHitOut(Schema):
+    episode: EpisodeBriefOut
+    matches: list[TranscriptMatchOut]
+
+
+class TranscriptSearchOut(Schema):
+    """Where a phrase was SAID, as opposed to which episodes are ABOUT it.
+
+    ⚠️ `limit`/`offset` page over SEGMENTS, not episodes, and the segments on a
+    page are then grouped by episode for display. So `hits` is however many
+    distinct episodes this page of segments touched - it is not a page size.
+    """
+
+    query: str
+    hits: list[TranscriptHitOut]
+    total_segments: int = Field(
+        ..., description="Matching passages across the catalogue (clamped at 20,000)"
+    )
+    limit: int
+    offset: int
+    available: bool = Field(
+        ...,
+        description=(
+            "False when Meilisearch is down. There is no Postgres fallback here - "
+            "an ILIKE over every transcript is a full scan of the catalogue."
+        ),
+    )
+    processing_ms: int | None = None
+
+
+# ---------------------------------------------------------------------------
 # Season grid (IMDb-style ratings heatmap). One calendar year = one season.
 # ---------------------------------------------------------------------------
 

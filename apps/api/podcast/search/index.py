@@ -20,7 +20,15 @@ from django.db.models import QuerySet
 
 from podcast.models import Episode
 
-from .client import EPISODES_INDEX, SEARCH_ERRORS, get_client, get_index, graceful, is_available
+from .client import (
+    EPISODES_INDEX,
+    SEARCH_ERRORS,
+    get_client,
+    get_index,
+    graceful,
+    is_available,
+    wait_for_task,
+)
 from .documents import build_document, build_documents, episode_index_queryset
 
 logger = logging.getLogger(__name__)
@@ -86,13 +94,28 @@ RANKING_RULES: list[str] = [
     "upload_date:desc",
 ]
 
-# 🇧🇬 Bulgarian words are long and inflected, and users type them on a phone
-# keyboard they may be switching layouts on. Meilisearch's defaults (one typo
-# from 5 chars, two from 9) are tuned for English; loosening them to 4 and 8
-# means "Бъgария"-class fumbles still land.
+# 🚨 `minWordSizeForTypos` is measured in BYTES, not characters. Cyrillic is 2
+# bytes per character in UTF-8, so every Bulgarian word crosses these thresholds
+# at HALF the word length you would assume. Proven by sweep on 2026-08-09: the
+# query "пица" (4 chars / 8 bytes) kept matching "пича", "пичаги" and "пичове"
+# at every threshold up to 8 and stopped dead at 9 - exactly its byte length.
+# 95 of 100 hits were false.
+#
+# These values previously read {4, 8} in the belief they meant characters. They
+# actually meant 2 and 4 CHARACTERS, so a 2-letter Bulgarian word got a typo and
+# a 4-letter one got two - which is how "пица" reached "пичове".
+#
+# 🇧🇬 Intent is unchanged and stated in characters: one typo from 4 characters,
+# two from 8. Bulgarian words are long and inflected and users type them on a
+# phone keyboard they may be switching layouts on, so this is still LOOSER than
+# Meilisearch's English-tuned default of 5/9 characters.
+BYTES_PER_CYRILLIC_CHAR = 2
 TYPO_TOLERANCE: dict[str, Any] = {
     "enabled": True,
-    "minWordSizeForTypos": {"oneTypo": 4, "twoTypos": 8},
+    "minWordSizeForTypos": {
+        "oneTypo": 4 * BYTES_PER_CYRILLIC_CHAR,
+        "twoTypos": 8 * BYTES_PER_CYRILLIC_CHAR,
+    },
     "disableOnWords": [],
     # Never typo-correct an id or a slug: a one-character "fix" makes it a
     # different record.
@@ -250,20 +273,12 @@ DEFAULT_BATCH_SIZE = 500
 # ---------------------------------------------------------------------------
 
 
-def _task_uid(task: Any) -> int | None:
-    """Pull the task uid out of whatever the client handed back."""
-    uid = getattr(task, "task_uid", None)
-    if uid is None and isinstance(task, dict):
-        uid = task.get("taskUid")
-    return uid if isinstance(uid, int) else None
-
-
 def _wait(task: Any, timeout_ms: int = BATCH_TIMEOUT_MS) -> None:
-    """Block until an enqueued Meilisearch task finishes."""
-    uid = _task_uid(task)
-    if uid is None:
-        return
-    get_client().wait_for_task(uid, timeout_in_ms=timeout_ms)
+    """Block until an enqueued Meilisearch task finishes.
+
+    Shared with the transcript index, so the implementation lives in client.py.
+    """
+    wait_for_task(task, timeout_ms)
 
 
 def ensure_index(*, wait: bool = True) -> Any:

@@ -172,3 +172,93 @@ def rebuild_search_index(drop: bool = False) -> dict:
     except Exception:
         logger.exception("Search index rebuild failed")
         return {"documents_indexed": 0}
+
+
+# ---------------------------------------------------------------------------
+# Transcripts
+# ---------------------------------------------------------------------------
+
+
+@shared_task(name="podcast.fetch_episode_transcript", bind=True, max_retries=3)
+def fetch_episode_transcript(self, episode_id: int) -> dict:
+    """Fetch and store one episode's captions.
+
+    🚨 A throttled response is retried with a LONG countdown, not the default
+    backoff. The block lasts hours, not minutes - retrying sooner just deepens
+    it and writes nothing either way.
+    """
+    from podcast.ingestion.transcripts import TranscriptThrottled
+    from podcast.models import Episode
+    from podcast.services.indexing import schedule_transcript_reindex
+    from podcast.services.transcripts import fetch_and_store
+
+    episode = Episode.objects.filter(pk=episode_id).first()
+    if episode is None:
+        return {"episode_id": episode_id, "outcome": "missing"}
+
+    try:
+        transcript, outcome = fetch_and_store(episode)
+    except TranscriptThrottled as exc:
+        raise self.retry(exc=exc, countdown=3 * 60 * 60) from exc
+
+    if outcome == "stored":
+        schedule_transcript_reindex(episode_id)
+
+    return {
+        "episode_id": episode_id,
+        "outcome": outcome,
+        "segments": transcript.segment_count,
+        "words": transcript.word_count,
+    }
+
+
+@shared_task(name="podcast.backfill_transcripts")
+def backfill_transcripts(channel_id: int | None = None, limit: int | None = None) -> dict:
+    """Sweep pending episodes for captions. Thin wrapper over the service."""
+    from podcast.models import Channel
+    from podcast.services.transcripts import backfill_transcripts as run
+
+    channel = Channel.objects.filter(pk=channel_id).first() if channel_id else None
+    result = run(channel, limit=limit)
+    return {
+        "stored": result.stored,
+        "unavailable": result.unavailable,
+        "throttled": result.throttled,
+        "segments": result.segments_created,
+        "aborted": result.aborted,
+    }
+
+
+@shared_task(name="podcast.reindex_transcript", bind=True, retry_backoff=True, max_retries=5)
+def reindex_transcript(self, episode_id: int) -> int:
+    from podcast.search.client import SEARCH_ERRORS
+    from podcast.search.transcript_index import index_transcript
+
+    try:
+        return index_transcript(episode_id, strict=True)
+    except SEARCH_ERRORS as exc:
+        raise self.retry(exc=exc) from exc
+
+
+@shared_task(
+    name="podcast.remove_transcript_from_index", bind=True, retry_backoff=True, max_retries=5
+)
+def remove_transcript_from_index(self, episode_id: int) -> bool:
+    from podcast.search.client import SEARCH_ERRORS
+    from podcast.search.transcript_index import remove_episode_segments
+
+    try:
+        return remove_episode_segments(episode_id, strict=True)
+    except SEARCH_ERRORS as exc:
+        raise self.retry(exc=exc) from exc
+
+
+@shared_task(name="podcast.rebuild_transcript_index")
+def rebuild_transcript_index(drop: bool = False) -> dict:
+    try:
+        from podcast.search.transcript_index import rebuild_all
+
+        return rebuild_all(drop=drop)
+    except Exception:
+        logger.exception("Transcript index rebuild failed")
+        return {"documents_indexed": 0}

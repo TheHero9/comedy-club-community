@@ -234,6 +234,132 @@ class Chapter(models.Model):
         return f"{self.start_sec}s - {self.title}"
 
 
+class Transcript(models.Model):
+    """One episode's transcript, or a record that it has none.
+
+    🚨 A row with `status=UNAVAILABLE` is DATA, not an absence. Without it the
+    backfill would re-fetch every caption-less episode on every run, and the
+    catalogue is majority caption-less. `checked_at` is what makes a re-check
+    deliberate rather than accidental - YouTube does add captions to older
+    videos over time, so "none" is true on a date, not forever.
+
+    ⚠️ NEVER write UNAVAILABLE from a degraded response. A soft-block strips the
+    caption list the same way it strips `duration`, so absence only counts when
+    the response was complete. `ingestion/transcripts.py` enforces this by
+    raising `TranscriptThrottled` instead of returning "none".
+
+    The `source` field is the upgrade path: re-transcribing an episode with
+    Whisper later replaces the segments and flips `source`, with no schema
+    change and nothing to migrate. One transcript per episode - the current best
+    one - rather than a history, because nothing reads an older tier.
+    """
+
+    class Status(models.TextChoices):
+        OK = "ok", "Transcript stored"
+        UNAVAILABLE = "unavailable", "No captions published"
+
+    class Source(models.TextChoices):
+        # 🇧🇬 Free, from YouTube's own Bulgarian ASR. Lowercase, unpunctuated,
+        # good enough to search, not good enough to read.
+        YOUTUBE_AUTO = "youtube_auto", "YouTube auto-captions"
+        YOUTUBE_MANUAL = "youtube_manual", "Creator-uploaded captions"
+        WHISPER = "whisper", "Whisper"
+        SCRIBE = "scribe", "ElevenLabs Scribe"
+
+    episode = models.OneToOneField(Episode, on_delete=models.CASCADE, related_name="transcript")
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.OK, db_index=True
+    )
+    source = models.CharField(max_length=32, choices=Source.choices, blank=True)
+    language = models.CharField(max_length=8, blank=True)  # e.g. "bg"
+    track_id = models.CharField(
+        max_length=32, blank=True, help_text='YouTube caption track, e.g. "bg-orig".'
+    )
+
+    # Denormalized counts so the admin and the API never aggregate over segments.
+    segment_count = models.PositiveIntegerField(default=0)
+    word_count = models.PositiveIntegerField(default=0)
+    covered_sec = models.PositiveIntegerField(
+        default=0, help_text="End of the last segment. Compare with Episode.duration_sec."
+    )
+
+    checked_at = models.DateTimeField(
+        null=True, blank=True, help_text="Last COMPLETE fetch attempt. Never set from a throttled one."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            # The backfill queryset: "which episodes still need checking, and
+            # which unavailable ones are stale enough to re-check".
+            models.Index(fields=["status", "checked_at"]),
+        ]
+
+    def __str__(self):
+        if self.status == self.Status.UNAVAILABLE:
+            return f"{self.episode_id}: no captions"
+        return f"{self.episode_id}: {self.segment_count} segments ({self.source})"
+
+    @property
+    def is_usable(self) -> bool:
+        return self.status == self.Status.OK and self.segment_count > 0
+
+    @property
+    def coverage_ratio(self) -> float | None:
+        """Fraction of the episode the transcript spans.
+
+        ⚠️ A value well under 1.0 means the caption track stopped early, which is
+        a partial transcript masquerading as a complete one.
+        """
+        duration = self.episode.duration_sec
+        if not duration or not self.covered_sec:
+            return None
+        return min(self.covered_sec / duration, 1.0)
+
+
+class TranscriptSegment(models.Model):
+    """A windowed slice of a transcript. The unit that gets searched.
+
+    🚨 Segments exist because a raw caption cue (~2s, ~7 words) is too granular
+    to be a search result - a phrase spanning two cues would match neither.
+    ~60s windows trade timestamp precision for recall, and `start_sec` is still
+    an exact deep link into the video.
+
+    ⚠️ NEVER add this text to the `episodes` Meilisearch document. A 26,000-word
+    field next to a 60-character title makes every episode match almost every
+    common Bulgarian word, and a passing mention would outrank an episode
+    actually about the subject. It gets its own index - see
+    podcast/search/transcript_index.py.
+    """
+
+    transcript = models.ForeignKey(
+        Transcript, on_delete=models.CASCADE, related_name="segments"
+    )
+    start_sec = models.PositiveIntegerField()
+    end_sec = models.PositiveIntegerField()
+    text = models.TextField()
+
+    class Meta:
+        ordering = ["start_sec"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transcript", "start_sec"], name="uniq_segment_start_per_transcript"
+            )
+        ]
+
+    def __str__(self):
+        minutes, seconds = divmod(self.start_sec, 60)
+        return f"{minutes}:{seconds:02d} - {self.text[:50]}"
+
+    @property
+    def deep_link(self) -> str:
+        return (
+            f"https://www.youtube.com/watch?v={self.transcript.episode.youtube_id}"
+            f"&t={self.start_sec}"
+        )
+
+
 # ---------------------------------------------------------------------------
 # PEOPLE / PERSONAS
 # ---------------------------------------------------------------------------

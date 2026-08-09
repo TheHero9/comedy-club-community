@@ -178,10 +178,60 @@ The pre-existing `-upload_date` index is **kept**: `Episode.Meta.ordering` and t
 
 ---
 
+## Deviation 6: `Transcript` + `TranscriptSegment` (added 2026-08-09)
+
+**Canonical file:** neither model exists. The brief lists transcription as an explicit v1 non-goal.
+
+**What changed:** two new models, both purely additive. No existing model, field or index was touched.
+
+```python
+class Transcript(models.Model):          # OneToOne -> Episode
+    status      = "ok" | "unavailable"
+    source      = "youtube_auto" | "youtube_manual" | "whisper" | "scribe"
+    language, track_id
+    segment_count, word_count, covered_sec      # denormalized
+    checked_at                                   # last COMPLETE fetch attempt
+
+class TranscriptSegment(models.Model):   # FK -> Transcript
+    start_sec, end_sec, text
+    UniqueConstraint(transcript, start_sec)
+```
+
+**Why this is not the deferred transcription work:** the non-goal was *paying to transcribe*. This ships **zero** ASR. YouTube already publishes a Bulgarian ASR track (`bg-orig`) for part of the catalogue and yt-dlp hands it over free. The `source` field is exactly the upgrade path the brief anticipated - re-transcribing later with Whisper replaces the segments and flips `source`, with no schema change.
+
+**Why a `status=unavailable` row instead of an absent row:** the majority of the catalogue has no captions. Without a negative record every backfill would re-fetch every caption-less episode forever. `checked_at` makes the re-check deliberate: "no captions" is true on a date, not permanently, because YouTube does add captions to older videos.
+
+🚨 **An `unavailable` row is only ever written from a COMPLETE response.** The same soft-block that strips `duration` from a backfill also strips the caption list, so absence proves nothing on a degraded response. `ingestion/transcripts.py` raises `TranscriptThrottled` rather than returning "none", and the service leaves the episode pending. Writing a false "none" would be permanent - nothing would re-check it.
+
+**Why OneToOne and not a history:** nothing reads an older transcript tier. One transcript per episode, the current best one.
+
+**Why segments and not one text blob:**
+
+| | One `TextField` per episode | Windowed segments |
+| --- | --- | --- |
+| Deep link to the moment | ❌ impossible | ✅ `start_sec` |
+| Search result granularity | whole 2h38m episode | ~60s passage |
+| Meilisearch ranking | one 26k-word doc drowns every title | passage-level |
+
+Window size is `settings.TRANSCRIPT_SEGMENT_SECONDS` (60). A raw caption cue is ~2s / ~7 words, too granular to be a result: a phrase spanning two cues would match neither.
+
+**Measured cost** (this box, 2026-08-09):
+
+| | Whole catalogue (1,392 eps / 1,914 h) | Per hour of audio |
+| --- | --- | --- |
+| Postgres text | ~56 MB compressed | ~30 KB |
+| Meilisearch | ~2.0-2.5 GB | ~1.2 MB |
+| Segment rows | ~115,000 | ~60 |
+
+Postgres is a non-issue. **Meilisearch is the real cost** - budget host RAM against that number.
+
+**Index N+1:** `segment_index_queryset()` uses `select_related("transcript__episode__channel")`. Measured: 1 query for 400 segments, versus 151 queries for 50 without it.
+
+---
+
 ## Deferred
 
 | Idea | Why not now |
 | ---- | ----------- |
-| `Transcript` model | Out of scope for v1 per the brief. Attaches to `Episode` later with no rework. |
 | R2 thumbnail mirroring | Thumbnails are a free Google CDN URL derived from the video id. Mirroring adds cost and staleness for zero gain. |
 | i18n / `next-intl` | UI is English for now. See `NEXT_TIME.md`. |

@@ -190,6 +190,33 @@ YOUTUBE_INGEST_TABS = ("videos", "streams")
 YOUTUBE_INGEST_WORKERS = 8
 
 # ---------------------------------------------------------------------------
+# Transcripts
+# ---------------------------------------------------------------------------
+
+# 🇧🇬 Which caption languages we accept, best first. "bg" also matches the
+# "bg-orig" original-ASR track, which is preferred over a plain "bg" that could
+# be a machine translation. See podcast/ingestion/transcripts.py.
+TRANSCRIPT_LANGUAGES = ("bg",)
+
+# Seconds per searchable passage. 60s => ~154 segments and ~171 words per
+# segment on the probed 2h38m episode. Lower means better timestamps and more
+# documents; higher means fewer documents and vaguer deep links.
+# ⚠️ Changing this invalidates existing windowing - re-run the backfill with
+# --force, or old and new segments will coexist at different granularities.
+TRANSCRIPT_SEGMENT_SECONDS = 60
+
+# 🚨 Seconds between caption fetches. A caption fetch is a SECOND request per
+# episode on top of the metadata one, and parallel requests are exactly what
+# soft-blocked the 1,318-episode backfill on 2026-08-09. Serial and slow on
+# purpose - this job has no deadline.
+TRANSCRIPT_FETCH_DELAY = float(env_str("TRANSCRIPT_FETCH_DELAY", "1.0"))
+
+# Days before an episode recorded as caption-less is checked again. YouTube does
+# add captions to older videos over time (the 2023 sample came back mixed), so
+# "no captions" is true on a date, not forever.
+TRANSCRIPT_RECHECK_DAYS = 90
+
+# ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 
