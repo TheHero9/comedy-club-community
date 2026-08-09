@@ -183,3 +183,95 @@ def test_two_channels_may_share_an_episode_slug(channel):
     upsert_episode(channel, _payload())
     upsert_episode(other, _payload(youtube_id="different123"))
     assert Episode.objects.filter(slug="историята-на-каспаров").count() == 2
+
+
+# ---------------------------------------------------------------------------
+# 🚨 Throttled-response protection
+#
+# Regressions for the 2026-08-09 @comedyclubpodcast backfill, where YouTube
+# soft-blocked the run partway through and yt-dlp kept returning a REDUCED payload
+# without ever raising. The run reported "1318 created, 0 errors" while 1,036 rows
+# silently lost duration and availability.
+#
+# See specs/04-channel-ingestion/01-comedyclubpodcast-run.md
+# ---------------------------------------------------------------------------
+
+
+def _throttled_payload(**overrides):
+    """What a soft-blocked yt-dlp response shapes into.
+
+    Core fields survive; everything from the player response is gone. Note
+    `availability` arrives as "public" because shape_video coerces the missing
+    value - which is exactly what makes this dangerous rather than obvious.
+    """
+    return _payload(
+        duration_sec=None,
+        availability="public",
+        view_count=None,
+        like_count=None,
+        yt_comment_count=None,
+        **overrides,
+    )
+
+
+def test_throttled_response_never_downgrades_an_existing_episode(channel):
+    """A re-run while throttled must not destroy metadata we already got right.
+
+    This is the daily sync's safety property: update_or_create is idempotent in row
+    COUNT, but without this guard it is not idempotent in row QUALITY.
+    """
+    upsert_episode(channel, _payload(duration_sec=3935, availability="subscriber_only",
+                                     view_count=12345))
+
+    upsert_episode(channel, _throttled_payload())
+
+    episode = Episode.objects.get(youtube_id="KaZG3h2if_0")
+    assert episode.duration_sec == 3935, "throttled re-run wiped a good duration"
+    assert episode.availability == Episode.Availability.SUBSCRIBER_ONLY, (
+        "throttled re-run flipped a members-only episode to public"
+    )
+    assert episode.view_count == 12345
+
+
+def test_throttled_response_still_updates_safe_fields(channel):
+    """Only the player-response fields are protected - a retitle must still land."""
+    upsert_episode(channel, _payload(duration_sec=3935))
+    upsert_episode(channel, _throttled_payload(title="Преименуван епизод"))
+
+    episode = Episode.objects.get(youtube_id="KaZG3h2if_0")
+    assert episode.title == "Преименуван епизод"
+    assert episode.duration_sec == 3935
+
+
+def test_a_brand_new_episode_from_a_throttled_response_is_still_written(channel):
+    """Never drop the episode - a listed episode beats a missing one.
+
+    It is written with the gaps and counted as degraded, so repair_metadata can
+    finish the job later.
+    """
+    episode, created, _ = upsert_episode(channel, _throttled_payload())
+    assert created is True
+    assert episode.duration_sec is None
+
+
+def test_degraded_rows_are_detectable(channel):
+    """`duration_sec IS NULL` is the marker the repair pass keys on."""
+    from podcast.services.metadata_repair import degraded_queryset
+
+    upsert_episode(channel, _payload(duration_sec=3935))
+    # A distinct title: slugs are unique per channel, so reusing one collides.
+    upsert_episode(
+        channel, _throttled_payload(youtube_id="throttled123", title="Друг епизод")
+    )
+
+    degraded = list(degraded_queryset(channel).values_list("youtube_id", flat=True))
+    assert degraded == ["throttled123"]
+
+
+def test_repair_refuses_to_write_from_a_degraded_response():
+    """Running the repair while still blocked must be a no-op, never data loss."""
+    from podcast.services.metadata_repair import is_full_response
+
+    assert is_full_response({"duration": 3935}) is True
+    assert is_full_response({"duration": None, "availability": None}) is False
+    assert is_full_response({}) is False

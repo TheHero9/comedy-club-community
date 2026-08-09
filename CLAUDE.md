@@ -557,7 +557,7 @@ YYYYMMDD-feature-name        e.g. 20260808-p1-ingestion
 
 ## 🧪 Testing
 
-**666 automated tests. Run them all with `npm run test` from the repo root.**
+**723 automated tests. Run them all with `npm run test` from the repo root.**
 
 ```bash
 npm run test                 # everything: Vitest + Playwright + pytest
@@ -567,7 +567,7 @@ npm run test:api             # pytest only
 cd apps/web && npx vitest run           # 117 unit + contract tests
 cd apps/web && npx playwright test      # 232 E2E (116 x desktop + mobile)
 cd apps/web && npx playwright test --ui # debug interactively
-cd apps/api && uv run pytest -q         # 317 backend tests
+cd apps/api && uv run pytest -q         # 350 backend tests
 ```
 
 | Layer | Tool | Location |

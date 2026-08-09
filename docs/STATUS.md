@@ -1,7 +1,7 @@
 # 📊 STATUS
 
 **Updated:** 2026-08-08
-**Overall:** 🟢 **Waves 1-13 built and test-hardened.** 39 API paths / 48 operations, a live Next.js frontend with the IMDb-style ratings grid, and **712 automated tests** (339 pytest + 137 Vitest + 236 Playwright) that all run from `npm run test`.
+**Overall:** 🟢 **Waves 1-13 built and test-hardened.** 39 API paths / 48 operations, a live Next.js frontend with the IMDb-style ratings grid, and **723 automated tests** (350 pytest + 137 Vitest + 236 Playwright) that all run from `npm run test`.
 
 > Wave definitions live in [`specs/01-initial-build/01-waves.md`](../specs/01-initial-build/01-waves.md).
 
@@ -43,10 +43,10 @@ suites; the counts here come from actual runs.
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| Backend | `cd apps/api && uv run pytest -q` | **339 passed** |
+| Backend | `cd apps/api && uv run pytest -q` | **350 passed** |
 | Frontend unit + contract | `cd apps/web && npx vitest run` | **137 passed** |
 | Frontend E2E | `cd apps/web && npx playwright test` | **236 passed** (118 tests x desktop 1280x800 + mobile 390x844) |
-| Everything, cold start | `npm run test` | **712 passed** |
+| Everything, cold start | `npm run test` | **723 passed** |
 | Performance | `npm run benchmark` | See `specs/05-performance/` |
 | Static gates | `npx turbo typecheck lint build` | **4/4 successful** |
 | Python lint | `cd apps/api && uv run ruff check .` | All checks passed |

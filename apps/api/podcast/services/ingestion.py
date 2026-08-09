@@ -32,14 +32,24 @@ class IngestionResult:
     chapters_created: int = 0
     errors: list[dict] = field(default_factory=list)
 
+    # 🚨 Rows written from a throttled, reduced YouTube response. NOT errors - the run
+    # succeeded and yt-dlp never raised. Counting these is the only honest completeness
+    # signal a backfill has; `len(errors)` says nothing. See services/metadata_repair.py.
+    degraded: int = 0
+
     @property
     def total(self) -> int:
         return self.created + self.updated
 
+    @property
+    def is_complete(self) -> bool:
+        return self.degraded == 0 and not self.errors
+
     def summary(self) -> str:
         return (
             f"{self.total} episodes ({self.created} created, {self.updated} updated), "
-            f"{self.chapters_created} chapters, {len(self.errors)} errors"
+            f"{self.chapters_created} chapters, {len(self.errors)} errors, "
+            f"{self.degraded} degraded"
         )
 
 
@@ -161,6 +171,26 @@ def upsert_episode(channel: Channel, data: dict) -> tuple[Episode, bool, int]:
         )
         defaults["availability"] = Episode.Availability.PUBLIC
 
+    # 🚨 Never let a throttled response DOWNGRADE a row we already got right.
+    #
+    # A reduced response carries no duration, and `availability` silently falls back to
+    # "public" above. Writing that over an existing good row would turn a re-run - or
+    # the daily sync - into data loss: a members-only episode would flip to public and
+    # its duration would vanish. `update_or_create` alone is idempotent in row COUNT,
+    # not in row QUALITY.
+    #
+    # A brand new episode still gets written as-is; `IngestionResult.degraded` counts it
+    # and the command tells the operator to run `repair_metadata`.
+    existing = Episode.objects.filter(youtube_id=data["youtube_id"]).first()
+    if existing and data.get("duration_sec") is None:
+        for volatile in ("duration_sec", "availability", "view_count", "like_count",
+                         "yt_comment_count"):
+            defaults.pop(volatile, None)
+        logger.info(
+            "Throttled response for existing %s - keeping stored metadata",
+            data["youtube_id"],
+        )
+
     episode, created = Episode.objects.update_or_create(
         youtube_id=data["youtube_id"], defaults=defaults
     )
@@ -215,6 +245,13 @@ def backfill_channel(
         result.created += int(created)
         result.updated += int(not created)
         result.chapters_created += chapters
+
+    # 🚨 The completeness check the 2026-08-09 backfill did not have. A throttled run
+    # finishes with 0 errors while silently dropping duration/availability, so the run
+    # MUST measure what it actually wrote rather than trusting its own error count.
+    from podcast.services.metadata_repair import degraded_queryset
+
+    result.degraded = degraded_queryset(channel).count()
 
     channel.last_synced_at = timezone.now()
     channel.save(update_fields=["last_synced_at"])
