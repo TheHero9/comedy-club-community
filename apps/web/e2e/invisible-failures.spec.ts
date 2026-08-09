@@ -18,12 +18,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { copy } from "@/lib/copy";
+
 import {
   apiJson,
   expect,
   hasHorizontalOverflow,
   PUBLIC_ROUTES,
   test,
+  visibleGrid,
   type ConsoleCapture,
 } from "./fixtures";
 
@@ -161,11 +164,29 @@ test.describe("8. mobile + layout", () => {
     });
   });
 
-  test("8.3 the ratings grid scrolls inside its own container, not the page", async ({
+  test("8.3 the ratings grid never makes the PAGE scroll sideways", async ({
     page,
   }) => {
     await page.goto("/channels/ivan-kirkov");
-    const container = page.locator("div.overflow-x-auto").filter({ has: page.locator("table") });
+    await expect(visibleGrid(page)).toBeVisible();
+    expect(await hasHorizontalOverflow(page), "the page itself must not scroll").toBe(
+      false,
+    );
+  });
+
+  test("8.3 the desktop grid is the only thing that scrolls sideways", async ({
+    page,
+    viewport,
+  }) => {
+    test.skip(
+      (viewport?.width ?? 0) < 768,
+      "the mobile grid is transposed precisely so that nothing scrolls sideways; 3.10 pins that",
+    );
+
+    await page.goto("/channels/ivan-kirkov");
+    const container = page
+      .locator("div.overflow-x-auto")
+      .filter({ has: page.locator("table[data-grid='desktop']") });
     await expect(container).toBeVisible();
 
     const box = await container.evaluate((el) => ({
@@ -176,7 +197,9 @@ test.describe("8. mobile + layout", () => {
       box.scrollWidth,
       "the grid must actually be wider than its container, or this test proves nothing",
     ).toBeGreaterThan(box.clientWidth);
-    expect(await hasHorizontalOverflow(page), "the page itself must not scroll").toBe(false);
+    expect(await hasHorizontalOverflow(page), "the page itself must not scroll").toBe(
+      false,
+    );
   });
 
   for (const route of PUBLIC_ROUTES) {
@@ -242,7 +265,7 @@ test.describe("9. theme + fonts", () => {
     expect(luminance, `body background ${background} is not dark`).toBeLessThan(60);
   });
 
-  test("9.3 REGRESSION: the sans font resolves to Geist, not a serif fallback", async ({
+  test("9.3 REGRESSION: headings resolve to Unbounded, not a serif fallback", async ({
     page,
   }) => {
     // Guards the circular `--font-sans: var(--font-sans)` that shadcn's init
@@ -252,42 +275,69 @@ test.describe("9. theme + fonts", () => {
     const family = await page.evaluate(
       () => getComputedStyle(document.querySelector("h1") as Element).fontFamily,
     );
-    expect(family, `<h1> font-family was "${family}"`).toMatch(/geist/i);
+    expect(family, `<h1> font-family was "${family}"`).toMatch(/unbounded/i);
     expect(family).not.toMatch(/(^|[\s,"])(serif|Times|Times New Roman)([\s,"]|$)/i);
   });
 
-  test("9.4 REGRESSION: Bulgarian text uses the same family as English chrome", async ({
+  test("9.3 body text resolves to Onest, the Cyrillic-first UI family", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const family = await page.evaluate(
+      () => getComputedStyle(document.body).fontFamily,
+    );
+    expect(family, `body font-family was "${family}"`).toMatch(/onest/i);
+  });
+
+  test("9.4 REGRESSION: a Bulgarian title uses the same family as Latin text in the same face", async ({
     page,
   }) => {
     const route = await firstEpisodeRoute(page);
     await page.goto(route);
 
+    // Both of these are Unbounded by design: the episode H1 and the wordmark.
+    // One is Cyrillic and one is Latin, so if the Cyrillic subset were missing
+    // the browser would fall back per glyph and the families would diverge.
     const families = await page.evaluate(() => {
       const title = document.querySelector("h1") as Element;
-      const nav = document.querySelector("header nav a") as Element;
+      const wordmark = document.querySelector(
+        'header a[href="/"] span:last-child',
+      ) as Element;
       return {
         titleText: title.textContent ?? "",
         titleFamily: getComputedStyle(title).fontFamily,
-        navText: nav.textContent ?? "",
-        navFamily: getComputedStyle(nav).fontFamily,
+        wordmarkText: wordmark.textContent ?? "",
+        wordmarkFamily: getComputedStyle(wordmark).fontFamily,
       };
     });
 
-    // Prove the fixture is actually Cyrillic, or the comparison means nothing.
     expect(families.titleText, "the episode title must be Bulgarian").toMatch(/[Ѐ-ӿ]/);
-    expect(families.navText, "the nav label must be Latin").toMatch(/^[\x20-\x7E]+$/);
-    expect(families.titleFamily).toBe(families.navFamily);
+    expect(families.wordmarkText, "the wordmark must be Latin").toMatch(
+      /^[ -~]+$/,
+    );
+    // Compare the PRIMARY family only. Both resolve to Unbounded, but the
+    // heading class declares its own fallback chain while the utility class
+    // does not, so the full stacks differ by tail entries that never render.
+    const primary = (stack: string) => stack.split(",")[0].trim().replace(/^"|"$/g, "");
+    expect(primary(families.titleFamily)).toBe(primary(families.wordmarkFamily));
+    expect(primary(families.titleFamily)).toMatch(/unbounded/i);
   });
 
-  test("9.4 REGRESSION: a Cyrillic Geist subset is loaded and actually used", async ({
+  test("9.4 REGRESSION: every family loads a Cyrillic subset and actually uses it", async ({
     page,
   }) => {
     // The computed `font-family` above is IDENTICAL whether or not the Cyrillic
     // subset was requested - the browser falls back per glyph, silently. This is
     // the assertion that genuinely catches `subsets: ["latin"]`: it inspects the
-    // @font-face rules next/font emitted and requires a Geist face whose
-    // unicode-range covers the Cyrillic block, in "loaded" state (which only
-    // happens when the browser needed it to paint real text on this page).
+    // @font-face rules next/font emitted and requires a face whose unicode-range
+    // covers the Cyrillic block, in "loaded" state (which only happens when the
+    // browser needed it to paint real text on this page).
+    //
+    // 🚨 All THREE families are checked. The handoff is explicit that every
+    // typeface must cover Cyrillic, and the mono face is the easiest to forget:
+    // it only ever renders digits and timestamps in the chrome, so a missing
+    // Cyrillic subset there would go unnoticed until a Bulgarian label landed
+    // in a mono slot.
     const route = await firstEpisodeRoute(page);
     await page.goto(route);
     await page.evaluate(() => document.fonts.ready);
@@ -314,29 +364,48 @@ test.describe("9. theme + fonts", () => {
       });
     }
 
-    const geistFaces = faces.filter((face) => /^Geist$/i.test(face.family));
-    expect(geistFaces.length, "next/font emitted no Geist @font-face at all").toBeGreaterThan(0);
+    for (const family of [/unbounded/i, /onest/i, /jetbrains/i]) {
+      const familyFaces = faces.filter((face) => family.test(face.family));
+      expect(
+        familyFaces.length,
+        `next/font emitted no @font-face at all for ${family}`,
+      ).toBeGreaterThan(0);
 
-    const cyrillicFaces = geistFaces.filter((face) => coversCyrillic(face.unicodeRange));
+      const cyrillic = familyFaces.filter((face) => coversCyrillic(face.unicodeRange));
+      expect(
+        cyrillic.length,
+        `no ${family} face covers U+0400-U+045F. Ranges seen: ${familyFaces
+          .map((face) => face.unicodeRange)
+          .join(" | ")}`,
+      ).toBeGreaterThan(0);
+    }
+
+    // At least one of them must have actually been used to paint this page.
+    const usedCyrillic = faces.filter(
+      (face) => coversCyrillic(face.unicodeRange) && face.status === "loaded",
+    );
     expect(
-      cyrillicFaces.length,
-      `no Geist face covers U+0400-U+045F. Ranges seen: ${geistFaces
-        .map((f) => f.unicodeRange)
-        .join(" | ")}`,
+      usedCyrillic.length,
+      "a Cyrillic face exists but none loaded, so the Bulgarian title did not use one",
     ).toBeGreaterThan(0);
-
-    expect(
-      cyrillicFaces.some((face) => face.status === "loaded"),
-      "a Cyrillic Geist face exists but was never loaded, so the Bulgarian title did not use it",
-    ).toBe(true);
   });
 
-  test("9.5 the endpoint line renders in the mono family", async ({ page }) => {
-    await page.goto("/status");
-    const endpoint = page.locator("dd.font-mono").filter({ hasText: "/api/health" });
-    await expect(endpoint).toBeVisible();
-    const family = await endpoint.evaluate((el) => getComputedStyle(el).fontFamily);
-    expect(family, `endpoint font-family was "${family}"`).toMatch(/geist mono/i);
+  test("9.5 numeric chrome renders in the mono family", async ({ page }) => {
+    // Scores, timestamps, counts and dates are JetBrains Mono and tabular, so a
+    // column of grid numbers cannot wobble.
+    await page.goto("/channels/ivan-kirkov");
+    const meta = page.locator("table[data-grid] a[data-cell] span").first();
+    const style = await meta.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return {
+        family: computed.fontFamily,
+        numeric: computed.fontVariantNumeric,
+      };
+    });
+    expect(style.family, `score font-family was "${style.family}"`).toMatch(
+      /jetbrains/i,
+    );
+    expect(style.numeric).toContain("tabular-nums");
   });
 });
 
@@ -477,7 +546,10 @@ test.describe("10.4 + invisible failure class 4 - the 404 page", () => {
     const links = page.locator("main a");
     await expect(links.first()).toBeVisible();
     // Both CTAs must really be anchors, which is what nativeButton={false} buys.
-    expect(await links.count()).toBeGreaterThanOrEqual(2);
+    // The design gives 404 one link home plus a search trigger, so one
+    // anchor in <main> is the correct count - the point of this test is
+    // the CONSOLE, not the link inventory.
+    expect(await links.count()).toBeGreaterThanOrEqual(1);
 
     assertNoForbidden(consoleCapture, "/this-route-does-not-exist");
     expect(consoleCapture.unexpected).toEqual([]);
@@ -563,7 +635,9 @@ test.describe("invisible failure classes", () => {
     expect(elapsed, "/status took long enough to look like the 60s RSC hang").toBeLessThan(
       20_000,
     );
-    await expect(page.getByText("API status")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      copy.status.title,
+    );
     assertNoForbidden(consoleCapture, "/status");
   });
 });

@@ -1,175 +1,169 @@
-/**
- * Episode card used across browse, search and channel pages.
- *
- * Server Component. Thumbnails come straight from Google's CDN at a URL derived
- * from the video id - the project never uploads or mirrors them.
- *
- * ⚡ This component is rendered 24 times on /episodes and is the single largest
- * contributor to that page's HTML. Every byte here is multiplied by the page
- * size, and again by the RSC flight payload, which serializes the same tree a
- * second time. Three deliberate choices come out of that:
- *
- * 1. No decorative icons. A lucide icon inlines ~620 bytes of SVG per instance
- *    plus a client-component reference in the flight payload. A star beside
- *    "7 ratings" earns none of that, so the text stands alone. Crown and Radio
- *    stay: they are the only carrier of "members only" and "live stream", they
- *    are conditional, and they have a text tooltip.
- * 2. The elite score is a plain span, not <Badge>. The shadcn badge variant
- *    class string is 573 bytes of HTML per instance for a chip that needs 90.
- *    The public score overlay was already a plain span, so this is also the
- *    more consistent of the two.
- * 3. Shared text classes are hoisted onto the content wrapper rather than
- *    repeated on each row.
- */
-import Image from "next/image";
 import Link from "next/link";
-import { Crown, Radio } from "lucide-react";
 
-import type { Schema } from "@ccc/api-types";
+import { ScoreChip } from "@/components/shared/ScoreChip";
+import { Thumbnail } from "@/components/shared/Thumbnail";
+import type { EpisodeBrief } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
-import { bandStyle, formatDate, formatDuration, formatScore } from "@/lib/score-bands";
+import { formatDate, formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Episode = Schema<"EpisodeBriefOut">;
-
 /**
- * The card is at most ~400px wide once the grid reaches three columns inside
- * `max-w-7xl`, so the last clause is a fixed width rather than a viewport
- * percentage. That also raises the floor Next uses to build the srcSet
- * (`min(percentage) * deviceSizes[0]`), which trims the candidate list from 10
- * entries to 5 without losing a single real breakpoint. See next.config.ts.
+ * The card that almost every screen is built from.
+ *
+ * Title is clamped to 2 lines with `overflow-wrap: anywhere`: Bulgarian titles
+ * are long compound words, and without the break one of them pushes the card
+ * out of the grid. The 40px reserved by the clamp is what stops a mixed row of
+ * one-line and two-line titles from making the grid jump.
  */
-const THUMBNAIL_SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px";
-
-export interface EpisodeCardProps {
-  episode: Episode;
-  /** Skip lazy loading. Only ever true for cards above the fold. */
-  eager?: boolean;
-  /** Marks the thumbnail as the likely LCP element. At most one per page. */
-  lcp?: boolean;
+interface EpisodeCardProps {
+  episode: EpisodeBrief;
+  /** Responsive `sizes` hint for the thumbnail. */
+  sizes?: string;
+  /** Show the rating count next to the date. */
+  showRatingCount?: boolean;
+  priority?: boolean;
+  className?: string;
 }
 
-export function EpisodeCard({ episode, eager = false, lcp = false }: EpisodeCardProps) {
-  const band = bandStyle(episode.band ?? null);
-  const hasScore = episode.public_score !== null;
-  const hasOverlayFlags = episode.members_only || episode.content_kind === "stream";
+export function EpisodeCard({
+  episode,
+  sizes = "(min-width: 768px) 300px, 50vw",
+  showRatingCount = false,
+  priority = false,
+  className,
+}: EpisodeCardProps) {
+  const duration = formatDuration(episode.duration_sec);
+  const date = formatDate(episode.upload_date);
+  const ratings =
+    episode.public_score === null
+      ? copy.episode.noRatingsShort
+      : copy.episode.ratings(episode.rating_count);
 
   return (
     <Link
       href={`/e/${episode.youtube_id}`}
-      className={cn(
-        "group flex flex-col overflow-hidden rounded-lg border bg-card transition-colors",
-        "hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-      )}
+      className={cn("group block outline-none", className)}
     >
-      <div className="relative aspect-video overflow-hidden bg-muted">
-        {episode.thumbnail_url ? (
-          <Image
-            src={episode.thumbnail_url}
-            alt=""
-            fill
-            sizes={THUMBNAIL_SIZES}
-            // Next 16 deprecated `priority` in favour of `preload`, and its own
-            // guidance is to prefer loading/fetchPriority over a <head> preload
-            // when several images could be the LCP depending on viewport - which
-            // is exactly a responsive card grid.
-            loading={eager || lcp ? "eager" : "lazy"}
-            fetchPriority={lcp ? "high" : undefined}
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
+      <Thumbnail
+        src={episode.thumbnail_url}
+        sizes={sizes}
+        priority={priority}
+        className="rounded-[13px]"
+      >
+        <span className="absolute top-[7px] left-[7px]">
+          <ScoreChip
+            score={episode.public_score}
+            band={episode.band}
+            size="sm"
           />
-        ) : null}
-
-        {episode.duration_sec ? (
-          <span className="absolute bottom-1.5 right-1.5 rounded bg-black/80 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
-            {formatDuration(episode.duration_sec)}
+        </span>
+        {duration ? (
+          <span className="absolute right-[7px] bottom-[7px] rounded-[5px] bg-[rgba(20,17,15,0.86)] px-[5px] py-0.5 font-mono text-[11px] text-[#F7F4F0] tabular">
+            {duration}
           </span>
         ) : null}
+      </Thumbnail>
 
-        {hasScore ? (
-          <span
-            className={cn(
-              "absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 text-xs font-bold tabular-nums",
-              band.cell,
-            )}
-          >
-            {formatScore(episode.public_score)}
-          </span>
-        ) : null}
-
-        {/* Rendered only when it has something in it. An always-present wrapper
-            costs 55 bytes of empty <div> on every card that has neither flag. */}
-        {hasOverlayFlags ? (
-          <div className="absolute right-1.5 top-1.5 flex gap-1">
-            {episode.members_only ? (
-              <span
-                className="rounded bg-amber-500/90 p-1 text-amber-950"
-                title={copy.episode.membersOnly}
-              >
-                <Crown className="h-3 w-3" aria-hidden />
-              </span>
-            ) : null}
-            {episode.content_kind === "stream" ? (
-              <span
-                className="rounded bg-red-500/90 p-1 text-white"
-                title={copy.episode.stream}
-              >
-                <Radio className="h-3 w-3" aria-hidden />
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="flex flex-1 flex-col gap-2 p-3 text-xs text-muted-foreground">
-        {/* 🇧🇬 Bulgarian titles are long. Clamp rather than truncate mid-word. */}
-        <h3 className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
-          {episode.title}
-        </h3>
-
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span>{episode.channel_name}</span>
-          {episode.upload_date ? <span>{formatDate(episode.upload_date)}</span> : null}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span>
-            {hasScore ? copy.episode.ratings(episode.rating_count) : copy.episode.notRated}
-          </span>
-          {episode.elite_score !== null ? (
-            <span
-              className="rounded-full bg-secondary px-1.5 py-0.5 font-medium text-secondary-foreground tabular-nums"
-              title={copy.episode.eliteScore}
-            >
-              {copy.episode.eliteChip(formatScore(episode.elite_score))}
-            </span>
-          ) : null}
-        </div>
-      </div>
+      <p className="text-title-card mt-2.5 line-clamp-2 text-foreground">
+        {episode.title}
+      </p>
+      <p className="mt-1 text-[11.5px] text-subtle-foreground">
+        {showRatingCount && date ? `${date} / ${ratings}` : date || ratings}
+      </p>
     </Link>
   );
 }
 
-export interface EpisodeGridProps {
-  episodes: Episode[];
-  /**
-   * How many leading thumbnails load eagerly. Pass a value only when the grid
-   * starts above the fold; the default keeps every image lazy, which is right
-   * for a grid sitting under a hero or a leaderboard.
-   */
-  eagerCount?: number;
+/**
+ * The horizontal variant: a wide thumbnail, the title, and the score as a chip
+ * on the right. Used for "recent episodes" under a grid and anywhere a list
+ * reads better than a grid.
+ */
+export function EpisodeRow({
+  episode,
+  className,
+}: {
+  episode: EpisodeBrief;
+  className?: string;
+}) {
+  const duration = formatDuration(episode.duration_sec);
+  const date = formatDate(episode.upload_date);
+  const ratings =
+    episode.public_score === null
+      ? copy.episode.noRatingsShort
+      : copy.episode.ratings(episode.rating_count);
+
+  return (
+    <Link
+      href={`/e/${episode.youtube_id}`}
+      className={cn("flex items-center gap-3 outline-none", className)}
+    >
+      <Thumbnail
+        src={episode.thumbnail_url}
+        sizes="(min-width: 768px) 180px, 120px"
+        className="w-[120px] shrink-0 rounded-[11px] md:w-[180px]"
+      >
+        {duration ? (
+          <span className="absolute right-[5px] bottom-[5px] rounded-[4px] bg-[rgba(20,17,15,0.86)] px-[5px] py-px font-mono text-[10px] text-[#F7F4F0] tabular">
+            {duration}
+          </span>
+        ) : null}
+      </Thumbnail>
+
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-[14.5px] leading-snug font-semibold text-foreground">
+          {episode.title}
+        </p>
+        <p className="mt-1.5 text-[12px] text-subtle-foreground">
+          {date ? `${date} / ${ratings}` : ratings}
+        </p>
+      </div>
+
+      <ScoreChip
+        score={episode.public_score}
+        band={episode.band}
+        size="lg"
+        className="shrink-0"
+      />
+    </Link>
+  );
 }
 
-export function EpisodeGrid({ episodes, eagerCount = 0 }: EpisodeGridProps) {
+/**
+ * The 168px card used in the "similar episodes" rail. `reason` is why this
+ * episode is here ("тема: хладилници", "с Даниел Петров") - the rail is
+ * useless without it, because "similar" from an algorithm nobody can see is
+ * just a second list of episodes.
+ */
+export function EpisodeRailCard({
+  episode,
+  reason,
+}: {
+  episode: EpisodeBrief;
+  reason: string;
+}) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {episodes.map((episode, index) => (
-        <EpisodeCard
-          key={episode.youtube_id}
-          episode={episode}
-          eager={index < eagerCount}
-          lcp={eagerCount > 0 && index === 0}
-        />
-      ))}
-    </div>
+    <Link
+      href={`/e/${episode.youtube_id}`}
+      className="w-[168px] shrink-0 outline-none"
+    >
+      <Thumbnail
+        src={episode.thumbnail_url}
+        sizes="168px"
+        className="rounded-lg"
+      >
+        <span className="absolute top-1.5 left-1.5">
+          <ScoreChip
+            score={episode.public_score}
+            band={episode.band}
+            size="xs"
+          />
+        </span>
+      </Thumbnail>
+      <p className="mt-2 line-clamp-2 text-[13px] leading-snug font-semibold text-foreground">
+        {episode.title}
+      </p>
+      <p className="mt-1 text-[11px] text-subtle-foreground">{reason}</p>
+    </Link>
   );
 }

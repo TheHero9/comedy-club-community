@@ -4,127 +4,466 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
+/* ==========================================================================
+   DESIGN TOKENS - Bulgarian Podcast Index
+   Source: Designs/design_handoff_podcast_index/README.md + Prototype.dc.html
+
+   Two rules that are load-bearing and easy to break later:
+
+   1. The neutrals carry a warm hue (55-85) at very low chroma. They are NOT
+      grey. That warmth is most of what makes the dark theme feel like a room
+      rather than a dashboard. Do not "clean them up" to zero chroma.
+
+   2. Score bands are IDENTICAL in both themes. They carry meaning, so they are
+      declared once outside the theme split. Only the neutrals, brand red,
+      gold and the unrated chip flip between light and dark.
+   ========================================================================== */
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* -- Brand ------------------------------------------------------------- */
+  --primary: #d0202a; /* darkened from the dark theme's red to hold on paper */
+  --primary-hover: #b81a22;
+  --primary-foreground: #ffffff;
+  /* Brand red as TEXT. On paper the fill colour already clears 4.5:1, so this
+     is the same value; in dark it is not. See the note on the dark block. */
+  --primary-text: oklch(0.542 0.208 27);
+  /* Gold. Named --gold, not --accent, because shadcn's `accent` token is the
+     neutral hover surface its primitives already use. Gold as `accent` would
+     turn every dropdown hover into a gold bar. */
+  /* Gold becomes bronze on paper - #FFC93A is invisible on white. Taken two
+     steps darker than the handoff's #A8760C, which measured 3.3:1 against
+     --elevated and so failed AA everywhere it is used as text (the match-reason
+     badge, the moment timestamp, the search highlight). */
+  --gold: #8a6008;
+  --gold-quiet: oklch(0.56 0.1 88);
+
+  /* -- Neutrals, light --------------------------------------------------- */
+  --background: #fbf8f4;
+  --card: #ffffff;
+  --card-2: #f6f2ec;
+  --elevated: #ede8e1;
+  --border: #e6dfd5;
+  --border-2: #d8d0c5;
+  --border-3: #c4bbae;
+  --foreground: #1a1614;
+  --muted-foreground: #57504a;
+  --subtle-foreground: #6e665d;
+  --faint-foreground: #766e65;
+  --thumb-1: #e9e3da;
+  --thumb-2: #ddd5c9;
+  --overlay: rgba(26, 22, 20, 0.45);
+
+  /* Unrated chip. Light needs its own values - the dark ones vanish on paper. */
+  --unrated: #f1ece4;
+  --unrated-foreground: #6e665d;
+  --unrated-border: #c4bbae;
+
+  /* #1 row tint on the home leaderboard. */
+  --rank-one: #fff9ec;
+
+  /* Private personal tags. This violet appears nowhere else in the product,
+     which is the point: a private label must never be mistakable for a public
+     topic chip. */
+  --private: #6a5a8c;
+  --private-border: #6a5a8c;
+
+  /* -- shadcn compatibility ---------------------------------------------- */
+  /* The primitives in components/ui reference these names. Mapping them onto
+     the palette above keeps them usable without a fork. */
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--elevated);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--card-2);
+  --accent: var(--elevated);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--primary);
+  --input: var(--border-2);
+  --ring: var(--primary);
+  --radius: 0.875rem; /* 14px base - cards. Replaces shadcn's 10px default. */
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--elevated);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--primary);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* -- Brand ------------------------------------------------------------- */
+  /* 🚨 The HEX, not the handoff's oklch. `oklch(0.6 0.225 27)` renders as
+     #E82729, on which white text is 4.41:1 - a hair under AA - while the hex
+     the same table gives is 4.59:1 and passes. Every primary button in the
+     product is white on this colour, so the difference is not academic. */
+  --primary: #e4232c;
+  /* ⚠️ Hover goes DARKER, not lighter. The design's #F0463E puts white text at
+     3.7:1, so the button would have dropped out of AA for exactly as long as
+     the pointer was on it. Contrast has to hold in every state, and a deeper
+     red reads as "pressed" just as clearly as a brighter one. */
+  --primary-hover: #b81a22;
+  --primary-foreground: #ffffff;
+  /* 🚨 Brand red as TEXT is a SEPARATE token, and this is not fussiness.
+     #E4232C measures 3.9:1 on --background and 3.5:1 on --card, so every small
+     red label the design calls for ("всички", "още", "Оцени", the active nav
+     item) failed WCAG AA at the handoff's value. The fill colour is unchanged -
+     white on #E4232C is 4.6:1 and fine - only red-on-dark text is lifted. */
+  --primary-text: #f0554d;
+  --gold: oklch(0.855 0.165 88); /* #FFC93A */
+  --gold-quiet: oklch(0.56 0.1 88);
+
+  /* -- Neutrals, dark (the default theme) -------------------------------- */
+  --background: oklch(0.155 0.008 55); /* #191614 */
+  --card: oklch(0.205 0.01 55); /* #23201D */
+  --card-2: oklch(0.19 0.01 55); /* #1E1B19 */
+  --elevated: oklch(0.245 0.011 55); /* #2C2825 */
+  --border: oklch(0.225 0.01 55); /* #2C2825 */
+  --border-2: oklch(0.32 0.01 55); /* #3D3935 */
+  --border-3: oklch(0.375 0.01 55); /* #4A4540 */
+  --foreground: oklch(0.97 0.004 85); /* #F7F4F0 */
+  --muted-foreground: oklch(0.745 0.008 60); /* #ADA69F */
+  /* ⚠️ Lifted from the handoff's #7A736C / #5E5852, which measured 3.9:1 and
+     2.6:1 on --background. Both carry real text (meta lines, grid numbers,
+     footer headings), none of it large, so both failed AA. The four-step
+     hierarchy foreground > muted > subtle > faint is preserved, just
+     compressed into the range that clears 4.5:1. */
+  --subtle-foreground: #968f88;
+  --faint-foreground: #8e8780;
+  --thumb-1: #26221f;
+  --thumb-2: #2c2825;
+  --overlay: rgba(11, 10, 9, 0.72);
+
+  --unrated: oklch(0.205 0.01 55);
+  --unrated-foreground: #968f88; /* was #6E6862, which was 2.95:1 on --card */
+  --unrated-border: oklch(0.375 0.01 55);
+
+  --rank-one: #2a2521;
+
+  --private: #b9a6dc;
+  --private-border: #6a5a8c;
+}
+
+/* -- Score bands. Identical in both themes, so declared once. -------------
+   All seven sit at L 0.66-0.87 with chroma held 0.13-0.16, which is why they
+   read as one family and every one of them can take the same near-black text.
+   ------------------------------------------------------------------------ */
+:root,
+.dark {
+  --band-masterpiece: oklch(0.8 0.13 235); /* #5CB8E8  8.1:1 */
+  --band-awesome: oklch(0.8 0.15 155); /* #46C68F  8.0:1 */
+  --band-great: oklch(0.83 0.16 140); /* #6FD16A  8.9:1 */
+  --band-good: oklch(0.87 0.15 118); /* #ABDC5F  9.9:1 */
+  --band-regular: oklch(0.84 0.14 85); /* #E9BE4B  9.1:1 */
+  --band-bad: oklch(0.75 0.15 55); /* #E2914F  6.7:1 */
+  --band-garbage: oklch(0.66 0.16 28); /* #D66A5B  5.1:1 */
+  /* The text every band chip carries, and the stroke colour of grid markers. */
+  --ink: #1a1614;
+  --marker: #2a211c;
+}
+
+@theme inline {
+  /* Colours */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-card-foreground: var(--card-foreground);
+  --color-elevated: var(--elevated);
+  --color-border: var(--border);
+  --color-border-2: var(--border-2);
+  --color-border-3: var(--border-3);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-faint-foreground: var(--faint-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-gold: var(--gold);
+  --color-gold-quiet: var(--gold-quiet);
+  --color-thumb-1: var(--thumb-1);
+  --color-thumb-2: var(--thumb-2);
+  --color-overlay: var(--overlay);
+  --color-unrated: var(--unrated);
+  --color-unrated-foreground: var(--unrated-foreground);
+  --color-unrated-border: var(--unrated-border);
+  --color-rank-one: var(--rank-one);
+  --color-private: var(--private);
+  --color-private-border: var(--private-border);
+  --color-ink: var(--ink);
+  --color-marker: var(--marker);
+
+  --color-band-masterpiece: var(--band-masterpiece);
+  --color-band-awesome: var(--band-awesome);
+  --color-band-great: var(--band-great);
+  --color-band-good: var(--band-good);
+  --color-band-regular: var(--band-regular);
+  --color-band-bad: var(--band-bad);
+  --color-band-garbage: var(--band-garbage);
+
+  /* shadcn primitive tokens */
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Type. All three families carry full Cyrillic - non-negotiable, Bulgarian
+     titles must not fall back per glyph. */
+  --font-sans: var(--font-onest);
+  --font-display: var(--font-unbounded);
+  --font-mono: var(--font-jetbrains);
+  --font-heading: var(--font-unbounded);
+
+  /* Radius ladder. 99px pills are the signature of this redesign - almost
+     every interactive surface is a pill. */
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+  --radius-3xl: 20px;
+  --radius-4xl: 26px;
+  --radius-pill: 99px;
+
+  /* Elevation. `flat` is the default - cards and lists carry a border only. */
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-floating: 0 6px 16px rgba(0, 0, 0, 0.45);
+  --shadow-overlay: 0 20px 44px rgba(0, 0, 0, 0.5);
+
+  /* Motion */
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
+
+  html {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    /* The page never scrolls sideways. The ratings grid's cell area is the
+       only overflow-x container in the product. */
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* Bulgarian titles are long compound words; `pretty` keeps orphans off. */
+    text-wrap: pretty;
   }
-  html {
-    @apply font-sans;
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: pretty;
+  }
+
+  /* Every title slot carries this, so a compound word breaks instead of
+     overflowing a 390px screen. */
+  h1,
+  h2,
+  h3,
+  p {
+    overflow-wrap: anywhere;
+  }
+
+  /* Inputs must never drop below 16px on mobile or iOS zooms the viewport on
+     focus, which then leaves the page horizontally scrolled. */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-2);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ==========================================================================
+   TYPE SCALE
+   Sizes are exact from the handoff. The mobile/desktop split happens at the
+   `md` breakpoint (768px); the handoff only specifies 390 and 1280, and a
+   tablet reads better with the desktop scale.
+   ========================================================================== */
+@layer components {
+  .text-display {
+    font-family: var(--font-display), system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 30px;
+    line-height: 1.06;
+    letter-spacing: -0.03em;
+  }
+  .text-episode-title {
+    font-family: var(--font-display), system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    line-height: 1.14;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+  }
+  .text-h1 {
+    font-family: var(--font-display), system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 23px;
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+  }
+  .text-h2 {
+    font-family: var(--font-display), system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+  }
+  .text-section-label {
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .text-title-card {
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .text-body {
+    font-size: 14.5px;
+    line-height: 1.55;
+  }
+  .text-small {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .text-micro {
+    font-weight: 500;
+    font-size: 11.5px;
+    line-height: 1.3;
+  }
+  .text-numeric {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Mono label used for section eyebrows: "ПОПУЛЯРНИ ТЕМИ", "ОЦЕНКА". */
+  .text-eyebrow {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--subtle-foreground);
+  }
+
+  @media (min-width: 768px) {
+    .text-display {
+      font-size: 52px;
+    }
+    .text-episode-title {
+      font-size: 36px;
+    }
+    .text-h1 {
+      font-size: 34px;
+    }
+    .text-h2 {
+      font-size: 22px;
+    }
+    .text-title-card {
+      font-size: 15px;
+    }
+    .text-body {
+      font-size: 16px;
+    }
+    .text-small {
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+    .text-micro {
+      font-size: 12px;
+    }
+    .text-numeric {
+      font-size: 14px;
+    }
+  }
+}
+
+@utility noscroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    height: 0;
+    width: 0;
+    display: none;
+  }
+}
+
+/* The diagonal-stripe placeholder that stands in for a thumbnail while it
+   loads and when it 404s. Same geometry as the real 16:9 image. */
+@utility thumb-placeholder {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--thumb-1) 0 9px,
+    var(--thumb-2) 9px 18px
+  );
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeletons pulse OPACITY only. A moving gradient sweeping across 20 cards
+   reads as the page loading 20 separate times. */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@utility skeleton-pulse {
+  animation: skeleton-pulse 1200ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Drop every transform and every pulse. Keep opacity and colour
+     transitions, capped at 100ms. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 100ms !important;
+    transition-property: opacity, color, background-color, border-color !important;
+    transform: none !important;
   }
 }

@@ -245,6 +245,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/search/transcripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Transcripts
+         * @description Find where a phrase was SPOKEN, with a timestamp.
+         *
+         *     🎯 The half of search community labels cannot cover. Labels answer "which
+         *     episodes are about X"; this answers "X was said at 45:12 in these episodes".
+         *
+         *     ⚠️ Coverage is PARTIAL and date-dependent - roughly the newer part of the
+         *     catalogue has captions, and members-only episodes have none. An episode
+         *     missing from these results has not been ruled out, it may simply have no
+         *     transcript. Never present this as exhaustive.
+         */
+        get: operations["podcast_api_search_search_transcripts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/suggest": {
         parameters: {
             query?: never;
@@ -1172,6 +1200,62 @@ export interface components {
             /** Processing Ms */
             processing_ms?: number | null;
         };
+        /** TranscriptHitOut */
+        TranscriptHitOut: {
+            episode: components["schemas"]["EpisodeBriefOut"];
+            /** Matches */
+            matches: components["schemas"]["TranscriptMatchOut"][];
+        };
+        /**
+         * TranscriptMatchOut
+         * @description One passage where the query was spoken.
+         */
+        TranscriptMatchOut: {
+            /** Start Sec */
+            start_sec: number;
+            /** End Sec */
+            end_sec: number;
+            /**
+             * Text
+             * @description The passage, cropped around the match, with <mark> around the matched terms. 🔒 Escape on output - this is auto-caption text, not trusted HTML beyond the <mark> tags the client is expected to render.
+             */
+            text: string;
+            /**
+             * Deep Link
+             * @description YouTube URL seeked to start_sec
+             */
+            deep_link: string;
+        };
+        /**
+         * TranscriptSearchOut
+         * @description Where a phrase was SAID, as opposed to which episodes are ABOUT it.
+         *
+         *     ⚠️ `limit`/`offset` page over SEGMENTS, not episodes, and the segments on a
+         *     page are then grouped by episode for display. So `hits` is however many
+         *     distinct episodes this page of segments touched - it is not a page size.
+         */
+        TranscriptSearchOut: {
+            /** Query */
+            query: string;
+            /** Hits */
+            hits: components["schemas"]["TranscriptHitOut"][];
+            /**
+             * Total Segments
+             * @description Matching passages across the catalogue (clamped at 20,000)
+             */
+            total_segments: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /**
+             * Available
+             * @description False when Meilisearch is down. There is no Postgres fallback here - an ILIKE over every transcript is a full scan of the catalogue.
+             */
+            available: boolean;
+            /** Processing Ms */
+            processing_ms?: number | null;
+        };
         /** MeOut */
         MeOut: {
             /** Id */
@@ -1818,6 +1902,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchOut"];
+                };
+            };
+        };
+    };
+    podcast_api_search_search_transcripts: {
+        parameters: {
+            query?: {
+                /** @description Query text. Bulgarian and typos are expected. */
+                q?: string;
+                /** @description Channel slug */
+                channel?: string | null;
+                /** @description Restrict to one episode id */
+                episode?: number | null;
+                members_only?: boolean | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptSearchOut"];
                 };
             };
         };

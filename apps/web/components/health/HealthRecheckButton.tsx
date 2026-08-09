@@ -2,20 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { LoaderCircleIcon, RefreshCwIcon } from "lucide-react";
-import { toast } from "sonner";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  getHealth,
-  HEALTH_QUERY_KEY,
-  isFullyHealthy,
-} from "@/lib/api/health";
+import { notify } from "@/components/ui/toast";
+import { getHealth, HEALTH_QUERY_KEY, isFullyHealthy } from "@/lib/api/health";
 import { copy } from "@/lib/copy";
 
 /**
  * Client Component. Proves the typed client works from the browser too, and is
- * the first consumer of the TanStack Query provider and the sonner toaster.
+ * the first consumer of the TanStack Query provider and the toaster.
  */
 export function HealthRecheckButton() {
   const router = useRouter();
@@ -33,14 +29,14 @@ export function HealthRecheckButton() {
     const { data, error } = await refetch();
 
     if (error || !data) {
-      toast.error(copy.health.recheckFailed);
+      notify.error(copy.status.recheckFailed);
       return;
     }
 
     if (isFullyHealthy(data)) {
-      toast.success(copy.health.recheckSucceeded);
+      notify.success(copy.status.recheckSucceeded);
     } else {
-      toast.warning(copy.health.recheckDegraded);
+      notify.warning(copy.status.recheckDegraded);
     }
 
     // Re-render the server-rendered card with the fresh snapshot.
@@ -51,16 +47,16 @@ export function HealthRecheckButton() {
     <Button
       type="button"
       variant="outline"
-      size="sm"
+      size="md"
       onClick={handleRecheck}
       disabled={isFetching}
     >
       {isFetching ? (
-        <LoaderCircleIcon className="size-4 animate-spin" aria-hidden />
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
       ) : (
-        <RefreshCwIcon className="size-4" aria-hidden />
+        <RefreshCw className="size-4" aria-hidden />
       )}
-      {isFetching ? copy.health.rechecking : copy.health.recheck}
+      {isFetching ? copy.status.rechecking : copy.status.recheck}
     </Button>
   );
 }

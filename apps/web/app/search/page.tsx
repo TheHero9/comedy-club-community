@@ -1,100 +1,166 @@
+import Link from "next/link";
 import type { Metadata } from "next";
-import { Search as SearchIcon } from "lucide-react";
 
-import { EpisodeCard } from "@/components/episode/EpisodeCard";
-import { Badge } from "@/components/ui/badge";
-import { search } from "@/lib/api/podcast";
+import { SearchResultCard } from "@/components/search/SearchResultCard";
+import { SearchTrigger } from "@/components/search/SearchTrigger";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { Page } from "@/components/shell/Page";
+import { buttonVariants, LinkButton } from "@/components/ui/button";
+import { listTopics, search } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
-
-// A stale search result is worse than a slow one.
-export const dynamic = "force-dynamic";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: copy.search.title,
+  title: copy.nav.search,
   description: copy.search.subtitle,
 };
 
-function first(value: string | string[] | undefined): string {
-  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+/** Search results must never be cached: a stale answer is worse than a slow one. */
+export const dynamic = "force-dynamic";
+
+/**
+ * Assigned before use rather than chained off `copy` inline: the copy-key
+ * scanner reads `copy.search.examples.map` as a key and cannot resolve it.
+ */
+const EXAMPLE_QUERIES = copy.search.examples;
+
+const RESULT_LIMIT = 20;
+const POPULAR_TOPIC_LIMIT = 8;
+
+function readQuery(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return (value[0] ?? "").trim();
+  return (value ?? "").trim();
 }
 
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {
   const params = await searchParams;
-  const query = first(params.q).trim();
+  const query = readQuery(params.q);
 
-  const results = query ? await search({ q: query, limit: 24 }) : null;
+  if (query.length === 0) {
+    const topics = await listTopics({ limit: POPULAR_TOPIC_LIMIT });
+
+    return (
+      <Page>
+        <SearchTrigger size="md" />
+
+        <h1 className="text-display mt-6 leading-[1.1]">{copy.search.title}</h1>
+        <p className="text-body mt-3 max-w-[560px] text-muted-foreground">
+          {copy.search.subtitle}
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {EXAMPLE_QUERIES.map((example) => (
+            <LinkButton
+              key={example}
+              href={`/search?q=${encodeURIComponent(example)}`}
+              // 🚨 `prefetch={false}` is load-bearing. /search is force-dynamic,
+              // so every prefetched query is a REAL Meilisearch round trip on
+              // the server - a dozen of them fired the moment this page
+              // painted, and the RSC prefetches for a dynamic route never
+              // settled, so the page never reached network idle. Search results
+              // are the last thing worth speculatively fetching anyway.
+              prefetch={false}
+              variant="elevated"
+              size="md"
+              className="font-normal"
+            >
+              {example}
+            </LinkButton>
+          ))}
+        </div>
+
+        {topics.length > 0 ? (
+          <>
+            <p className="text-eyebrow mt-7">{copy.search.popularTopics}</p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              {topics.map((topic) => (
+                <LinkButton
+                  key={topic.slug}
+                  href={`/search?q=${encodeURIComponent(topic.name)}`}
+                  prefetch={false}
+                  variant="outline"
+                  size="sm"
+                  className="font-normal"
+                >
+                  {topic.name}
+                  <span className="font-mono text-[11px] text-subtle-foreground tabular">
+                    {topic.episode_count}
+                  </span>
+                </LinkButton>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </Page>
+    );
+  }
+
+  const results = await search({ q: query, limit: RESULT_LIMIT });
+
+  // 🚨 Only claimed when it is actually true. "The word appears in no title" is
+  // the strongest line on the page, and printing it above a result whose title
+  // contains the word would discredit every other claim the site makes.
+  const inNoTitle =
+    results.hits.length > 0 &&
+    results.hits.every(
+      (hit) =>
+        !hit.episode.title
+          .toLocaleLowerCase("bg")
+          .includes(query.toLocaleLowerCase("bg")),
+    );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{copy.search.title}</h1>
-        <p className="mt-1 text-muted-foreground">{copy.search.subtitle}</p>
-      </div>
+    <Page>
+      <SearchTrigger size="md" initialQuery={query} />
 
-      {/* A GET form keeps every search a shareable URL and needs no JavaScript. */}
-      <form action="/search" method="get" className="flex gap-2">
-        <div className="relative flex-1">
-          <SearchIcon
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <input
-            type="search"
-            name="q"
-            defaultValue={query}
-            placeholder={copy.search.placeholder}
-            aria-label={copy.search.title}
-            autoComplete="off"
-            /* text-base, not text-sm: anything under 16px makes iOS Safari zoom
-               the viewport on focus and never zoom back. */
-            className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-        <button
-          type="submit"
-          className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          {copy.search.title}
-        </button>
-      </form>
+      {results.total === 0 ? (
+        <EmptyState
+          className="mt-5"
+          variant="card"
+          titleAs="h1"
+          title={copy.search.zeroTitle}
+          body={copy.search.zeroBody}
+          action={
+            <Link
+              href="/episodes"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "lg", block: true }),
+              )}
+            >
+              {copy.search.zeroCta}
+            </Link>
+          }
+        />
+      ) : (
+        <>
+          <div className="mt-5 flex flex-wrap items-baseline gap-2.5">
+            <h1 className="text-h2">
+              {copy.search.resultsFor(copy.search.resultCount(results.total), query)}
+            </h1>
+            {results.processing_ms != null ? (
+              <span className="ml-auto font-mono text-[11px] text-faint-foreground tabular">
+                {copy.search.tookMs(results.processing_ms)}
+              </span>
+            ) : null}
+          </div>
 
-      {!query ? (
-        <p className="py-12 text-center text-muted-foreground">{copy.search.prompt}</p>
-      ) : results && results.hits.length > 0 ? (
-        <div className="space-y-4">
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            {copy.search.results(results.total)}
-            <Badge variant="secondary" className="font-normal">
-              {copy.search.poweredBy(results.backend)}
-              {results.processing_ms !== null ? ` - ${results.processing_ms}ms` : ""}
-            </Badge>
-          </p>
+          {inNoTitle ? (
+            <p className="mt-2 text-small text-subtle-foreground">
+              {copy.search.notInAnyTitle}
+            </p>
+          ) : null}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="mt-4 flex flex-col gap-3">
             {results.hits.map((hit) => (
-              <div key={hit.episode.youtube_id} className="space-y-1.5">
-                <EpisodeCard episode={hit.episode} />
-                {hit.matched_topics.length > 0 || hit.matched_moments.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 px-1">
-                    {hit.matched_topics.map((topic) => (
-                      <Badge key={topic} variant="outline" className="text-[10px]">
-                        {topic}
-                      </Badge>
-                    ))}
-                    {hit.matched_moments.map((moment) => (
-                      <Badge key={moment} variant="outline" className="text-[10px]">
-                        {moment}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+              <SearchResultCard
+                key={hit.episode.youtube_id}
+                hit={hit}
+                query={query}
+              />
             ))}
           </div>
-        </div>
-      ) : (
-        <p className="py-12 text-center text-muted-foreground">{copy.search.empty}</p>
+        </>
       )}
-    </div>
+    </Page>
   );
 }

@@ -1,58 +1,136 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import {
-  Calendar,
-  Clock,
-  Crown,
-  ExternalLink,
-  MessageSquare,
-  Radio,
-  Star,
-  Tag,
-  Users,
-} from "lucide-react";
+import { Crown, Play, Plus, Radio, Star } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { CommentCard } from "@/components/episode/CommentCard";
+import { EpisodeDescription } from "@/components/episode/EpisodeDescription";
+import { EpisodeRailCard } from "@/components/episode/EpisodeCard";
+import { EpisodeViewerProvider } from "@/components/episode/viewer/EpisodeViewerContext";
+import {
+  EpisodeActionBar,
+  EpisodeHeaderScore,
+  EpisodeScoreStrip,
+  EpisodeSheets,
+  EpisodeSidebar,
+} from "@/components/episode/viewer/EpisodeViewerParts";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { PersonAvatar } from "@/components/shared/PersonAvatar";
+import { Thumbnail } from "@/components/shared/Thumbnail";
+import { MetaLine } from "@/components/shell/Page";
+import { buttonVariants, LinkButton } from "@/components/ui/button";
 import { isApiError } from "@/lib/api/client";
-import { getEpisode, listComments, listMoments } from "@/lib/api/podcast";
+import {
+  getEpisode,
+  listComments,
+  listEpisodes,
+  listMoments,
+  type Episode,
+  type EpisodeBrief,
+} from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
-import { bandStyle, formatDate, formatDuration, formatScore } from "@/lib/score-bands";
+import {
+  formatDate,
+  formatDuration,
+  formatScore,
+  formatTimestamp,
+  yearOf,
+  youtubeMomentUrl,
+} from "@/lib/format";
+import { bandStyle } from "@/lib/score-bands";
+import { decodeRouteParam } from "@/lib/route-params";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 60;
 
+const SIMILAR_LIMIT = 8;
+const COMMENT_LIMIT = 6;
+
 export async function generateMetadata({
   params,
 }: PageProps<"/e/[youtubeId]">): Promise<Metadata> {
-  const { youtubeId } = await params;
+  const { youtubeId: raw } = await params;
   try {
-    const episode = await getEpisode(youtubeId);
+    const episode = await getEpisode(decodeRouteParam(raw));
     return {
       title: episode.title,
-      description: episode.description.slice(0, 200) || copy.app.description,
+      description: episode.description || copy.app.description,
       openGraph: {
         title: episode.title,
-        description: episode.description.slice(0, 200),
-        // The YouTube CDN thumbnail doubles as the OG image - no upload needed.
+        description: episode.description || copy.app.description,
         images: episode.thumbnail_url ? [episode.thumbnail_url] : undefined,
-        type: "video.episode",
       },
     };
   } catch {
-    return { title: copy.episodes.title };
+    return { title: copy.browse.title };
   }
 }
 
-function timestampLink(youtubeId: string, seconds: number) {
-  return `https://www.youtube.com/watch?v=${youtubeId}&t=${seconds}`;
+/**
+ * "Similar episodes" and, crucially, WHY.
+ *
+ * A rail of episodes with no stated reason is just a second list. The reason
+ * comes from the strongest signal available: a shared topic, then a shared
+ * guest, then "same channel" - and each card is tagged with the specific one.
+ */
+async function loadSimilar(episode: Episode): Promise<{
+  reason: string;
+  items: Array<{ episode: EpisodeBrief; reason: string }>;
+}> {
+  const topic = episode.topics[0];
+  const guest = episode.participants.find(
+    (person) => person.role !== copy.episode.roleHost,
+  );
+
+  if (topic) {
+    const list = await listEpisodes({ topic: topic.slug, limit: SIMILAR_LIMIT + 1 });
+    const items = list.items
+      .filter((item) => item.youtube_id !== episode.youtube_id)
+      .slice(0, SIMILAR_LIMIT)
+      .map((item) => ({
+        episode: item,
+        reason: copy.episode.similarTagTopic(topic.name),
+      }));
+    if (items.length > 0) {
+      return { reason: copy.episode.similarByTopic, items };
+    }
+  }
+
+  if (guest) {
+    const list = await listEpisodes({ person: guest.slug, limit: SIMILAR_LIMIT + 1 });
+    const items = list.items
+      .filter((item) => item.youtube_id !== episode.youtube_id)
+      .slice(0, SIMILAR_LIMIT)
+      .map((item) => ({
+        episode: item,
+        reason: copy.episode.similarTagGuest(guest.name),
+      }));
+    if (items.length > 0) {
+      return { reason: copy.episode.similarByTopic, items };
+    }
+  }
+
+  const list = await listEpisodes({
+    channel: episode.channel_slug,
+    limit: SIMILAR_LIMIT + 1,
+  });
+  return {
+    reason: copy.episode.similarSameChannel,
+    items: list.items
+      .filter((item) => item.youtube_id !== episode.youtube_id)
+      .slice(0, SIMILAR_LIMIT)
+      .map((item) => ({
+        episode: item,
+        reason: formatDate(item.upload_date),
+      })),
+  };
 }
 
 export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]">) {
-  const { youtubeId } = await params;
+  const { youtubeId: raw } = await params;
+  const youtubeId = decodeRouteParam(raw);
 
-  let episode;
+  let episode: Episode;
   try {
     episode = await getEpisode(youtubeId);
   } catch (error) {
@@ -60,226 +138,335 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
     throw error;
   }
 
-  const [moments, comments] = await Promise.all([
-    listMoments(youtubeId),
-    listComments(youtubeId, { limit: 20 }),
+  const [moments, comments, similar] = await Promise.all([
+    listMoments(youtubeId).catch(() => []),
+    listComments(youtubeId, { limit: COMMENT_LIMIT }).catch(() => null),
+    loadSimilar(episode),
   ]);
 
-  const band = bandStyle(episode.band ?? null);
+  const duration = formatDuration(episode.duration_sec);
+  const year = yearOf(episode.upload_date);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-8">
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="space-y-4">
-          <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
-            {episode.thumbnail_url ? (
-              <Image
-                src={episode.thumbnail_url}
-                alt=""
-                fill
-                priority
-                sizes="(max-width: 768px) 100vw, 720px"
-                className="object-cover"
+    <EpisodeViewerProvider
+      seed={{
+        youtubeId: episode.youtube_id,
+        title: episode.title,
+        watchUrl: episode.watch_url || episode.url,
+        publicScore: episode.public_score,
+        ratingCount: episode.rating_count,
+        eliteScore: episode.elite_score,
+        eliteBand: episode.elite_band ?? null,
+      }}
+    >
+      <div className="mx-auto w-full max-w-[1216px]">
+        {/* Header band. The H1 is the canonical location for the title, so it
+            is NOT clamped: 3 of 20 real titles need 4 lines at 390px, and
+            clipping loses words with no ellipsis to warn you. */}
+        <header className="px-4 pt-4 pb-3 md:px-8 md:pt-6 md:pb-4">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-episode-title">{episode.title}</h1>
+              <MetaLine
+                className="mt-2 text-[12px] md:text-[13px]"
+                items={[
+                  year === null ? "" : String(year),
+                  formatDate(episode.upload_date),
+                  duration,
+                ]}
               />
-            ) : null}
-          </div>
-
-          <div>
-            {/* 🇧🇬 The title is Bulgarian. `break-words` stops long compound words
-                from overflowing on a 390px screen. */}
-            <h1 className="break-words text-2xl font-bold leading-tight">{episode.title}</h1>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-              <Link
-                href={`/channels/${episode.channel_slug}`}
-                className="font-medium text-foreground hover:underline"
-              >
-                {episode.channel_name}
-              </Link>
-              {episode.upload_date ? (
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5" aria-hidden />
-                  {formatDate(episode.upload_date)}
-                </span>
-              ) : null}
-              {episode.duration_sec ? (
-                <span className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" aria-hidden />
-                  {formatDuration(episode.duration_sec)}
-                </span>
-              ) : null}
-              {episode.members_only ? (
-                <Badge variant="secondary" className="gap-1">
-                  <Crown className="h-3 w-3" aria-hidden />
-                  {copy.episode.membersOnly}
-                </Badge>
-              ) : null}
-              {episode.content_kind === "stream" ? (
-                <Badge variant="secondary" className="gap-1">
-                  <Radio className="h-3 w-3" aria-hidden />
-                  {copy.episode.stream}
-                </Badge>
-              ) : null}
             </div>
+            <EpisodeHeaderScore />
           </div>
+        </header>
 
-          <a
-            href={episode.watch_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden />
-            {copy.episode.watchOnYouTube}
-          </a>
-        </div>
-
-        <aside className="space-y-4">
-          <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                {copy.episode.publicScore}
-              </span>
-              <span
-                className={cn(
-                  "rounded px-2 py-0.5 text-lg font-bold tabular-nums",
-                  episode.public_score === null ? "text-muted-foreground" : band.cell,
-                )}
+        <div className="grid grid-cols-1 gap-0 px-4 pb-0 md:grid-cols-[1fr_320px] md:gap-8 md:px-8 md:pb-10">
+          <div className="min-w-0">
+            {/* 🚨 No embedded player anywhere in this product. Every watch
+                action opens YouTube in a new tab. */}
+            <a
+              href={episode.watch_url || episode.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={copy.episode.playOnYouTube}
+              className="block outline-none"
+            >
+              <Thumbnail
+                src={episode.thumbnail_url}
+                sizes="(min-width: 768px) 860px, 100vw"
+                priority
+                className="rounded-2xl"
               >
-                {formatScore(episode.public_score)}
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {episode.public_score === null
-                ? copy.episode.notRated
-                : copy.episode.ratings(episode.rating_count)}
-            </p>
-
-            {episode.elite_score !== null ? (
-              <>
-                <div className="mt-4 flex items-center justify-between border-t pt-4">
-                  <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" aria-hidden />
-                    {copy.episode.eliteScore}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex size-[62px] items-center justify-center rounded-pill bg-[rgba(228,35,44,0.94)] shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+                    <Play className="size-6 fill-white text-white" aria-hidden />
                   </span>
-                  <span
-                    className={cn(
-                      "rounded px-2 py-0.5 text-lg font-bold tabular-nums",
-                      bandStyle(episode.elite_band ?? null).cell,
-                    )}
-                  >
-                    {formatScore(episode.elite_score)}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {copy.episode.ratings(episode.elite_rating_count)}
-                </p>
-              </>
-            ) : null}
-          </div>
+                </span>
 
-          <section className="rounded-lg border bg-card p-4">
-            <h2 className="mb-3 flex items-center gap-1.5 text-sm font-medium">
-              <Tag className="h-3.5 w-3.5" aria-hidden />
-              {copy.episode.topics}
-            </h2>
-            {episode.topics.length === 0 ? (
-              <p className="text-xs text-muted-foreground">{copy.episode.noTopics}</p>
-            ) : (
-              <ul className="flex flex-wrap gap-1.5">
-                {episode.topics.map((topic) => (
-                  <li key={topic.id}>
-                    <Link href={`/episodes?topic=${topic.slug}`}>
-                      <Badge variant="secondary" className="hover:bg-accent">
-                        {topic.name}
-                      </Badge>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </aside>
-      </div>
+                <span className="absolute top-2.5 left-2.5 flex gap-1.5">
+                  {episode.members_only ? (
+                    <Badge icon={<Crown className="size-3" strokeWidth={2.2} />}>
+                      {copy.episode.membersOnly}
+                    </Badge>
+                  ) : null}
+                  {episode.content_kind === "stream" ? (
+                    <Badge icon={<Radio className="size-3" strokeWidth={2.2} />}>
+                      {copy.episode.stream}
+                    </Badge>
+                  ) : null}
+                </span>
 
-      <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Star className="h-4 w-4" aria-hidden />
-          {copy.episode.moments}
-          <span className="text-sm font-normal text-muted-foreground">
-            ({moments.length})
-          </span>
-        </h2>
-        {moments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{copy.episode.noMoments}</p>
-        ) : (
-          <ul className="divide-y rounded-lg border bg-card">
-            {moments.map((moment) => (
-              <li key={moment.id} className="flex items-center gap-3 p-3">
-                <a
-                  href={timestampLink(episode.youtube_id, moment.timestamp_sec)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 rounded bg-muted px-2 py-1 font-mono text-xs tabular-nums hover:bg-accent"
-                >
-                  {formatDuration(moment.timestamp_sec)}
-                </a>
-                <span className="min-w-0 flex-1 break-words text-sm">{moment.label}</span>
-                {moment.author ? (
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {moment.author}
+                {duration ? (
+                  <span className="absolute right-2.5 bottom-2.5 flex h-6 items-center rounded-[7px] bg-[rgba(20,17,15,0.88)] px-2 font-mono text-[12px] text-[#F7F4F0] tabular">
+                    {duration}
                   </span>
                 ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              </Thumbnail>
+            </a>
 
-      <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <MessageSquare className="h-4 w-4" aria-hidden />
-          {copy.episode.comments}
-          <span className="text-sm font-normal text-muted-foreground">
-            ({comments.meta.total})
-          </span>
-        </h2>
-        {comments.items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{copy.episode.noComments}</p>
-        ) : (
-          <ul className="space-y-3">
-            {comments.items.map((comment) => (
-              <li key={comment.id} className="rounded-lg border bg-card p-3">
-                <div className="mb-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{comment.author_name}</span>
-                  <span>{formatDate(comment.created_at)}</span>
-                </div>
-                {/* Comment bodies are user input. Rendered as TEXT - never as HTML. */}
-                <p
-                  className={cn(
-                    "whitespace-pre-wrap break-words text-sm",
-                    comment.is_spoiler &&
-                      "select-none blur-sm transition hover:select-auto hover:blur-none focus:blur-none",
-                  )}
-                  tabIndex={comment.is_spoiler ? 0 : undefined}
-                  title={comment.is_spoiler ? copy.episode.spoiler : undefined}
+            <EpisodeScoreStrip />
+
+            {/* Topics. Tapping one runs a real search for it. */}
+            <div className="mt-4 flex flex-wrap gap-[7px]">
+              {episode.topics.map((topic) => (
+                <LinkButton
+                  key={topic.slug}
+                  href={`/search?q=${encodeURIComponent(topic.name)}`}
+                  prefetch={false}
+                  variant="outline"
+                  size="xs"
+                  className="font-medium"
                 >
-                  {comment.body}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                  {topic.name}
+                </LinkButton>
+              ))}
+              {episode.topics.length === 0 ? (
+                <span
+                  className={cn(
+                    buttonVariants({ variant: "dashed", size: "xs" }),
+                    "cursor-default",
+                  )}
+                >
+                  <Plus className="size-3.5" aria-hidden strokeWidth={2.4} />
+                  {copy.episode.addFirstTopic}
+                </span>
+              ) : null}
+            </div>
 
-      {episode.description ? (
-        <section className="space-y-2">
-          <h2 className="text-lg font-semibold">{copy.episode.description}</h2>
-          <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-            {episode.description}
-          </p>
-        </section>
-      ) : null}
-    </div>
+            <EpisodeDescription
+              text={episode.description || copy.episode.noDescription}
+            />
+
+            {episode.participants.length > 0 ? (
+              <Section title={copy.episode.cast} meta={String(episode.participants.length)}>
+                <div className="noscroll mt-3 flex gap-2.5 overflow-x-auto pb-0.5">
+                  {episode.participants.map((person) => (
+                    <Link
+                      key={person.slug}
+                      href={`/episodes?person=${encodeURIComponent(person.slug)}`}
+                      className="w-[92px] shrink-0 text-center outline-none"
+                    >
+                      <span className="mx-auto block w-16">
+                        <PersonAvatar name={person.name} slug={person.slug} size="md" />
+                      </span>
+                      <span className="mt-2 block text-[12.5px] leading-tight font-semibold">
+                        {person.name}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-subtle-foreground">
+                        {copy.episode.role(person.role)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </Section>
+            ) : null}
+
+            <Section
+              title={copy.episode.moments}
+              meta={moments.length > 0 ? String(moments.length) : undefined}
+            >
+              {moments.length > 0 ? (
+                <>
+                  {/* Timeline. Ticks are positioned by timestamp, so the bar
+                      only means something when the duration is known. */}
+                  {episode.duration_sec ? (
+                    <div className="relative mt-3 h-8">
+                      <span className="absolute inset-x-0 top-[13px] h-1.5 rounded-pill bg-elevated" />
+                      {moments.map((moment) => (
+                        <span
+                          key={moment.id}
+                          className="absolute top-[7px] h-[18px] w-1 rounded-pill bg-gold"
+                          style={{
+                            left: `${Math.min(
+                              99,
+                              (moment.timestamp_sec / episode.duration_sec!) * 100,
+                            )}%`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <ul className="mt-1 flex flex-col gap-2">
+                    {moments.map((moment) => (
+                      <li key={moment.id}>
+                        <a
+                          href={youtubeMomentUrl(
+                            episode.youtube_id,
+                            moment.timestamp_sec,
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex min-h-[52px] items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 outline-none"
+                        >
+                          <span className="inline-flex h-[27px] shrink-0 items-center rounded-sm bg-elevated px-2 font-mono text-[12.5px] font-bold text-gold tabular">
+                            {formatTimestamp(moment.timestamp_sec)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[14px] leading-snug">
+                              {moment.label}
+                            </span>
+                            {moment.author ? (
+                              <span className="mt-0.5 block text-[11px] text-subtle-foreground">
+                                {moment.author}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="font-mono text-[12.5px] text-muted-foreground tabular">
+                            {copy.episode.momentVotes(moment.score)}
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <EmptyState
+                  className="mt-3"
+                  title={copy.episode.momentsEmptyTitle}
+                  body={copy.episode.momentsEmptyBody}
+                />
+              )}
+            </Section>
+
+            <Section title={copy.episode.community}>
+              {/* ⚠️ The design also puts a 1-10 breakdown histogram beside this
+                  score. It is NOT built: no endpoint returns the distribution -
+                  `EpisodeOut` carries `public_score` and `rating_count` and
+                  nothing else - and the only way to derive it today is one
+                  request per rating. Drawing a plausible-looking histogram from
+                  the average would be inventing data on the page whose whole
+                  job is reporting what the community actually said. */}
+              <div className="mt-3.5 flex items-end gap-4">
+                <div className="shrink-0">
+                  <p className="flex items-baseline gap-1.5">
+                    <Star
+                      className="size-5 self-center fill-gold text-gold"
+                      aria-hidden
+                    />
+                    <span className="font-mono text-[30px] font-bold tabular">
+                      {formatScore(episode.public_score)}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] text-subtle-foreground">
+                    {episode.rating_count > 0
+                      ? copy.episode.ratings(episode.rating_count)
+                      : copy.episode.noRatings}
+                  </p>
+                </div>
+                {episode.elite_score !== null ? (
+                  <div className="shrink-0 border-l border-border pl-4">
+                    <p
+                      className={cn(
+                        "font-mono text-[22px] font-bold tabular",
+                        bandStyle(episode.elite_band).swatch,
+                        "bg-clip-text text-transparent",
+                      )}
+                    >
+                      {formatScore(episode.elite_score)}
+                    </p>
+                    <p className="mt-0.5 text-[11.5px] text-subtle-foreground">
+                      {copy.episode.elite}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              {comments && comments.items.length > 0 ? (
+                <div className="mt-3 flex flex-col gap-2">
+                  {comments.items.map((comment) => (
+                    <CommentCard key={comment.id} comment={comment} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  className="mt-3"
+                  title={copy.episode.commentsEmptyTitle}
+                  body={copy.episode.commentsEmptyBody}
+                />
+              )}
+            </Section>
+
+            {similar.items.length > 0 ? (
+              <Section title={copy.episode.similar} meta={similar.reason}>
+                <div className="noscroll mt-3 flex gap-3 overflow-x-auto pb-1">
+                  {similar.items.map((item) => (
+                    <EpisodeRailCard
+                      key={item.episode.youtube_id}
+                      episode={item.episode}
+                      reason={item.reason}
+                    />
+                  ))}
+                </div>
+              </Section>
+            ) : null}
+
+            <div className="h-5 md:hidden" />
+          </div>
+
+          <EpisodeSidebar />
+        </div>
+      </div>
+
+      <EpisodeActionBar />
+      <EpisodeSheets />
+    </EpisodeViewerProvider>
+  );
+}
+
+function Section({
+  title,
+  meta,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-5.5 border-t border-border pt-4.5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-section-label">{title}</h2>
+        {meta ? (
+          <span className="text-[12.5px] text-subtle-foreground">{meta}</span>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Badge({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex h-[26px] items-center gap-1.5 rounded-sm bg-[rgba(20,17,15,0.88)] px-2.5 text-[11.5px] font-semibold text-[#FFC93A]">
+      {icon}
+      {children}
+    </span>
   );
 }

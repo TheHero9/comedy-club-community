@@ -1,146 +1,229 @@
 import Link from "next/link";
-import { ArrowRight, Search, Trophy } from "lucide-react";
+import { ChevronRight, Star } from "lucide-react";
 
-import { EpisodeGrid } from "@/components/episode/EpisodeCard";
-import { Badge } from "@/components/ui/badge";
-import { getLeaderboard, listChannels, listEpisodes } from "@/lib/api/podcast";
+import { EpisodeCard } from "@/components/episode/EpisodeCard";
+import { SearchTrigger } from "@/components/search/SearchTrigger";
+import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
+import { Thumbnail } from "@/components/shared/Thumbnail";
+import { Page, SectionHeading } from "@/components/shell/Page";
+import { LinkButton } from "@/components/ui/button";
+import {
+  getLeaderboard,
+  LEADERBOARD_KINDS,
+  listChannels,
+  listEpisodes,
+  type EpisodeBrief,
+} from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
-import { bandStyle, formatScore } from "@/lib/score-bands";
+import { formatScore } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+/**
+ * Assigned before use rather than chained off `copy` inline: the copy-key
+ * scanner reads `copy.search.examples.map` as a key and cannot resolve it.
+ */
+const EXAMPLE_QUERIES = copy.search.examples;
 
 export const revalidate = 60;
 
+/** Rank styling. #1 is gold and larger; the tail fades out deliberately. */
+function rankStyle(rank: number): { size: string; color: string; row: string } {
+  if (rank === 1) {
+    return {
+      size: "text-[21px]",
+      color: "text-gold",
+      row: "bg-rank-one",
+    };
+  }
+  if (rank <= 3) {
+    return {
+      size: "text-[19px]",
+      color: "text-muted-foreground",
+      row: "bg-transparent",
+    };
+  }
+  return {
+    size: "text-[16px]",
+    color: "text-subtle-foreground",
+    row: "bg-transparent",
+  };
+}
+
 export default async function HomePage() {
-  // Independent requests, so fan out rather than waterfall.
-  const [channels, latest, topRated] = await Promise.all([
+  const [channels, newest, topRated] = await Promise.all([
     listChannels(),
     listEpisodes({ limit: 8, sort: "newest" }),
-    getLeaderboard("top_rated", { limit: 5 }),
+    getLeaderboard(LEADERBOARD_KINDS.top, { limit: 5 }),
   ]);
 
-  const episodeTotal = channels.reduce((sum, channel) => sum + channel.episode_count, 0);
+  const totalEpisodes = newest.meta.total;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-12 px-4 py-10">
-      <section className="space-y-4">
-        <h1 className="max-w-2xl text-4xl font-bold leading-tight tracking-tight">
-          {copy.app.tagline}
-        </h1>
-        <p className="max-w-2xl text-muted-foreground">{copy.app.description}</p>
+    <Page>
+      <h1 className="text-display">
+        {copy.home.heroLine1}
+        <br />
+        {copy.home.heroLine2}
+        <br />
+        <span className="text-primary">{copy.home.heroLine3}</span>
+      </h1>
 
-        <div className="flex flex-wrap items-center gap-3 pt-2">
-          <Link
-            href="/search"
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <Search className="h-4 w-4" aria-hidden />
-            {copy.search.title}
-          </Link>
-          <Link
-            href="/episodes"
-            className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm transition-colors hover:border-ring"
-          >
-            {copy.episodes.title}
-            <ArrowRight className="h-4 w-4" aria-hidden />
-          </Link>
-        </div>
+      <p className="text-body mt-3.5 max-w-[520px] text-muted-foreground">
+        {copy.home.subhead(totalEpisodes)}
+      </p>
 
-        <div className="flex flex-wrap gap-2 pt-2 text-sm text-muted-foreground">
-          <Badge variant="secondary" className="font-normal">
-            {copy.channels.episodeCount(episodeTotal)}
-          </Badge>
-          <Badge variant="secondary" className="font-normal">
-            {copy.channels.channelCount(channels.length)}
-          </Badge>
-        </div>
-      </section>
+      <SearchTrigger className="mt-4.5 max-w-[560px]" />
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {EXAMPLE_QUERIES.map((example) => (
+          <LinkButton
+            key={example}
+            href={`/search?q=${encodeURIComponent(example)}`}
+            // See the note in app/search/page.tsx: /search is force-dynamic and
+            // a prefetch of it is a real search on the server.
+            prefetch={false}
+            variant="outline"
+            size="sm"
+            className="font-normal text-muted-foreground"
+          >
+            {example}
+          </LinkButton>
+        ))}
+      </div>
 
       {topRated.items.length > 0 ? (
-        <section className="space-y-4">
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Trophy className="h-5 w-5" aria-hidden />
-            {copy.episodes.sortTop}
-          </h2>
-
-          <ol className="divide-y rounded-lg border bg-card">
-            {topRated.items.map((entry) => {
-              const band = bandStyle(entry.episode.band ?? null);
-              return (
-                <li key={entry.episode.youtube_id}>
-                  <Link
-                    href={`/e/${entry.episode.youtube_id}`}
-                    className="flex items-center gap-3 p-3 transition-colors hover:bg-accent/50"
-                  >
-                    <span className="w-6 shrink-0 text-center text-sm font-medium tabular-nums text-muted-foreground">
-                      {entry.rank}
-                    </span>
-                    <span
-                      className={cn(
-                        "shrink-0 rounded px-2 py-1 text-sm font-bold tabular-nums",
-                        band.cell,
-                      )}
-                    >
-                      {formatScore(entry.episode.public_score)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="line-clamp-1 text-sm font-medium">
-                        {entry.episode.title}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {entry.episode.channel_name} -{" "}
-                        {copy.episode.ratings(entry.episode.rating_count)}
-                      </span>
-                    </span>
-                    {/* A plain span, not <Badge>. The shadcn badge variant
-                        emits a 573-byte class string per instance; inside a
-                        list that is pure repetition. The two one-off badges in
-                        the hero above still use the component. */}
-                    {entry.episode.elite_score !== null ? (
-                      <span
-                        className="hidden shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium tabular-nums text-secondary-foreground sm:inline"
-                        title={copy.episode.eliteScore}
-                      >
-                        {copy.episode.eliteChip(formatScore(entry.episode.elite_score))}
-                      </span>
-                    ) : null}
-                  </Link>
-                </li>
-              );
-            })}
+        <section className="mt-9">
+          <SectionHeading
+            title={copy.home.topRated}
+            action={
+              <Link
+                href="/leaderboard"
+                className="text-[13.5px] font-semibold text-primary-text hover:text-primary-hover"
+              >
+                {copy.home.seeAll}
+              </Link>
+            }
+          />
+          <ol className="mt-3.5 flex flex-col gap-2">
+            {topRated.items.map((entry) => (
+              <li key={entry.episode.youtube_id}>
+                <TopRatedRow episode={entry.episode} rank={entry.rank} />
+              </li>
+            ))}
           </ol>
         </section>
       ) : null}
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">{copy.episodes.sortNewest}</h2>
-          <Link
-            href="/episodes"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            {copy.channels.browseAll}
-          </Link>
-        </div>
-        <EpisodeGrid episodes={latest.items} />
-      </section>
+      {newest.items.length > 0 ? (
+        <section className="mt-9">
+          <h2 className="text-h2">{copy.home.newest}</h2>
+          <div className="mt-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-4">
+            {newest.items.slice(0, 4).map((episode, index) => (
+              <EpisodeCard
+                key={episode.youtube_id}
+                episode={episode}
+                sizes="(min-width: 768px) 280px, 50vw"
+                priority={index < 2}
+              />
+            ))}
+            {/* Desktop shows eight; mobile stops at four to keep the fold
+                within reach of the sections below it. */}
+            {newest.items.slice(4, 8).map((episode) => (
+              <EpisodeCard
+                key={episode.youtube_id}
+                episode={episode}
+                sizes="280px"
+                className="hidden md:block"
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-      <section className="space-y-4">
-        <h2 className="text-xl font-semibold">{copy.channels.title}</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="mt-9">
+        <h2 className="text-h2">{copy.home.channels}</h2>
+        <div className="mt-3.5 flex flex-col gap-2.5">
           {channels.map((channel) => (
             <Link
-              key={channel.id}
-              href={`/channels/${channel.slug}`}
-              className="rounded-lg border bg-card p-4 transition-colors hover:border-ring"
+              key={channel.slug}
+              href={`/channels/${encodeURIComponent(channel.slug)}`}
+              className="flex items-center gap-3.5 rounded-2xl border border-border bg-card p-3.5 outline-none"
             >
-              <span className="block font-medium">{channel.name}</span>
-              <span className="block text-sm text-muted-foreground">
-                {copy.channels.episodeCount(channel.episode_count)}
-              </span>
+              <ChannelAvatar
+                name={channel.name}
+                avatarUrl={channel.avatar_url}
+                size="sm"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="font-display text-base font-semibold text-foreground">
+                  {channel.name}
+                </p>
+                <p className="mt-1 font-mono text-[12px] text-subtle-foreground tabular">
+                  {copy.home.channelMetaNoAverage(channel.episode_count)}
+                </p>
+              </div>
+              <ChevronRight
+                className="size-[18px] shrink-0 text-faint-foreground"
+                aria-hidden
+                strokeWidth={2.2}
+              />
             </Link>
           ))}
         </div>
       </section>
-    </div>
+    </Page>
+  );
+}
+
+function TopRatedRow({
+  episode,
+  rank,
+}: {
+  episode: EpisodeBrief;
+  rank: number;
+}) {
+  const style = rankStyle(rank);
+
+  return (
+    <Link
+      href={`/e/${episode.youtube_id}`}
+      className={cn(
+        "flex min-h-16 items-center gap-3 rounded-xl border border-border px-3 py-2.5 outline-none",
+        style.row,
+      )}
+    >
+      <span
+        aria-label={copy.home.rank(rank)}
+        className={cn(
+          "min-w-6 text-center font-display font-bold",
+          style.size,
+          style.color,
+        )}
+      >
+        {rank}
+      </span>
+
+      <Thumbnail
+        src={episode.thumbnail_url}
+        sizes="70px"
+        className="w-[70px] shrink-0 rounded-[9px]"
+      />
+
+      <div className="min-w-0 flex-1">
+        <p className="text-title-card line-clamp-2 text-foreground">
+          {episode.title}
+        </p>
+        <p className="mt-1 text-[11.5px] text-subtle-foreground">
+          {copy.episode.ratings(episode.rating_count)}
+        </p>
+      </div>
+
+      <span className="flex shrink-0 items-center gap-1">
+        <Star className="size-3.5 fill-gold text-gold" aria-hidden />
+        <span className="font-mono text-[15px] font-bold tabular">
+          {formatScore(episode.public_score)}
+        </span>
+      </span>
+    </Link>
   );
 }

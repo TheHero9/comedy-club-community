@@ -1,25 +1,42 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Unbounded, Onest, JetBrains_Mono } from "next/font/google";
 
-import { SiteHeader } from "@/components/shared/SiteHeader";
+import { AppHeader } from "@/components/shell/AppHeader";
+import { BottomNav } from "@/components/shell/BottomNav";
+import { SiteFooter } from "@/components/shell/SiteFooter";
 import { Toaster } from "@/components/ui/sonner";
 import { copy } from "@/lib/copy";
 
 import { Providers } from "./providers";
 import "./globals.css";
 
-// 🇧🇬 "cyrillic" is NOT optional. Every episode title and community label is
-// Bulgarian; with only the latin subset the browser silently falls back to a
-// system font for Cyrillic text, so the whole content area renders in a
-// different typeface than the chrome around it.
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * 🇧🇬 "cyrillic" is NOT optional on any of the three families. Every episode
+ * title and community label is Bulgarian; with only the latin subset the
+ * browser silently falls back per glyph, so a title renders half in the chosen
+ * face and half in a system serif. That shipped once already and passed
+ * typecheck, lint and build - `e2e/invisible-failures.spec.ts` now pins it.
+ *
+ * All three are variable fonts, so no `weight` is declared: Next serves the
+ * variable file and the whole declared range (Unbounded 500-800, Onest
+ * 400-700, JetBrains Mono 500-700) is available from one download.
+ */
+const unbounded = Unbounded({
+  variable: "--font-unbounded",
   subsets: ["latin", "cyrillic"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const onest = Onest({
+  variable: "--font-onest",
+  subsets: ["latin", "cyrillic"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin", "cyrillic"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -46,7 +63,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  // Matches --background in the dark theme, which is the default.
+  themeColor: "#191614",
   width: "device-width",
   initialScale: 1,
 };
@@ -56,15 +74,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // `dark` is set here as well as in ThemeProvider so the first paint is
     // already dark and there is no light flash before hydration.
     <html
-      lang="en"
-      className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="bg"
+      className={`dark ${unbounded.variable} ${onest.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <Providers>
-          <SiteHeader />
-          <main className="flex-1">{children}</main>
-          <Toaster position="top-center" richColors />
+          <AppHeader />
+          {/* Bottom padding clears the fixed mobile bar. The bar is either the
+              bottom nav or, on an episode route, the action bar - never both. */}
+          <main className="flex-1 pb-[84px] md:pb-0">{children}</main>
+          <SiteFooter />
+          <BottomNav />
+          <Toaster />
         </Providers>
       </body>
     </html>

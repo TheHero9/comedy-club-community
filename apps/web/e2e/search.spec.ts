@@ -65,7 +65,11 @@ test.describe("search", () => {
     expect(ids.length).toBeGreaterThan(0);
     expect(ids.length).toBe(Math.min(api.total, PAGE_LIMIT));
     expect(ids).toEqual(api.hits.map((hit) => hit.episode.youtube_id));
-    await expect(page.getByText(copy.search.results(api.total))).toBeVisible();
+    await expect(
+      page.getByText(
+        copy.search.resultsFor(copy.search.resultCount(api.total), QUERY_KASPAROV),
+      ),
+    ).toBeVisible();
   });
 
   test("7.2 a dropped letter still finds the episode (typo tolerance)", async ({
@@ -122,19 +126,29 @@ test.describe("search", () => {
     // Page still renders, and renders nothing pretending to be a result.
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(resultLinks(page)).toHaveCount(0);
-    await expect(page.getByText(copy.search.empty)).toBeVisible();
+    await expect(page.getByText(copy.search.zeroTitle)).toBeVisible();
+    // Never blame the speller: the engine already tolerates typos, so the
+    // copy has to say the word is unlabelled rather than misspelled.
+    await expect(page.getByText(copy.search.zeroBody)).toBeVisible();
   });
 
-  test("7.5 the bare search page renders the form and a prompt", async ({ page }) => {
+  test("7.5 the bare search page prompts, and the field opens the overlay", async ({
+    page,
+  }) => {
     const response = await page.goto("/search");
     expect(response?.status()).toBe(200);
 
-    await expect(page.getByRole("searchbox")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: copy.search.title }),
-    ).toBeVisible();
-    await expect(page.getByText(copy.search.prompt)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      copy.search.title,
+    );
+    await expect(page.getByText(copy.search.subtitle)).toBeVisible();
     await expect(resultLinks(page)).toHaveCount(0);
+
+    // The field is a trigger, not an input: it opens the overlay OVER the page
+    // rather than navigating, so the page behind it survives a change of mind.
+    await page.getByRole("button", { name: copy.search.trigger }).first().click();
+    await expect(page.getByRole("searchbox")).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/search");
   });
 
   test("7.6 Bulgarian result text renders intact, not as mojibake", async ({ page }) => {
@@ -159,13 +173,14 @@ test.describe("search", () => {
     expect(bodyText).not.toContain("????");
   });
 
-  test("7.7 the search form is a GET form, so results are shareable", async ({
+  test("7.7 submitting the overlay puts the query in the URL, so results are shareable", async ({
     page,
   }) => {
     await page.goto("/search");
 
+    await page.getByRole("button", { name: copy.search.trigger }).first().click();
     await page.getByRole("searchbox").fill(QUERY_KASPAROV);
-    await page.getByRole("button", { name: copy.search.title }).click();
+    await page.getByRole("searchbox").press("Enter");
 
     // The query has to land in the URL, intact, for a result page to be linkable.
     await page.waitForURL((url) => url.pathname === "/search" && url.search !== "");
@@ -179,7 +194,9 @@ test.describe("search", () => {
     // client-side state.
     await page.goto(searchPagePath(QUERY_KASPAROV));
     expect(await renderedResultIds(page)).toEqual(submittedIds);
-    // And the input is repopulated from the URL.
-    await expect(page.getByRole("searchbox")).toHaveValue(QUERY_KASPAROV);
+    // And the trigger is repopulated from the URL.
+    await expect(
+      page.getByRole("button", { name: QUERY_KASPAROV }).first(),
+    ).toBeVisible();
   });
 });

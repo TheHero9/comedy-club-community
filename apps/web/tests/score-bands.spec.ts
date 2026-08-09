@@ -19,6 +19,7 @@ import {
   formatDuration,
   formatScore,
 } from "@/lib/score-bands";
+import { copy } from "@/lib/copy";
 import { cn } from "@/lib/utils";
 
 const GRID_SERVICE_PATH = fileURLToPath(
@@ -58,7 +59,12 @@ function apiBandForScore(bands: PythonBand[], score: number): string {
 }
 
 const API_BANDS = readApiBands();
-const FALLBACK_LABEL = "Not rated";
+/**
+ * Read from `lib/copy.ts`, never duplicated. The band NAMES stay English
+ * because the API owns them, but "no rating" is product copy and moved to
+ * Bulgarian with the redesign - a literal here would have pinned the old one.
+ */
+const FALLBACK_LABEL = copy.band.unrated;
 
 describe("5.1-5.2 bandStyle", () => {
   it("5.1 returns a complete style for every band key the API can emit", () => {

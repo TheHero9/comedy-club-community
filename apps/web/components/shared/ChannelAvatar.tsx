@@ -1,64 +1,72 @@
 import Image from "next/image";
-import { Mic } from "lucide-react";
 
+import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
- * A channel's YouTube profile picture.
+ * A channel's YouTube profile picture, over a gold fallback tile.
  *
- * 🚨 The fallback is layered, not conditional. The Mic icon sits *behind* the image
- * rather than replacing it when `avatar_url` is empty.
+ * 🚨 The fallback is layered, not conditional. The gold tile with the channel's
+ * initials sits *behind* the image rather than replacing it when `avatarUrl` is
+ * empty.
  *
- * The reason: a channel avatar URL is an opaque content hash that changes whenever the
- * owner changes their picture, so a stored URL can start 404ing between syncs. Handling
- * that with an `onError` handler would force this into a Client Component, and these
- * channel pages are Server Components on purpose - they are the indexable ones.
+ * The reason: a channel avatar URL is an opaque content hash on
+ * yt3.googleusercontent.com that changes whenever the owner changes their
+ * picture, so a stored URL can start 404ing between syncs. Handling that with
+ * an `onError` handler would force this into a Client Component, and the
+ * channel pages are Server Components on purpose.
  *
- * Stacking instead gives a pure-CSS fallback that covers BOTH failure modes (no URL,
- * and a URL that stopped resolving) with zero client JS. `alt=""` matters here: the
- * channel name is always rendered as text next to this, so the image is decorative,
- * and an empty alt means a broken image renders nothing and reveals the icon under it.
+ * `alt=""` is what makes it work: the channel name is always rendered as text
+ * beside this, so the image is decorative, and an empty alt means a broken
+ * image renders nothing at all and reveals the tile under it.
  */
-
 const SIZES = {
-  sm: { box: "h-11 w-11", icon: "h-5 w-5", px: 44 },
-  lg: { box: "h-16 w-16", icon: "h-7 w-7", px: 64 },
+  sm: { box: "size-14 rounded-2xl", textClass: "text-[19px]", px: 56 },
+  md: { box: "size-16 rounded-3xl", textClass: "text-[21px]", px: 64 },
+  lg: { box: "size-16 rounded-[24px] md:size-24", textClass: "text-[21px] md:text-[32px]", px: 96 },
 } as const;
 
-type Props = {
+interface ChannelAvatarProps {
   name: string;
-  avatarUrl: string;
+  avatarUrl?: string | null;
   size?: keyof typeof SIZES;
   className?: string;
-};
+}
 
-export function ChannelAvatar({ name, avatarUrl, size = "sm", className }: Props) {
-  const { box, icon, px } = SIZES[size];
+export function ChannelAvatar({
+  name,
+  avatarUrl,
+  size = "sm",
+  className,
+}: ChannelAvatarProps) {
+  const { box, textClass, px } = SIZES[size];
 
   return (
     <span
       className={cn(
-        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted",
+        "relative flex shrink-0 items-center justify-center overflow-hidden bg-gold",
         box,
         className,
       )}
     >
-      <Mic className={cn("text-muted-foreground", icon)} aria-hidden />
+      <span
+        aria-hidden
+        className={cn("font-display font-bold text-ink", textClass)}
+      >
+        {initials(name)}
+      </span>
 
       {avatarUrl ? (
+        // ⚠️ Explicit width/height, NOT `fill`. An avatar is a fixed size, and
+        // `fill` needs a `sizes` string - but a fixed `sizes` like "64px" has no
+        // vw for Next to filter the ladder against, so it emits every candidate
+        // up to 1280w. Explicit dimensions collapse it to a 1x/2x pair.
         <Image
           src={avatarUrl}
           alt=""
-          // ⚠️ Explicit width/height, NOT `fill`. An avatar is a fixed size, and
-          // `fill` requires a `sizes` string - but a fixed `sizes` like "44px" has
-          // no vw for Next to filter the ladder against, so it emits every
-          // candidate up to 1280w and defaults `src` to w=1280. That is 8 URLs of
-          // srcSet per channel to paint 44 CSS px, upscaled from a 480px source.
-          // Explicit dimensions collapse it to a 1x/2x pair. Same reasoning as the
-          // deviceSizes trimming in next.config.ts.
           width={px}
           height={px}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 size-full object-cover"
         />
       ) : null}
 

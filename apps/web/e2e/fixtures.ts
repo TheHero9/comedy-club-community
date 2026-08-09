@@ -104,6 +104,8 @@ export const PUBLIC_ROUTES = [
   "/channels/ivan-kirkov",
   "/episodes",
   "/search",
+  "/leaderboard",
+  "/me",
   "/status",
 ] as const;
 
@@ -136,4 +138,16 @@ export async function hasHorizontalOverflow(page: Page): Promise<boolean> {
     // 1px of tolerance for sub-pixel layout rounding.
     return el.scrollWidth - el.clientWidth > 1;
   });
+}
+
+/**
+ * The ratings grid the current viewport can actually see.
+ *
+ * Both orientations are always in the HTML - CSS decides which one renders -
+ * so a hardcoded `table[data-grid="desktop"]` passes on one project and fails
+ * on the other. Every test that does not care WHICH orientation it got should
+ * use this.
+ */
+export function visibleGrid(page: Page) {
+  return page.locator("table[data-grid]").locator("visible=true");
 }

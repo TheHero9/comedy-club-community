@@ -28,8 +28,8 @@ type SearchResults = Schema<"SearchOut">;
 /** A Bulgarian query that is known to match content in the dev database. */
 const BULGARIAN_QUERY = "Каспаров";
 
-/** How many episodes `/episodes` asks for on the first page. */
-const EPISODES_PAGE_SIZE = 24;
+/** How many episodes `/episodes` renders before the load-more pill. */
+const EPISODES_PAGE_SIZE = 9;
 
 /**
  * Pick a real episode from the API instead of hardcoding an id, so the suite
@@ -87,7 +87,12 @@ test("1.1 home page renders with real data", async ({ page }) => {
   const response = await page.goto("/");
 
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(copy.app.tagline);
+  // The hero H1 is three lines, the third in brand red. `toHaveText` would
+  // need the exact concatenation, so each line is asserted on its own.
+  const hero = page.getByRole("heading", { level: 1 });
+  await expect(hero).toContainText(copy.home.heroLine1);
+  await expect(hero).toContainText(copy.home.heroLine2);
+  await expect(hero).toContainText(copy.home.heroLine3);
 
   // At least one episode card. The home page composes three episode sections,
   // so an empty result here means the API contract broke, not that the DB is
@@ -103,14 +108,25 @@ test("1.2 channels page lists every channel the API returns", async ({ page }) =
   const response = await page.goto("/channels");
   expect(response?.status()).toBe(200);
 
-  const links = page.locator('main a[href^="/channels/"]');
-  await expect(links).toHaveCount(channels.length);
-
   for (const channel of channels) {
-    const link = page.locator(`main a[href="/channels/${channel.slug}"]`);
-    await expect(link).toHaveCount(1);
-    await expect(link).toContainText(channel.name);
-    await expect(link).toContainText(copy.channels.episodeCount(channel.episode_count));
+    // Located by its own link, not by name: one channel's description mentions
+    // the other channel by name, so `hasText` matches two cards.
+    const card = page
+      .locator("main article")
+      .filter({
+        // Cyrillic slugs are percent-encoded in the rendered href, so the
+        // comparison has to encode too or every Bulgarian channel misses.
+        has: page.locator(
+          `a[href="/channels/${encodeURIComponent(channel.slug)}"]`,
+        ),
+      });
+    await expect(card, `no card for ${channel.slug}`).toHaveCount(1);
+    await expect(card).toContainText(
+      copy.channels.handleAndCount(channel.handle, channel.episode_count),
+    );
+    await expect(
+      card.locator(`a[href="/channels/${encodeURIComponent(channel.slug)}"]`),
+    ).toHaveCount(1);
   }
 });
 
@@ -127,10 +143,14 @@ test("1.3 channel page renders name, episode count and the ratings grid", async 
     page.getByText(copy.channels.episodeCount(channel.episode_count)).first(),
   ).toBeVisible();
 
-  // Grid presence only - every cell value is cross-checked in section 3.
-  const grid = page.getByRole("table");
-  await expect(grid).toBeVisible();
-  await expect(grid.locator("caption")).toHaveText(copy.grid.caption(channel.name));
+
+  // Grid presence only - every cell value is cross-checked in section 3. Both
+  // orientations are always in the HTML, so this asserts on the one CSS shows.
+  const grid = page.locator("table[data-grid]").locator("visible=true");
+  await expect(grid).toHaveCount(1);
+  await expect(grid.locator("caption")).toHaveText(
+    copy.channel.gridLabel(channel.name),
+  );
 });
 
 test("1.4 episodes page renders one card per episode, each linking to /e/", async ({
@@ -159,60 +179,86 @@ test("1.4 episodes page renders one card per episode, each linking to /e/", asyn
 });
 
 /**
- * 1.4b - pagination.
+ * 1.4b - "Зареди още", and why deep pagination is no longer needed.
  *
- * `/episodes` used to render page one and a one-way "Load more" link, so
- * episodes 25 to 1392 had no reachable, crawlable URL at all. Pagination is now
- * offset-driven and rendered by a Server Component, which means every page of
- * every filter combination is a real URL that works with JavaScript disabled.
+ * The browse list previously used offset pagination with rel=prev/next so that
+ * episodes past page one had crawlable URLs. The redesign replaces that with
+ * the "Зареди още" pill the design specifies, which grows `limit` in the URL.
  *
- * The assertion is against the API rather than against fixed ids, for the same
- * reason as 1.4: a reseed must not turn this into a false failure.
+ * That would orphan deep episodes IF browse were the only path to them. It is
+ * not: the channel grid renders EVERY episode of a channel as an `<a href>` on
+ * one page - 74 cells for one channel and 1,318 for the other - so every
+ * episode already has a crawlable link from an indexable page. 3.3/3.4 walk
+ * that matrix cell by cell. The test below pins the guarantee itself, so
+ * removing it from the grid cannot silently un-index the archive.
  */
-test("1.4b episodes page 2 renders the matching API offset window", async ({ page }) => {
-  const second = await apiJson<EpisodeList>(
+test("1.4b the load-more pill is a real link that widens the list", async ({ page }) => {
+  const list = await apiJson<EpisodeList>(
     page,
-    `/api/episodes?limit=${EPISODES_PAGE_SIZE}&offset=${EPISODES_PAGE_SIZE}&sort=newest`,
+    `/api/episodes?limit=${EPISODES_PAGE_SIZE}&offset=0&sort=newest`,
   );
   test.skip(
-    second.items.length === 0,
-    "the dev database holds a single page of episodes, so there is no page 2",
+    !list.meta.has_more,
+    "the dev database holds a single page of episodes, so there is nothing to load",
   );
 
-  const response = await page.goto(`/episodes?offset=${EPISODES_PAGE_SIZE}`);
-  expect(response?.status()).toBe(200);
+  await page.goto("/episodes");
+  const more = page.getByRole("link", { name: copy.browse.loadMore });
+  await expect(more).toHaveAttribute("href", `/episodes?limit=${EPISODES_PAGE_SIZE * 2}`);
 
+  await more.click();
+  await page.waitForURL(/limit=/);
   const hrefs = await page
     .locator('main a[href^="/e/"]')
     .evaluateAll((elements) => elements.map((element) => element.getAttribute("href")));
-
-  expect([...hrefs].sort()).toEqual(
-    second.items.map((item) => `/e/${item.youtube_id}`).sort(),
-  );
-
-  // Page one is the canonical URL, so "Previous" must drop `offset` entirely
-  // rather than link to `?offset=0`.
-  await expect(page.locator('main nav a[rel="prev"]')).toHaveAttribute(
-    "href",
-    "/episodes",
-  );
-  await expect(page.locator('main nav a[rel="next"]')).toHaveAttribute(
-    "href",
-    `/episodes?offset=${EPISODES_PAGE_SIZE * 2}`,
-  );
+  expect(hrefs.length).toBe(EPISODES_PAGE_SIZE * 2);
 });
 
-test("1.4c pagination preserves the active filters", async ({ page }) => {
-  const response = await page.goto("/episodes?sort=oldest");
+test("1.4c every episode of a channel is a crawlable link on its grid page", async ({
+  page,
+}) => {
+  const channel = await firstChannel(page);
+  const grid = await apiJson<{
+    total_count: number;
+    rows: Array<{ cells: Array<{ youtube_id: string } | null> }>;
+  }>(page, `/api/channels/${channel.slug}/grid`);
+
+  const expected = new Set(
+    grid.rows.flatMap((row) =>
+      row.cells.filter(Boolean).map((cell) => `/e/${cell!.youtube_id}`),
+    ),
+  );
+  expect(expected.size).toBe(grid.total_count);
+
+  await page.goto(`/channels/${channel.slug}`);
+  const hrefs = new Set(
+    await page
+      .locator("table[data-grid] a[href^='/e/']")
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute("href") ?? ""),
+      ),
+  );
+
+  for (const href of expected) {
+    expect(hrefs.has(href), `${href} is not linked from the grid`).toBe(true);
+  }
+});
+
+test("1.4d the filter chips live in the URL, so a filtered view is shareable", async ({
+  page,
+}) => {
+  const streams = await apiJson<EpisodeList>(page, "/api/episodes?kind=stream&limit=1");
+  test.skip(streams.meta.total === 0, "no streams in the dev database");
+
+  const response = await page.goto("/episodes?kind=stream");
   expect(response?.status()).toBe(200);
 
-  // A page-two link that forgot the sort would silently send the user back to
-  // "newest" halfway through browsing.
-  await expect(page.locator('main nav a[rel="next"]')).toHaveAttribute(
-    "href",
-    `/episodes?sort=oldest&offset=${EPISODES_PAGE_SIZE}`,
-  );
-  await expect(page.locator('main nav a[rel="prev"]')).toHaveCount(0);
+  await expect(
+    page.getByText(copy.browse.showing(
+      Math.min(EPISODES_PAGE_SIZE, streams.meta.total),
+      streams.meta.total,
+    )),
+  ).toBeVisible();
 });
 
 test("1.5 episode page renders title, thumbnail and duration", async ({ page }) => {
@@ -261,7 +307,11 @@ test("1.6 search page renders results for a Bulgarian query", async ({ page }) =
   );
   expect(response?.status()).toBe(200);
 
-  await expect(page.getByText(copy.search.results(results.total))).toBeVisible();
+  await expect(
+    page.getByText(
+      copy.search.resultsFor(copy.search.resultCount(results.total), BULGARIAN_QUERY),
+    ),
+  ).toBeVisible();
   expect(await page.locator('main a[href^="/e/"]').count()).toBeGreaterThan(0);
 });
 
@@ -277,11 +327,10 @@ test("1.7 status page renders the API health card and its dependency rows", asyn
   expect(response?.status()).toBe(200);
 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    copy.home.systemSectionTitle,
+    copy.status.title,
   );
-  await expect(page.getByText(copy.health.cardTitle).first()).toBeVisible();
-  await expect(page.getByText(copy.health.dependencies.database)).toBeVisible();
-  await expect(page.getByText(copy.health.dependencies.redis)).toBeVisible();
+  await expect(page.getByText(copy.status.database)).toBeVisible();
+  await expect(page.getByText(copy.status.redis)).toBeVisible();
 });
 
 test("1.8 every link in the site header resolves", async ({ page }) => {

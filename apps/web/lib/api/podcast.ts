@@ -1,9 +1,9 @@
 /**
  * Typed data access for the podcast API.
  *
- * Every function is safe to call from a Server Component. Response types come
- * from @ccc/api-types, which is generated from the API's OpenAPI schema - no API
- * shape is ever hand-written here.
+ * Every function here is safe to call from a Server Component. Response types
+ * come from @ccc/api-types, which is generated from the API's OpenAPI schema -
+ * no API shape is ever hand-written.
  */
 import type { Schema } from "@ccc/api-types";
 
@@ -16,16 +16,33 @@ export type EpisodeList = Schema<"EpisodeListOut">;
 export type ChannelGrid = Schema<"ChannelGridOut">;
 export type Topic = Schema<"TopicOut">;
 export type Person = Schema<"PersonOut">;
+export type PersonDetail = Schema<"PersonDetailOut">;
 export type Moment = Schema<"MomentOut">;
+export type Comment = Schema<"CommentOut">;
 export type CommentList = Schema<"CommentListOut">;
 export type SearchResult = Schema<"SearchOut">;
+export type SearchHit = Schema<"SearchHitOut">;
 export type Leaderboard = Schema<"LeaderboardOut">;
+export type Me = Schema<"MeOut">;
+export type ViewerState = Schema<"ViewerStateOut">;
+export type WatchSummary = Schema<"WatchSummaryOut">;
+export type RatingResult = Schema<"RatingOut">;
+export type FavoriteResult = Schema<"FavoriteOut">;
 
 /**
  * Public content changes at most once a day (the ingestion sync), so a short
  * revalidate keeps pages fast without serving stale ratings for long.
  */
 const PUBLIC_CACHE = { next: { revalidate: 60 } } as const;
+
+/** Leaderboard kinds the API accepts. Anything else is a 404 by design. */
+export const LEADERBOARD_KINDS = {
+  top: "top_rated",
+  elite: "top_elite",
+  mostRated: "most_rated",
+} as const;
+
+export type LeaderboardKey = keyof typeof LEADERBOARD_KINDS;
 
 export function listChannels() {
   return api.get<Channel[]>("/api/channels", PUBLIC_CACHE);
@@ -47,7 +64,10 @@ export function listEpisodes(params: QueryParams = {}) {
 }
 
 export function getEpisode(youtubeId: string) {
-  return api.get<Episode>(`/api/episodes/${encodeURIComponent(youtubeId)}`, PUBLIC_CACHE);
+  return api.get<Episode>(
+    `/api/episodes/${encodeURIComponent(youtubeId)}`,
+    PUBLIC_CACHE,
+  );
 }
 
 export function listMoments(youtubeId: string) {
@@ -58,10 +78,10 @@ export function listMoments(youtubeId: string) {
 }
 
 export function listComments(youtubeId: string, params: QueryParams = {}) {
-  return api.get<CommentList>(`/api/episodes/${encodeURIComponent(youtubeId)}/comments`, {
-    query: params,
-    ...PUBLIC_CACHE,
-  });
+  return api.get<CommentList>(
+    `/api/episodes/${encodeURIComponent(youtubeId)}/comments`,
+    { query: params, ...PUBLIC_CACHE },
+  );
 }
 
 export function listTopics(params: QueryParams = {}) {
@@ -70,6 +90,13 @@ export function listTopics(params: QueryParams = {}) {
 
 export function listPeople() {
   return api.get<Person[]>("/api/people", PUBLIC_CACHE);
+}
+
+export function getPerson(slug: string) {
+  return api.get<PersonDetail>(
+    `/api/people/${encodeURIComponent(slug)}`,
+    PUBLIC_CACHE,
+  );
 }
 
 export function getLeaderboard(kind: string, params: QueryParams = {}) {
@@ -82,4 +109,11 @@ export function getLeaderboard(kind: string, params: QueryParams = {}) {
 /** Search is never cached - a stale search result is worse than a slow one. */
 export function search(params: QueryParams) {
   return api.get<SearchResult>("/api/search", { query: params, cache: "no-store" });
+}
+
+export function suggest(query: string) {
+  return api.get<string[]>("/api/search/suggest", {
+    query: { q: query },
+    cache: "no-store",
+  });
 }

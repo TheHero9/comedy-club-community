@@ -142,9 +142,27 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 
 ### UI language
 
-- ✅ **UI copy is ENGLISH for now** (owner decision, 2026-08-08). Episode content, titles and community labels are Bulgarian; the chrome around them is English.
-- ✅ **Never hardcode a user-facing string inside a component.** Put copy in a module-level `const` or a small `lib/copy.ts` map. Bulgarian or a BG/EN toggle is a likely v2, and this one habit is the difference between a one-day i18n retrofit and a two-week one.
+- 🇧🇬 **UI copy is BULGARIAN** (design handoff, 2026-08-09, superseding the 2026-08-08 English ruling). The handoff states the prototype's Bulgarian copy is final and must not be translated. A handful of structural labels stay Latin because the design shows them that way: `Public`, `Elite`, `Member`, `Podcast Index`, the seven score-band names, and the footer column headings.
+- ✅ **Never hardcode a user-facing string inside a component.** Everything lives in `apps/web/lib/copy.ts`. `tests/copy.spec.ts` parses every `.tsx` under `app/` and `components/` and fails on any rendered literal with three or more letters, so this is enforced, not aspirational.
+- ⚠️ A Tailwind class in an object property named `text`, `label`, `title` or `heading` is read by that scanner as display copy. Name such a key `textClass`.
 - ❌ Do not install `next-intl` or any i18n library yet. Deferred to `NEXT_TIME.md`.
+
+### Design system (see `specs/07-visual-redesign/`)
+
+- 🎨 **Tokens live in `app/globals.css`.** Warm-hued neutrals at very low chroma - they are NOT grey, and that warmth is most of what makes the dark theme feel like a room. Dark is the default and the priority.
+- 🚨 **Score bands are identical in both themes.** They carry meaning, so they are declared once outside the light/dark split. Only neutrals, brand red, gold and the unrated chip flip.
+- 🚨 **Unrated is not a band.** `score === null` renders `?` on `--card` with a dashed border. Never `0`, never the garbage band, never a filled colour. That is 22% of the catalogue.
+- 🚨 **`--primary` is the FILL colour; `--primary-text` is brand red as TEXT.** They differ in dark mode because `#E4232C` is only 3.9:1 on the background. Never use `text-primary` for small text - use `text-primary-text`.
+- ♿ **The handed-over palette failed WCAG AA in nine places** and the shipped values are corrected. `e2e/a11y.spec.ts` fails the build on any critical or serious axe violation, so a "faithful" revert to the handoff's hex values will be caught. The table of what changed and why is in `specs/07-visual-redesign/01-implementation.md`.
+- 🔤 **Three families, all with Cyrillic subsets: Unbounded (display), Onest (UI), JetBrains Mono (numerics).** `subsets: ["latin", "cyrillic"]` is not optional - without it the browser falls back per glyph and a Bulgarian title renders half in the wrong face. `e2e/invisible-failures.spec.ts` 9.4 pins all three.
+- 💊 Almost every interactive surface is a pill (radius 99). That is the signature; a squared corner is the exception.
+- 🚨 **Band colours NEVER transition.** A colour that moves reads as a value that changed. Skeletons pulse opacity only - a gradient sweeping 20 cards reads as the page loading 20 times.
+
+### Next.js specifics
+
+- 🚨 **`prefetch={false}` on every link to `/search?q=...`.** `/search` is `force-dynamic`, so each prefetch is a real Meilisearch round trip on the server; a dozen fired on paint and the RSC prefetches never settled, so the page never reached network idle.
+- 🚨 **Never call `setState` synchronously inside an effect.** `react-hooks/set-state-in-effect` is an error in this repo. Use derived state, adjust-during-render for "reset when a prop changes", or `lib/use-hydrated.ts` for "the server cannot know this".
+- ✅ **`LinkButton` / `ExternalLinkButton`, never `<Button render={<Link/>}>`.** Base UI's `render` prop without `nativeButton={false}` logs a console-only accessibility error that passes typecheck, lint AND build.
 
 ### Database & schema
 
@@ -575,15 +593,15 @@ YYYYMMDD-feature-name        e.g. 20260808-p1-ingestion
 
 ## 🧪 Testing
 
-**723 automated tests. Run them all with `npm run test` from the repo root.**
+**746 automated tests. Run them all with `npm run test` from the repo root.**
 
 ```bash
 npm run test                 # everything: Vitest + Playwright + pytest
 npm run test:web             # turbo test -> Vitest then Playwright
 npm run test:api             # pytest only
 
-cd apps/web && npx vitest run           # 117 unit + contract tests
-cd apps/web && npx playwright test      # 232 E2E (116 x desktop + mobile)
+cd apps/web && npx vitest run           # 137 unit + contract tests
+cd apps/web && npx playwright test      # 259 E2E (desktop 1280x800 + mobile 390x844)
 cd apps/web && npx playwright test --ui # debug interactively
 cd apps/api && uv run pytest -q         # 350 backend tests
 ```
@@ -596,6 +614,8 @@ cd apps/api && uv run pytest -q         # 350 backend tests
 | A11y | **`@axe-core/playwright`** | `apps/web/e2e/a11y.spec.ts` |
 
 ❌ **Never** add Jest, Cypress, Selenium, Enzyme, or a React component renderer. Server Components are covered by Playwright against a real server.
+
+⚠️ **Run the E2E suite against a PRODUCTION build when the signal matters.** `next dev` compiles routes on demand, and under parallel Playwright load the failures that appear are compile pressure, not product bugs - they move between runs. `npx next build && npx next start --port 3100`, then `npx playwright test` (the config reuses an existing server on that port). Dev is fine for iterating on one spec.
 
 ### 🚨 Never weaken a test to make it pass
 

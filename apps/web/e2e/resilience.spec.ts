@@ -21,6 +21,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { copy } from "@/lib/copy";
+
 import { expect, test } from "./fixtures";
 
 const WEB_ROOT = path.resolve(__dirname, "..");
@@ -41,11 +43,15 @@ const DEGRADED_BODY = {
   redis: { ok: false, detail: "connection refused" },
 };
 
-/** Copy strings, asserted as text because the toasts carry no test hooks. */
+/**
+ * Toast copy, read from `lib/copy.ts` rather than duplicated here. Duplicating
+ * it is what made these four tests fail silently on the redesign: the strings
+ * moved from English to Bulgarian and the test kept asserting the old ones.
+ */
 const TOAST = {
-  success: "API is reachable.",
-  degraded: "API answered, but a dependency is down.",
-  failed: "Could not reach the API.",
+  success: copy.status.recheckSucceeded,
+  degraded: copy.status.recheckDegraded,
+  failed: copy.status.recheckFailed,
 } as const;
 
 function jsonResponse(body: unknown) {
@@ -71,7 +77,9 @@ test.describe("11. resilience", () => {
     });
 
     await page.goto("/status");
-    await expect(page.getByText("API status")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      copy.status.title,
+    );
 
     expect(
       serverSideHits,
@@ -79,11 +87,11 @@ test.describe("11. resilience", () => {
     ).toBe(0);
 
     // And the card shows the REAL server reading, not the degraded body above.
-    await expect(page.getByRole("button", { name: /Recheck/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: copy.status.recheck })).toBeVisible();
 
     // Now prove the same interception does fire for the client component, so a
     // reader can see the counter is wired correctly and not stuck at zero.
-    await page.getByRole("button", { name: /Recheck/i }).click();
+    await page.getByRole("button", { name: copy.status.recheck }).click();
     await expect(page.getByText(TOAST.degraded)).toBeVisible();
     expect(serverSideHits, "the client-side recheck must have been intercepted").toBe(1);
   });
@@ -96,7 +104,7 @@ test.describe("11. resilience", () => {
       await route.fulfill(jsonResponse(HEALTHY_BODY));
     });
 
-    await page.getByRole("button", { name: /Recheck/i }).click();
+    await page.getByRole("button", { name: copy.status.recheck }).click();
 
     await expect(page.getByText(TOAST.success)).toBeVisible();
     expect(hits, "route interception never fired - this test would be vacuous").toBeGreaterThan(0);
@@ -110,7 +118,7 @@ test.describe("11. resilience", () => {
       await route.fulfill(jsonResponse(DEGRADED_BODY));
     });
 
-    await page.getByRole("button", { name: /Recheck/i }).click();
+    await page.getByRole("button", { name: copy.status.recheck }).click();
 
     // A degraded API answers 200, so only `isFullyHealthy` separates this from
     // the success path. Assert the success toast is NOT the one shown.
@@ -135,7 +143,7 @@ test.describe("11. resilience", () => {
         await route.abort("failed");
       });
 
-      await page.getByRole("button", { name: /Recheck/i }).click();
+      await page.getByRole("button", { name: copy.status.recheck }).click();
 
       await expect(page.getByText(TOAST.failed)).toBeVisible();
       expect(hits, "route interception never fired - this test would be vacuous").toBeGreaterThan(
@@ -143,7 +151,9 @@ test.describe("11. resilience", () => {
       );
 
       // The page must survive a dead API, not blow up.
-      await expect(page.getByText("API status")).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      copy.status.title,
+    );
       expect(
         consoleCapture.all.filter((text) => /\[pageerror\]/.test(text)),
         "a failed health fetch must never throw into the page",
@@ -167,10 +177,10 @@ test.describe("11. resilience", () => {
     });
 
     const startedAt = Date.now();
-    await page.getByRole("button", { name: /Recheck/i }).click();
+    await page.getByRole("button", { name: copy.status.recheck }).click();
 
     // While in flight the button reports itself busy and is disabled.
-    const busyButton = page.getByRole("button", { name: /Rechecking/i });
+    const busyButton = page.getByRole("button", { name: copy.status.rechecking });
     await expect(busyButton).toBeVisible();
     await expect(busyButton).toBeDisabled();
 
@@ -183,7 +193,7 @@ test.describe("11. resilience", () => {
     expect(elapsed, "it gave up suspiciously early for a 10s timeout").toBeGreaterThan(8_000);
 
     // The button recovers rather than staying stuck in the busy state.
-    await expect(page.getByRole("button", { name: /^Recheck$/i })).toBeEnabled();
+    await expect(page.getByRole("button", { name: copy.status.recheck })).toBeEnabled();
   });
 
   test("11.7 PARTIAL: /status declares force-dynamic so `build` survives a dead API", async () => {

@@ -437,6 +437,10 @@ const DASH_EXEMPT_FILES: ReadonlyArray<{ path: string; why: string }> = [
     path: "docs/01-canonical-models.py",
     why: "the canonical schema, kept verbatim as handed over with the brief",
   },
+  {
+    path: "Designs/design_handoff_podcast_index/design_files/support.js",
+    why: "the design bundle's own template runtime, kept verbatim as handed over",
+  },
 ];
 
 describe("6.3 no em-dash or en-dash anywhere in the repo", () => {

@@ -1,170 +1,106 @@
-import {
-  ActivityIcon,
-  CircleCheckIcon,
-  CircleXIcon,
-  DatabaseIcon,
-  PlugZapIcon,
-  ServerIcon,
-  TriangleAlertIcon,
-  type LucideIcon,
-} from "lucide-react";
-
 import { HealthRecheckButton } from "@/components/health/HealthRecheckButton";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { API_BASE_URL } from "@/lib/api/client";
 import {
   HEALTH_DEPENDENCY_KEYS,
-  HEALTH_PATH,
   isFullyHealthy,
-  type HealthDependencyKey,
   type HealthResult,
 } from "@/lib/api/health";
 import { copy } from "@/lib/copy";
+import { cn } from "@/lib/utils";
 
 /**
- * Semantic dependency key to icon. The API sends keys, never glyphs; the
- * mapping to an icon belongs here in the component layer.
+ * Live state of the API and its dependencies.
+ *
+ * 🟡 "Redis is degraded" is a REAL state this product reports, not a
+ * hypothetical: the write throttle fails open on a cache outage precisely so a
+ * Redis blip cannot make the site read-only. So the card has three states, not
+ * two, and the degraded one has to read as "the rest still works" rather than
+ * as an outage.
  */
-const DEPENDENCY_ICONS: Record<HealthDependencyKey, LucideIcon> = {
-  database: DatabaseIcon,
-  redis: ServerIcon,
-};
+const DEPENDENCY_LABEL = {
+  database: copy.status.database,
+  redis: copy.status.redis,
+} as const;
 
-function DependencyRow({
-  dependencyKey,
-  ok,
-  detail,
-}: {
-  dependencyKey: HealthDependencyKey;
-  ok: boolean;
-  detail: string;
-}) {
-  const Icon = DEPENDENCY_ICONS[dependencyKey];
-
-  return (
-    <div className="flex items-center gap-3 py-2">
-      <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">
-          {copy.health.dependencies[dependencyKey]}
-        </p>
-        {detail ? (
-          <p className="truncate text-xs text-muted-foreground">{detail}</p>
-        ) : null}
-      </div>
-      <Badge variant={ok ? "secondary" : "destructive"} className="shrink-0 gap-1">
-        {ok ? (
-          <CircleCheckIcon className="size-3" aria-hidden />
-        ) : (
-          <CircleXIcon className="size-3" aria-hidden />
-        )}
-        {ok ? copy.health.dependencyUp : copy.health.dependencyDown}
-      </Badge>
-    </div>
-  );
-}
-
-function OverallBadge({ result }: { result: HealthResult }) {
-  if (!result.ok) {
-    return (
-      <Badge variant="destructive" className="gap-1">
-        <PlugZapIcon className="size-3" aria-hidden />
-        {copy.health.overallUnreachable}
-      </Badge>
-    );
-  }
-
-  if (!isFullyHealthy(result.data)) {
-    return (
-      <Badge variant="outline" className="gap-1">
-        <TriangleAlertIcon className="size-3" aria-hidden />
-        {copy.health.overallDegraded}
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge variant="secondary" className="gap-1">
-      <CircleCheckIcon className="size-3" aria-hidden />
-      {copy.health.overallHealthy}
-    </Badge>
-  );
-}
-
-/**
- * Server Component. Renders the health snapshot fetched on the server so the
- * page is meaningful with JavaScript disabled.
- */
 export function ApiHealthCard({ result }: { result: HealthResult }) {
+  const healthy = result.ok && isFullyHealthy(result.data);
+  const degraded = result.ok && !healthy;
+
+  const label = !result.ok
+    ? copy.status.unreachable
+    : healthy
+      ? copy.status.healthy
+      : copy.status.degraded;
+
+  const dot = !result.ok
+    ? "bg-primary"
+    : healthy
+      ? "bg-band-awesome"
+      : "bg-band-regular";
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ActivityIcon className="size-4 shrink-0" aria-hidden />
-          {copy.health.cardTitle}
-        </CardTitle>
-        <CardDescription>{copy.health.cardDescription}</CardDescription>
-        <CardAction>
-          <OverallBadge result={result} />
-        </CardAction>
-      </CardHeader>
+    <section className="rounded-2xl border border-border bg-card p-[18px]">
+      <div className="flex items-center gap-2.5">
+        <span aria-hidden className={cn("size-2.5 rounded-pill", dot)} />
+        <h2 className="text-[17px] font-semibold">{label}</h2>
+        <span className="ml-auto font-mono text-[11.5px] text-subtle-foreground tabular">
+          <time dateTime={result.checkedAt}>{result.checkedAt.slice(11, 19)}</time>
+        </span>
+      </div>
 
-      <CardContent>
-        {result.ok ? (
-          <div className="divide-y divide-border">
-            {HEALTH_DEPENDENCY_KEYS.map((key) => (
-              <DependencyRow
+      {result.ok ? (
+        <ul className="mt-3.5 flex flex-col gap-2">
+          {HEALTH_DEPENDENCY_KEYS.map((key) => {
+            const dependency = result.data[key];
+            return (
+              <li
                 key={key}
-                dependencyKey={key}
-                ok={result.data[key].ok}
-                detail={result.data[key].detail}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex items-start gap-3 rounded-lg bg-destructive/10 p-3">
-            <TriangleAlertIcon
-              className="mt-0.5 size-4 shrink-0 text-destructive"
-              aria-hidden
-            />
-            <div className="min-w-0 space-y-1">
-              <p className="text-sm font-medium">{result.error.message}</p>
-              <p className="text-xs break-words text-muted-foreground">
-                {copy.health.unreachableHint}
-              </p>
-            </div>
-          </div>
-        )}
+                className="flex items-center gap-2.5 rounded-lg bg-card-2 p-3"
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-2 rounded-pill",
+                    dependency.ok ? "bg-band-awesome" : "bg-band-regular",
+                  )}
+                />
+                <span className="flex-1 text-[13.5px]">
+                  {DEPENDENCY_LABEL[key]}
+                </span>
+                <span
+                  className={cn(
+                    "font-mono text-[12px] tabular",
+                    dependency.ok ? "text-subtle-foreground" : "text-band-regular",
+                  )}
+                >
+                  {dependency.ok
+                    ? copy.status.dependencyOk
+                    : copy.status.dependencyDown}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="mt-3.5 text-small text-subtle-foreground">
+          {result.error.message}
+        </p>
+      )}
 
-        <Separator className="my-3" />
+      {!result.ok ? (
+        <p className="mt-2.5 text-[12.5px] text-faint-foreground">
+          {copy.status.unreachableHint}
+        </p>
+      ) : null}
 
-        <dl className="space-y-1 text-xs text-muted-foreground">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <dt className="font-medium">{copy.health.endpointLabel}</dt>
-            <dd className="break-all font-mono">
-              {API_BASE_URL}
-              {HEALTH_PATH}
-            </dd>
-          </div>
-          <div>
-            <dd>{copy.health.checkedAt(result.checkedAt)}</dd>
-          </div>
-        </dl>
-      </CardContent>
+      {degraded ? (
+        <p className="mt-2.5 text-[12.5px] text-subtle-foreground">
+          {copy.status.redisDegradedToast}
+        </p>
+      ) : null}
 
-      <CardFooter>
+      <div className="mt-4">
         <HealthRecheckButton />
-      </CardFooter>
-    </Card>
+      </div>
+    </section>
   );
 }

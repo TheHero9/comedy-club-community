@@ -9,7 +9,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Result } from "axe-core";
 
-import { apiJson, expect, PUBLIC_ROUTES, test } from "./fixtures";
+import { copy } from "@/lib/copy";
+
+import { apiJson, expect, PUBLIC_ROUTES, test, visibleGrid } from "./fixtures";
 
 const CHANNEL_SLUG = "ivan-kirkov";
 
@@ -100,7 +102,7 @@ test.describe("12. accessibility", () => {
     const grid = await apiJson<GridResponse>(page, `/api/channels/${CHANNEL_SLUG}/grid`);
     await page.goto(`/channels/${CHANNEL_SLUG}`);
 
-    const table = page.locator("table");
+    const table = visibleGrid(page);
     await expect(table).toBeVisible();
 
     // The caption is visually hidden but is what a screen reader announces, so
@@ -119,7 +121,7 @@ test.describe("12. accessibility", () => {
   test("12.3 every grid cell link announces its episode title and score", async ({ page }) => {
     const grid = await apiJson<GridResponse>(page, `/api/channels/${CHANNEL_SLUG}/grid`);
     await page.goto(`/channels/${CHANNEL_SLUG}`);
-    await expect(page.locator("table")).toBeVisible();
+    await expect(visibleGrid(page)).toBeVisible();
 
     const cells = grid.rows
       .flatMap((row) => row.cells)
@@ -167,9 +169,12 @@ test.describe("12. accessibility", () => {
 
     for (const route of PUBLIC_ROUTES) {
       await page.goto(route);
-      // /status has a scoped loading.tsx, so Next streams a heading-less
-      // skeleton before the page resolves. Read headings only once the real
-      // content has replaced it, or this walks the fallback and sees nothing.
+      // /status has a scoped loading.tsx, so Next streams a fallback before the
+      // page resolves and BOTH subtrees are briefly in the DOM during the swap.
+      // Waiting for exactly one h1 is what settles that; `toBeVisible` throws a
+      // strict-mode violation mid-transition instead of waiting. The sibling
+      // test above owns the "exactly one h1" guarantee itself.
+      await expect(page.locator("h1")).toHaveCount(1);
       await expect(page.locator("h1")).toBeVisible();
       const levels = await page.evaluate(() =>
         Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6")).map((h) =>
@@ -195,9 +200,9 @@ test.describe("12. accessibility", () => {
 
   test("12.5 keyboard reaches the grid cell links", async ({ page }) => {
     await page.goto(`/channels/${CHANNEL_SLUG}`);
-    await expect(page.locator("table")).toBeVisible();
+    await expect(visibleGrid(page)).toBeVisible();
 
-    const firstCell = page.locator("table tbody a").first();
+    const firstCell = visibleGrid(page).locator("tbody a").first();
     await firstCell.focus();
 
     const before = await page.evaluate(() => (document.activeElement as HTMLAnchorElement).href);
@@ -218,16 +223,20 @@ test.describe("12. accessibility", () => {
 
   test("12.5 keyboard reaches the Recheck button on /status", async ({ page }) => {
     await page.goto("/status");
-    await expect(page.getByRole("button", { name: /Recheck/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: copy.status.recheck })).toBeVisible();
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 
     let pressesToReach = -1;
     for (let i = 0; i < 40; i += 1) {
       await page.keyboard.press("Tab");
-      const isRecheck = await page.evaluate(() => {
+      // `copy` cannot be referenced inside page.evaluate - the browser has no
+      // module scope - so the label crosses as an argument.
+      const isRecheck = await page.evaluate((label) => {
         const active = document.activeElement;
-        return active?.tagName === "BUTTON" && /Recheck/.test(active.textContent ?? "");
-      });
+        return (
+          active?.tagName === "BUTTON" && (active.textContent ?? "").includes(label)
+        );
+      }, copy.status.recheck);
       if (isRecheck) {
         pressesToReach = i + 1;
         break;
@@ -241,9 +250,17 @@ test.describe("12. accessibility", () => {
   });
 
   test("12.6 focus is visibly indicated on interactive elements", async ({ page }) => {
-    async function focusStyles(selector: string) {
-      return page.evaluate((sel) => {
-        const el = document.querySelector(sel) as HTMLElement;
+    /**
+     * Takes a LOCATOR, not a selector.
+     *
+     * Both grid orientations are always in the DOM and CSS hides one of them,
+     * so `document.querySelector("table ... a")` resolves to whichever comes
+     * first - which on desktop is the hidden mobile grid. Focusing a
+     * `display: none` element never matches `:focus-visible`, so the test
+     * failed for a reason that had nothing to do with focus styling.
+     */
+    async function focusStyles(locator: ReturnType<typeof page.locator>) {
+      return locator.evaluate((el: HTMLElement) => {
         const read = () => {
           const style = getComputedStyle(el);
           return [
@@ -260,22 +277,28 @@ test.describe("12. accessibility", () => {
         const isFocusVisible = el.matches(":focus-visible");
         el.blur();
         return { blurred, focused, isFocusVisible };
-      }, selector);
+      });
     }
 
     await page.goto("/status");
-    const button = await focusStyles("main button");
-    expect(button.isFocusVisible, "the Recheck button never matched :focus-visible").toBe(true);
+    const button = await focusStyles(page.locator("main button").first());
+    expect(button.isFocusVisible, "the Recheck button never matched :focus-visible").toBe(
+      true,
+    );
     expect(
       button.focused,
       "focusing the Recheck button changes nothing visually",
     ).not.toBe(button.blurred);
 
     await page.goto(`/channels/${CHANNEL_SLUG}`);
-    await expect(page.locator("table")).toBeVisible();
-    const cell = await focusStyles("table tbody a");
-    expect(cell.isFocusVisible, "the grid cell link never matched :focus-visible").toBe(true);
-    expect(cell.focused, "focusing a grid cell changes nothing visually").not.toBe(cell.blurred);
+    await expect(visibleGrid(page)).toBeVisible();
+    const cell = await focusStyles(visibleGrid(page).locator("tbody a").first());
+    expect(cell.isFocusVisible, "the grid cell link never matched :focus-visible").toBe(
+      true,
+    );
+    expect(cell.focused, "focusing a grid cell changes nothing visually").not.toBe(
+      cell.blurred,
+    );
   });
 
   for (const route of PUBLIC_ROUTES) {

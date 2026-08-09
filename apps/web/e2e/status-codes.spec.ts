@@ -144,21 +144,23 @@ test.describe("hard 404s", () => {
     );
     await expect(page.getByText(copy.notFound.body)).toBeVisible();
 
-    // A dead end is a bounce. There must be a working route home.
+    // A dead end is a bounce. There must be a working route home, and the
+    // design's other escape hatch is the search trigger - on a site whose whole
+    // argument is findability, "search will probably find it" is the right
+    // thing to offer someone who followed a stale link.
     //
-    // Selected as an anchor, not by role "link": shadcn's base-nova Button with
-    // `nativeButton={false}` renders `<a href="/" role="button" tabindex="0">`,
-    // so its ACCESSIBLE ROLE is button even though the element is an anchor.
-    // The assertions below are on what actually matters to a user - a real
-    // anchor, with an href, carrying the right accessible name. The role
-    // mismatch is reported as an a11y finding rather than papered over here.
+    // Selected as an anchor rather than by role "link": `LinkButton` renders a
+    // real `<a href>` (deliberately NOT a Base UI Button with `render`, which
+    // would claim role=button on an anchor), so this asserts on what actually
+    // matters to a user - a real anchor, with an href, carrying the right
+    // accessible name.
     const home = page.locator('main a[href="/"]');
     await expect(home).toBeVisible();
     await expect(home).toHaveAccessibleName(copy.notFound.backHome);
 
-    const browse = page.locator('main a[href="/episodes"]');
-    await expect(browse).toBeVisible();
-    await expect(browse).toHaveAccessibleName(copy.notFound.browseEpisodes);
+    await expect(
+      page.getByRole("main").getByRole("button", { name: copy.search.trigger }),
+    ).toBeVisible();
 
     await home.click();
     await page.waitForURL((url) => url.pathname === "/");
@@ -219,7 +221,7 @@ test("2.5 every real route answers 200", async ({ page }) => {
 
   const routes = [...PUBLIC_ROUTES, await realEpisodePath(page)];
   // 6 static/public routes plus the dynamic episode route: the 7 the app ships.
-  expect(routes).toHaveLength(7);
+  expect(routes).toHaveLength(9);
 
   for (const route of routes) {
     const response = await page.goto(route);

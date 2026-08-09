@@ -1,7 +1,7 @@
 # 📊 STATUS
 
-**Updated:** 2026-08-09
-**Overall:** 🟢 **Waves 1-13 built and test-hardened.** 39 API paths / 48 operations, a live Next.js frontend with the IMDb-style ratings grid, and **723 automated tests** (350 pytest + 137 Vitest + 236 Playwright) that all run from `npm run test`.
+**Updated:** 2026-08-10
+**Overall:** 🟢 **Waves 1-13 built and test-hardened, and the full visual redesign is shipped.** 41 API paths, all ten designed routes live in Bulgarian across two themes, and **746 automated tests** (350 pytest + 137 Vitest + 259 Playwright) that all run from `npm run test`.
 
 > Wave definitions live in [`specs/01-initial-build/01-waves.md`](../specs/01-initial-build/01-waves.md).
 
@@ -24,6 +24,7 @@
 | 11 | Community content | ✅ | |
 | 12 | Meilisearch | ✅ | Bulgarian typo tolerance verified |
 | 13 | People, moderation, leaderboards | ✅ | |
+| 14 | **Visual redesign** | ✅ | Whole frontend rebuilt from `Designs/design_handoff_podcast_index/`. All 10 routes, dark + light, Bulgarian copy, transposed mobile ratings grid. See [`specs/07-visual-redesign/`](../specs/07-visual-redesign/01-implementation.md). |
 
 Legend: ⬜ not started · 🔵 in progress · 🟡 partial/blocked · ✅ done
 
@@ -45,8 +46,8 @@ suites; the counts here come from actual runs.
 |-------|---------|--------|
 | Backend | `cd apps/api && uv run pytest -q` | **350 passed** |
 | Frontend unit + contract | `cd apps/web && npx vitest run` | **137 passed** |
-| Frontend E2E | `cd apps/web && npx playwright test` | **236 passed** (118 tests x desktop 1280x800 + mobile 390x844) |
-| Everything, cold start | `npm run test` | **723 passed** |
+| Frontend E2E | `cd apps/web && npx playwright test` | **259 passed** (desktop 1280x800 + mobile 390x844, against a production build) |
+| Everything, cold start | `npm run test` | **746 passed** |
 | Performance | `npm run benchmark` | See `specs/05-performance/` |
 | Static gates | `npx turbo typecheck lint build` | **4/4 successful** |
 | Python lint | `cd apps/api && uv run ruff check .` | All checks passed |
@@ -63,7 +64,10 @@ suites; the counts here come from actual runs.
 | Score bands agree with `podcast/services/grid.py` | `tests/score-bands.spec.ts` - parses the Python thresholds |
 | No hardcoded UI strings, no em-dash, no emoji in JSX | `tests/copy.spec.ts` (exact-match ratchet, currently empty) |
 | Committed `generated.ts` matches live OpenAPI | `tests/contract.spec.ts` + `scripts/check-api-types-drift.mjs` |
-| Dark theme on first paint, Geist loaded **with Cyrillic coverage** | `e2e/invisible-failures.spec.ts` |
+| Dark theme on first paint; **all three** families loaded with Cyrillic coverage | `e2e/invisible-failures.spec.ts` |
+| Both ratings-grid orientations match the API cell for cell | `e2e/ratings-grid.spec.ts` 3.1-3.4 |
+| The mobile transpose keeps its promises: no page scroll, no grid scroll, 44px cells | `e2e/ratings-grid.spec.ts` 3.10 |
+| Every episode of a channel is a crawlable link on its grid page | `e2e/public-browse.spec.ts` 1.4c |
 | No unexpected browser console errors on any route | `e2e/fixtures.ts` console guard, on by default |
 | No horizontal page overflow at 390px | `e2e/invisible-failures.spec.ts` |
 | Recheck-button toasts: healthy / degraded / unreachable / slow | `e2e/resilience.spec.ts` |
