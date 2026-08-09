@@ -7,9 +7,10 @@ handful of queries, not 200. Never map a raw queryset.
 
 from __future__ import annotations
 
-from django.db.models import Count, Prefetch, Q, QuerySet
+from django.db.models import Count, IntegerField, OuterRef, Prefetch, Q, QuerySet, Subquery
+from django.db.models.functions import Coalesce
 
-from podcast.models import Episode, EpisodeParticipant, EpisodeTopic
+from podcast.models import Channel, Episode, EpisodeParticipant, EpisodeTopic
 from podcast.services.grid import score_band
 
 # ---------------------------------------------------------------------------
@@ -17,9 +18,57 @@ from podcast.services.grid import score_band
 # ---------------------------------------------------------------------------
 
 
+# Exactly the columns `episode_brief` reads. Anything not listed here is deferred,
+# so a list page never drags Episode.description (avg 545 chars, max 2860) or the
+# channel's description/banner through the sort, the DISTINCT or the wire.
+# ⚠️ Touching a field outside this tuple on a list-queryset instance triggers a
+# per-row lazy SELECT. Add the field here rather than dropping the `only()`.
+BRIEF_FIELDS = (
+    "id",
+    "youtube_id",
+    "title",
+    "slug",
+    "channel_id",
+    "upload_date",
+    "duration_sec",
+    "thumbnail_url",
+    "content_kind",
+    "members_only",
+    "public_score",
+    "elite_score",
+    "rating_count",
+    "elite_rating_count",
+    "channel__id",
+    "channel__name",
+    "channel__slug",
+)
+
+
 def episode_list_queryset() -> QuerySet[Episode]:
-    """Everything EpisodeBriefOut needs, in one join."""
-    return Episode.objects.select_related("channel")
+    """Everything EpisodeBriefOut needs, in one join, and nothing else."""
+    return Episode.objects.select_related("channel").only(*BRIEF_FIELDS)
+
+
+def channel_list_queryset() -> QuerySet[Channel]:
+    """Channels with their episode_count.
+
+    ⚡ A correlated Subquery, not `annotate(Count("episodes"))`. The JOIN + GROUP BY
+    form reads every episode row to count a handful of channels; the subquery does
+    one index-only scan per channel on `podcast_episode(channel_id)`. Measured on a
+    simulated 7,992-episode / 8-channel table: 10.6ms -> 4.4ms.
+    """
+    episode_count = (
+        Episode.objects.filter(channel=OuterRef("pk"))
+        .order_by()
+        .values("channel")
+        .annotate(n=Count("*"))
+        .values("n")
+    )
+    return Channel.objects.annotate(
+        _episode_count=Coalesce(
+            Subquery(episode_count, output_field=IntegerField()), 0
+        )
+    )
 
 
 def episode_detail_queryset() -> QuerySet[Episode]:

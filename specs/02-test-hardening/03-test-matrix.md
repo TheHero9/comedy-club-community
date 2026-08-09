@@ -237,23 +237,31 @@ Legend: **Lane** = owning agent (see `02-implementation-plan.md`).
 
 Fill this in as lanes land. **Do not mark a row done without a passing committed test.**
 
+Executed 2026-08-08. Full write-up in [`05-results.md`](05-results.md).
+
 | Section | Rows | Lane | Done |
 |---------|------|------|------|
-| 1. Route rendering | 11 | A | ⬜ |
-| 2. HTTP status codes | 6 | A | ⬜ |
-| 3. Ratings grid | 17 | B | ⬜ |
-| 4. Typed client | 43 | C | ⬜ |
-| 5. Pure helpers | 8 | C | ⬜ |
-| 6. Copy discipline | 4 | C | ⬜ |
-| 7. Search | 7 | B | ⬜ |
-| 8. Mobile + layout | 4 | E | ⬜ |
-| 9. Theme + fonts | 5 | E | ⬜ |
-| 10. Console cleanliness | 4 | E | ⬜ |
-| 11. Resilience | 7 | E | ⬜ |
-| 12. Accessibility | 7 | E | ⬜ |
-| 13-19. Backend gaps | 21 | D | ⬜ |
-| 20-21. Contract | 5 | C | ⬜ |
-| **Total** | **149** | | |
+| 1. Route rendering | 11 | A | ✅ 11/11 |
+| 2. HTTP status codes | 6 | A | ✅ 6/6 |
+| 3. Ratings grid | 17 | B | 🟡 16/17 |
+| 4. Typed client | 43 | C | ✅ 43/43 |
+| 5. Pure helpers | 8 | C | ✅ 8/8 |
+| 6. Copy discipline | 4 | C | ✅ 4/4 |
+| 7. Search | 7 | B | ✅ 7/7 |
+| 8. Mobile + layout | 4 | E | ✅ 4/4 |
+| 9. Theme + fonts | 5 | E | ✅ 5/5 |
+| 10. Console cleanliness | 4 | E | ✅ 4/4 |
+| 11. Resilience | 7 | E | 🟡 4/7 + 1 partial |
+| 12. Accessibility | 7 | E | ✅ 7/7 |
+| 13-19. Backend gaps | 21 | D | ✅ 21/21 |
+| 20-21. Contract | 5 | C | ✅ 5/5 |
+| **Total** | **149** | | **145 covered, 1 partial, 3 uncovered** |
+
+**Uncovered, with reasons in `05-results.md`:** 3.17 (no channel with undated
+episodes exists to render an empty grid), 11.1 and 11.2 (`/status` is a Server
+Component, so `page.route()` cannot intercept its health fetch - a test that
+tries passes vacuously). 11.7 is partial (a real `next build` cannot run inside
+the E2E suite; the `force-dynamic` export is asserted at source level instead).
 
 > Section 4 counts 43 because two rows are ranges (`4.4-4.8` and `4.23-4.27` are 5 cases
 > each). If you add rows, update this table so the total stays honest.

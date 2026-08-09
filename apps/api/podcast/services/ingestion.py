@@ -10,6 +10,7 @@ Idempotency is the contract: every write is `update_or_create` keyed on the exte
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -57,16 +58,73 @@ def upsert_channel(payload: ChannelPayload) -> Channel:
     if not payload.youtube_channel_id:
         raise ValueError("Channel payload has no youtube_channel_id")
 
+    defaults = {
+        "name": payload.name or payload.handle or payload.youtube_channel_id,
+        "handle": payload.handle,
+        "description": payload.description,
+    }
+
+    # 🚨 Only write images/subscribers when we actually got them. A throttled or
+    # partial response yields empty strings, and blanking a good avatar because one
+    # sync came back thin is exactly the failure the 2026-08-09 backfill taught us
+    # to design against. Absent means "unknown", never "clear it".
+    if payload.avatar_url:
+        defaults["avatar_url"] = payload.avatar_url
+    if payload.banner_url:
+        defaults["banner_url"] = payload.banner_url
+    if payload.subscriber_count is not None:
+        defaults["subscriber_count"] = payload.subscriber_count
+
     channel, created = Channel.objects.update_or_create(
-        youtube_channel_id=payload.youtube_channel_id,
-        defaults={
-            "name": payload.name or payload.handle or payload.youtube_channel_id,
-            "handle": payload.handle,
-            "description": payload.description,
-        },
+        youtube_channel_id=payload.youtube_channel_id, defaults=defaults
     )
     logger.info("%s channel %s", "Created" if created else "Updated", channel.name)
     return channel
+
+
+def refresh_channel_metadata(target: str) -> Channel:
+    """Update one channel's name, avatar, banner and subscriber count. No episodes.
+
+    Costs a single flat listing request (`playlistend=1`), so it is cheap enough to run
+    often - unlike `backfill_channel`, which re-extracts every video.
+
+    Use it to populate avatars for channels that were ingested before avatar support
+    existed, and to refresh an avatar after a channel changes its picture (the URL is
+    an opaque hash, so a changed picture means a changed URL - see
+    ingestion/channel_images.py).
+    """
+    from podcast.ingestion.channel_images import avatar_url as pick_avatar_url
+    from podcast.ingestion.channel_images import banner_url as pick_banner_url
+    from podcast.ingestion.yt_dlp_backfill import (
+        IngestionError,
+        fetch_tab_entries,
+        normalize_channel_target,
+    )
+
+    base_url = normalize_channel_target(target)
+    meta, _ = fetch_tab_entries(base_url, "videos", 1)
+    if not meta:
+        raise IngestionError(f"No channel metadata returned for {base_url}")
+
+    handle = ""
+    match = re.search(r"@([\w.-]+)", meta.get("uploader_url") or base_url)
+    if match:
+        handle = f"@{match.group(1)}"
+
+    thumbnails = meta.get("thumbnails") or []
+    payload = ChannelPayload(
+        youtube_channel_id=(
+            meta.get("channel_id") or meta.get("uploader_id") or meta.get("id") or ""
+        ),
+        name=meta.get("channel") or meta.get("uploader") or meta.get("title") or handle,
+        handle=handle,
+        channel_url=meta.get("channel_url") or base_url,
+        description=meta.get("description") or "",
+        avatar_url=pick_avatar_url(thumbnails),
+        banner_url=pick_banner_url(thumbnails),
+        subscriber_count=meta.get("channel_follower_count"),
+    )
+    return upsert_channel(payload)
 
 
 @transaction.atomic

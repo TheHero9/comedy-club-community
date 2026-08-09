@@ -64,6 +64,23 @@ class GridCell:
     count: int
 
 
+# 🚨 Every column here is multiplied by the episode count. A decade of a
+# near-daily podcast is 1,300+ cells, so the grid loads ONLY the columns it
+# actually charts. Without this, `description` (unbounded text) is fetched for
+# every episode and then thrown away.
+_GRID_COLUMNS = (
+    "youtube_id",
+    "title",
+    "upload_date",
+    "content_kind",
+    "members_only",
+    "public_score",
+    "rating_count",
+    "elite_score",
+    "elite_rating_count",
+)
+
+
 def _cell(episode: Episode, score_kind: str) -> dict:
     if score_kind == "elite":
         score, count = episode.elite_score, episode.elite_rating_count
@@ -71,13 +88,16 @@ def _cell(episode: Episode, score_kind: str) -> dict:
         score, count = episode.public_score, episode.rating_count
 
     band = score_band(score)
+    # 🚨 Deliberately LEAN. Anything a hover card or a detail view wants
+    # (description, duration, upload date, thumbnail) is one request to
+    # /api/episodes/{youtube_id} away, and is NOT worth multiplying by 1,300.
+    # `thumbnail_url` in particular is derived from `youtube_id` (project rule:
+    # store the video id, build the CDN URL at render time), so shipping it per
+    # cell was pure duplication. `slug` was never read by any consumer - the
+    # episode route is keyed on `youtube_id`.
     return {
         "youtube_id": episode.youtube_id,
-        "slug": episode.slug,
         "title": episode.title,
-        "upload_date": episode.upload_date,
-        "duration_sec": episode.duration_sec,
-        "thumbnail_url": episode.thumbnail_url,
         "content_kind": episode.content_kind,
         "members_only": episode.members_only,
         # One decimal, IMDb style. Banding uses the FULL precision above, so a
@@ -103,6 +123,7 @@ def build_grid(channel, *, score_kind: str = "public") -> dict:
     episodes = list(
         Episode.objects.filter(channel=channel)
         .exclude(upload_date=None)
+        .only(*_GRID_COLUMNS)
         .order_by("upload_date", "id")
     )
 

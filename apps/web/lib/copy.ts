@@ -21,6 +21,10 @@ export const copy = {
   },
 
   nav: {
+    // Accessible name for the logo link. The wordmark beside the icon is hidden
+    // under the `sm` breakpoint, and the icon is decorative, so without this the
+    // link is focusable with nothing to announce on a phone.
+    homeLink: "Comedy Club Community - home",
     home: "Home",
     channels: "Channels",
     episodes: "Episodes",
@@ -126,12 +130,19 @@ export const copy = {
     spoiler: "Spoiler - tap to reveal",
     description: "Description",
     noDescription: "This episode has no description.",
+    /**
+     * Compact elite-score chip on an episode card. It carries its own label
+     * because the card has no room for an icon: a lucide SVG costs ~620 bytes
+     * of inline markup per card, and 24 cards make that the page's problem.
+     */
+    eliteChip: (score: string) => `Elite ${score}`,
   },
 
   channels: {
     title: "Channels",
     subtitle: "Every podcast channel tracked here.",
     episodeCount: (n: number) => (n === 1 ? "1 episode" : `${n} episodes`),
+    channelCount: (n: number) => (n === 1 ? "1 channel" : `${n} channels`),
     browseAll: "Browse all episodes",
   },
 
@@ -150,6 +161,15 @@ export const copy = {
     filterStreams: "Streams",
     filterMembers: "Members only",
     showing: (shown: number, total: number) => `Showing ${shown} of ${total}`,
+    showingRange: (from: number, to: number, total: number) =>
+      `Showing ${from} to ${to} of ${total}`,
+  },
+
+  pagination: {
+    label: "Pagination",
+    previous: "Previous",
+    next: "Next",
+    pageOf: (page: number, pages: number) => `Page ${page} of ${pages}`,
   },
 
   search: {

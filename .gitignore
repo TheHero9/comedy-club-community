@@ -40,6 +40,12 @@ dist/
 # the Django server running. Refresh it with `npm run generate:types`.
 apps/api/openapi.json
 
+# ---- Test artifacts ----
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
 # ---- Editors / OS ----
 .vscode/
 .idea/

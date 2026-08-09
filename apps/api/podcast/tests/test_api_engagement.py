@@ -194,9 +194,18 @@ def test_membership_response_never_exposes_the_screenshot_url(
     membership.verification_screenshot = "verifications/proof.png"
     membership.save()
 
-    body = client.get(f"{BASE}/me/memberships", **as_alice).content.decode()
-    assert "proof.png" not in body
-    assert '"has_screenshot": true' in body.lower().replace(" ", " ")
+    response = client.get(f"{BASE}/me/memberships", **as_alice)
+
+    # The security assertion: the storage path never crosses the wire.
+    assert "proof.png" not in response.content.decode()
+
+    # The contract assertion, made against PARSED json rather than formatted
+    # text. Asserting on `'"has_screenshot": true'` coupled this test to the
+    # renderer's whitespace, so it broke when the API switched to compact
+    # separators - a formatting change with no security meaning.
+    memberships = response.json()
+    assert memberships, "the fixture must return a membership to assert against"
+    assert memberships[0]["has_screenshot"] is True
 
 
 def test_removing_a_verified_membership_recomputes_elite_scores(

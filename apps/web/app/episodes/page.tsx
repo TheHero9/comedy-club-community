@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { EpisodeGrid } from "@/components/episode/EpisodeCard";
+import { Pagination } from "@/components/shared/Pagination";
 import { listEpisodes } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
 import { cn } from "@/lib/utils";
@@ -74,15 +75,20 @@ export default async function EpisodesPage({ searchParams }: PageProps<"/episode
     offset,
   });
 
-  const shown = Math.min(offset + data.items.length, data.meta.total);
+  const total = data.meta.total;
+  const shown = data.items.length;
+  // "Showing 25 to 48 of 1392" only says something once there is more than one
+  // page. A single page, or an offset past the end, reads better as a count.
+  const summary =
+    shown > 0 && total > PAGE_SIZE
+      ? copy.episodes.showingRange(offset + 1, offset + shown, total)
+      : copy.episodes.showing(shown, total);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">{copy.episodes.title}</h1>
-        <p className="mt-1 text-muted-foreground">
-          {copy.episodes.showing(shown, data.meta.total)}
-        </p>
+        <p className="mt-1 text-muted-foreground">{summary}</p>
       </div>
 
       {/* Filters are plain links so every combination is a shareable, indexable URL. */}
@@ -135,22 +141,18 @@ export default async function EpisodesPage({ searchParams }: PageProps<"/episode
       {data.items.length === 0 ? (
         <p className="py-12 text-center text-muted-foreground">{copy.episodes.empty}</p>
       ) : (
-        <EpisodeGrid episodes={data.items} />
+        // The grid starts just below the h1 and the filter row, so the first
+        // row of thumbnails is above the fold on every viewport.
+        <EpisodeGrid episodes={data.items} eagerCount={4} />
       )}
 
-      {data.meta.has_more ? (
-        <div className="flex justify-center pt-4">
-          <Link
-            href={`/episodes?${new URLSearchParams({
-              ...active,
-              offset: String(offset + PAGE_SIZE),
-            }).toString()}`}
-            className="rounded-md border px-6 py-2 text-sm transition-colors hover:border-ring"
-          >
-            {copy.episodes.loadMore}
-          </Link>
-        </div>
-      ) : null}
+      <Pagination
+        basePath="/episodes"
+        params={active}
+        offset={offset}
+        limit={PAGE_SIZE}
+        total={total}
+      />
     </div>
   );
 }

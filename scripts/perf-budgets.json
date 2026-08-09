@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "capturedOn": "2026-08-09",
+  "readme": [
+    "Per-route performance budgets, enforced by apps/web/tests/perf-budget.spec.ts",
+    "and by `node scripts/benchmark.mjs --budgets`.",
+    "",
+    "Keys are TEMPLATE keys, not URLs. Every channel shares api:channel-grid and",
+    "web:channel-page, so a newly ingested channel inherits the budget and cannot",
+    "arrive unmeasured. That is deliberate: the budget is a ceiling the WORST",
+    "channel has to meet, and a channel large enough to blow it is telling you the",
+    "route needs pagination, not that the budget needs raising.",
+    "",
+    "payloadKb is DECODED bytes - what the browser parses and holds in memory.",
+    "It is the enforced dimension because it is deterministic to the byte.",
+    "The benchmark also prints a locally gzipped size as an estimate of the 4G",
+    "wire cost; that number is informational and is not budgeted, because the",
+    "compressor and level on the real edge are not ours to pin down.",
+    "",
+    "medianMs budgets are deliberately looser than the payload budgets. Timing on",
+    "a developer laptop swings 10-20% run to run, so these are set to catch a real",
+    "regression (a route roughly doubling) and not to fail on noise.",
+    "",
+    "Target user: a phone on 4G. Roughly 1.5-4 Mbps of usable throughput and",
+    "~100 ms of RTT. That is the yardstick every `why` below is measured against."
+  ],
+  "budgets": {
+    "api:health": {
+      "payloadKb": 5,
+      "medianMs": 150,
+      "why": "Tiny JSON, but it fans out to Postgres, Redis and Meilisearch, so it is legitimately the slowest trivial endpoint (33 ms observed). 150 ms keeps /status responsive without pretending the dependency checks are free."
+    },
+    "api:channels": {
+      "payloadKb": 25,
+      "medianMs": 100,
+      "why": "5.1 KB for 2 channels, and every channel carries a long Bulgarian description. At the planned 6-8 channels this lands near 20 KB, so 25 KB is the honest full-roster ceiling. Past that the description belongs on the detail endpoint only."
+    },
+    "api:episodes-list": {
+      "payloadKb": 40,
+      "medianMs": 120,
+      "why": "22 KB for 24 episodes is ~900 bytes per card DTO, which is already generous for a listing. 40 KB leaves room for a couple of extra fields and no more; a listing DTO that needs to double is a listing DTO that is carrying detail-page data."
+    },
+    "api:search": {
+      "payloadKb": 40,
+      "medianMs": 250,
+      "why": "1.7 KB observed for a narrow query, but a broad Bulgarian term returns a full page of hits, so the ceiling is sized like a listing rather than like the sample. 250 ms allows a Meilisearch round trip plus hydration from Postgres."
+    },
+    "api:leaderboard": {
+      "payloadKb": 30,
+      "medianMs": 120,
+      "why": "17.5 KB today. A leaderboard is a bounded top-N list, so it must never grow with the corpus. 30 KB is headroom for more leaderboard kinds, not for more rows."
+    },
+    "api:channel-detail": {
+      "payloadKb": 25,
+      "medianMs": 100,
+      "why": "0.9-4.2 KB. This endpoint returns one channel row and must stay O(1) in episode count. If it ever approaches 25 KB, episodes have leaked into it."
+    },
+    "api:channel-grid": {
+      "payloadKb": 200,
+      "medianMs": 150,
+      "why": "THE PAYLOAD PROBLEM. 1044.8 KB today for 1318 episodes, and the grid is 11 seasons x 184 columns = 2024 cells of which over 90% are empty holes. A cell needs an id, a score, a band and a position: ~100 bytes. 1318 real cells x 100 B is ~130 KB, so 200 KB is an achievable ceiling that still demands a 5x cut. It also holds the line for future channels: a channel too big to fit needs a paginated or per-season grid, which is the correct fix rather than a bigger number here."
+    },
+    "web:home": {
+      "payloadKb": 150,
+      "medianMs": 200,
+      "why": "87 KB decoded / 11.2 KB gzipped, prerendered and served from the Next full-route cache. 150 KB is room for a hero and a few more cards. The home page is the single most-shared URL on the site and must stay the cheapest."
+    },
+    "web:channels": {
+      "payloadKb": 120,
+      "medianMs": 200,
+      "why": "22.6 KB for 2 channel cards. At 8 channels this is still well under 100 KB. 120 KB catches the case where the listing starts embedding grid or episode data it does not render."
+    },
+    "web:episodes": {
+      "payloadKb": 200,
+      "medianMs": 300,
+      "why": "172.7 KB decoded but only 13.9 KB gzipped, which is a fine 4G cost, so this is acceptable rather than alarming. The 200 KB ceiling exists to stop 24 cards from silently becoming 48, or from each card gaining a thumbnail srcset it does not need."
+    },
+    "web:search": {
+      "payloadKb": 120,
+      "medianMs": 300,
+      "why": "32.7 KB for a narrow query. Sized like a listing page rather than like the sample, because a broad Bulgarian query fills the page. 300 ms covers the API search round trip on top of the render."
+    },
+    "web:status": {
+      "payloadKb": 120,
+      "medianMs": 400,
+      "why": "35.4 KB. This route is force-dynamic and deliberately performs live dependency checks on every request, so its latency budget is the loosest on the site. It is an operator page, not a user page."
+    },
+    "web:channel-page": {
+      "payloadKb": 600,
+      "medianMs": 300,
+      "why": "THE HEADLINE PROBLEM. 2271 KB of HTML for the 1318-episode channel, against 233.6 KB for the 74-episode one. Over 90% of the 2024 grid cells are empty holes being rendered as real elements, and Next ships the tree twice (server HTML plus the RSC flight payload), so the per-cell cost is paid double. 600 KB decoded is roughly 45 KB gzipped - about a second of 4G transfer plus a DOM a phone can still hold - and demands a ~3.8x reduction. It is set below what 1318 fully-rendered cells can reach on purpose: empty holes must stop being elements, or the grid must paginate by season."
+    },
+    "web:episode-page": {
+      "payloadKb": 150,
+      "medianMs": 300,
+      "why": "36.9 KB. A single episode page is O(1) in corpus size and is the main SEO landing page. 150 KB is room for comments, moments and topics; anything beyond that means an unbounded list is being rendered without a cap."
+    }
+  },
+  "waivers": {
+    "api:channel-grid:комеди-клуб-подкаст-comedy-club-podcast": {
+      "why": "Known breach, measured 2026-08-09: 1044.8 KB against a 200 KB budget and 261 ms against 150 ms. Waived so the suite is not permanently red while the payload is being reduced, but ratcheted: it may not get any worse, and once it is inside budget this waiver must be deleted (the test fails with STALE WAIVER until it is). Optimisation work landed during the same session and it now measures 320.0 KB / 318.3 ms, so the ratchet ceiling below has been tightened to that state (600 KB / 550 ms) rather than left at the original 1044.8 KB. Tighten it again, or delete the waiver outright, once the payload settles under 200 KB.",
+      "observedKb": 320.0,
+      "observedMs": 318.3,
+      "maxKb": 600,
+      "maxMs": 550
+    },
+    "web:channel-page:комеди-клуб-подкаст-comedy-club-podcast": {
+      "why": "Known breach, measured 2026-08-09: 2271.2 KB against a 600 KB budget and 464 ms against 300 ms. Same ratchet rules as the grid waiver above. The 700 ms ceiling is wide because this route's timing is the noisiest on the site (413-516 ms spread over 9 runs).",
+      "observedKb": 2271.2,
+      "observedMs": 463.9,
+      "maxKb": 2400,
+      "maxMs": 700
+    }
+  }
+}

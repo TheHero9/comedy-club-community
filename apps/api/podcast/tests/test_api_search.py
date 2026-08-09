@@ -4,6 +4,7 @@ These tests never touch a live Meilisearch - `_meilisearch_available` is patched
 The search module's own behaviour is covered in test_search.py.
 """
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -201,8 +202,19 @@ def test_search_never_matches_a_private_personal_tag(
     PersonalTag.objects.create(user=alice, episode=episode, text="таенетикет")
 
     response = client.get(f"{BASE}/search?q=таенетикет")
-    assert response.json()["total"] == 0
-    assert "таенетикет" not in response.content.decode()
+    payload = response.json()
+    assert payload["total"] == 0
+    assert payload["hits"] == []
+
+    # The tag must not appear ANYWHERE except the query echo, which is just the
+    # caller's own input handed back and reveals nothing they did not send.
+    #
+    # This used to assert against the raw body. That was weaker than it looked:
+    # the API escaped Cyrillic as \uXXXX, so a raw substring check for Bulgarian
+    # text could never match and the assertion was vacuously true. The API now
+    # emits real UTF-8, so this check finally bites.
+    payload.pop("query")
+    assert "таенетикет" not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_search_does_not_match_hidden_comment_text(client, episode, alice, no_meilisearch):

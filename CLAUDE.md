@@ -191,6 +191,10 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
   - `https://img.youtube.com/vi/{VIDEO_ID}/maxresdefault.jpg` (1280x720, best)
   - `https://img.youtube.com/vi/{VIDEO_ID}/hqdefault.jpg` (480x360, **guaranteed** present)
   - Try `maxresdefault` with a `HEAD` request, fall back to `hqdefault`. **Store the video id, derive the URL at render time.** ❌ **Do NOT mirror thumbnails to R2.** Google's CDN serves them free and forever; mirroring adds cost, a sync job, and staleness for zero gain. (74/74 had `maxresdefault` on the test channel.)
+- 🚨 **Channel avatars/banners are the ONE image whose URL we store** - and it looks like it contradicts the thumbnail rule above, so know why. A thumbnail is *derivable* (`img.youtube.com/vi/{video_id}/...`), so we store the id. An avatar sits at an **opaque content hash** on `yt3.googleusercontent.com` that nothing in the channel id, handle or name predicts, so the URL itself is the data. Still ❌ **never mirrored to R2** - Google's CDN serves it.
+  - ✅ Size is a suffix after `=` and is re-derived, not trusted: `=s480-c-k-c0x00ffffff-no-rj` (81 KB) for avatars, `=w1707-no-rj` for banners. Verified live 2026-08-09.
+  - ⚠️ **The hash changes when the owner changes their picture**, so a stored URL can start 404ing. `manage.py refresh_channel_meta` re-fetches it in one cheap request per channel. The UI must always keep a fallback - `components/shared/ChannelAvatar.tsx` layers a `Mic` icon *behind* the image so both "no URL" and "URL stopped resolving" degrade without client JS.
+  - ✅ `upsert_channel` only writes avatar/banner/subscribers **when present**. An absent value means "unknown", never "clear it" - same lesson as the throttle incident below.
 - ⚠️ **Do NOT build `Chapter` ingestion assuming chapters arrive.** The probe found **0 of 12** episodes with `chapters`, and descriptions averaged **118 chars** (min 0). Populate `Chapter` opportunistically when present. Community `Moment` labels are the **primary** timestamp source. This is the strongest argument for the community-labelling model: there is no creator-supplied structure to lean on.
 - ⚠️ **`view_count` is missing on members-only videos.** Never assume it is present. Nullable, and excluded from "most-watched" sorting when null.
 - ✅ **yt-dlp for the one-time bulk backfill.** ~0.56s per episode with 8 parallel workers, so ~1,000 episodes ≈ **10 minutes**. Cheap enough to run in one foreground pass. Keep it resumable anyway via `update_or_create(youtube_id=...)`.
@@ -198,6 +202,12 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 - ✅ The flat channel listing is nearly free but returns **no upload date** (`timestamp` is null on flat entries). Dates require one full extraction per video. Budget accordingly.
 - ✅ Sync is a **management command** with the actual work in a reusable service function, so Celery Beat and the CLI share one code path.
 - ✅ Every sync run must be **idempotent and resumable**. Rate-limit, back off, and log per-video failures without aborting the run (see `build_one` error handling in the probe tool).
+- 🚨 **A large backfill gets soft-blocked partway through, and yt-dlp DOES NOT ERROR.** Discovered on the 1,318-episode `@comedyclubpodcast` run (2026-08-09). At 8 workers YouTube starts serving a **reduced** metadata payload. Title, description, `upload_date` and id still arrive, so the run finishes reporting **"1318 created, 0 errors"** and looks perfect. What silently vanishes is everything derived from the player response: **`duration`, `availability`, `view_count`, `like_count`**. 1,036 of 1,318 rows came back degraded.
+  - 🚨 **The dangerous part is `availability`.** `shape_video` coerces a missing value to `"public"`, so a members-only episode caught by the block is stored as **confidently public**. Missing duration is visibly wrong; a wrong paywall flag is not.
+  - 🔍 **Detection: `duration_sec IS NULL` is the marker of a degraded row.** A full response always carries a duration. Proven directly - `vawEZWFo4BA` returned `duration=10246` during the run and `None` on a re-fetch minutes later. Same video, same code, different IP reputation.
+  - ✅ **Always run `manage.py repair_metadata --probe 10` after any backfill over ~100 episodes.** It re-fetches degraded rows serially with a delay, and **only writes from a full response**, so running it while still blocked changes nothing rather than overwriting good data with nulls. It aborts after 25 consecutive degraded responses instead of wasting an hour.
+  - ⏳ **The block lasts hours, not minutes.** Probing 8 videos serially right after the run recovered **0/8**. There is no "retry harder" here - only wait.
+  - ❌ **Never judge a backfill by its error count.** `0 errors` means nothing survived an exception; it does not mean the data is complete. Check `duration_sec IS NULL` instead.
 - ⚠️ yt-dlp is scraping and **will** break on YouTube changes. It already warns about the missing JavaScript runtime (only needed for format decipher, which we never request). Never make the daily sync depend on it.
 - ⚠️ **Findings come from ONE channel.** Chapter availability, description quality and shorts/streams ratios will differ. **Re-probe each new channel** with `tools/youtube-metadata/fetch_video.py` before assuming its shape.
 
@@ -205,8 +215,22 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 
 | Handle | Channel ID | Episodes | Status |
 | ------ | ---------- | -------- | ------ |
-| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 72 videos + 2 streams | ✅ Probed 2026-08-08 |
-| _(5-7 more TBD)_ | | | ⏳ Awaiting list |
+| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 74 (72 videos + 2 streams) | ✅ Ingested 2026-08-08, metadata complete |
+| `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Ingested 2026-08-09, metadata complete after `repair_metadata` |
+| _(4-6 more TBD)_ | | | ⏳ Awaiting list |
+
+⚠️ **`@comedyclubpodcast` alone is 1,318 episodes** - the brief's "~1,000 across all channels"
+estimate is wrong by an order of magnitude. Budget search, sync quota and page size for
+**5,000-10,000+** episodes, not 1,000. 27 shorts on that channel were correctly excluded.
+
+### Performance (measured 2026-08-09, see `specs/05-performance/`)
+
+- 🇧🇬 **The API renders JSON with `ensure_ascii=False`** via `CompactUnicodeJSONRenderer` in `config/api.py`. Django-Ninja's default escapes every Cyrillic character to a 6-byte `\uXXXX`, which inflated the channel grid by **406 KB on one response**. Never revert to the default renderer on this project.
+- ✅ **`GZipMiddleware` is enabled.** Bulgarian JSON compresses ~90%. The BREACH assessment is recorded in `settings/base.py`; re-evaluate it if any endpoint ever returns a token in its body.
+- 🚨 **`Index(fields=["-col"])` compiles to `DESC NULLS FIRST`, but the list endpoints sort `DESC NULLS LAST`.** Postgres cannot use one for the other, so a naive descending index is **dead** (`idx_scan = 0`). Sort indexes must be expression indexes matching the actual ordering. Verify with `EXPLAIN ANALYZE` before adding one.
+- ⚠️ **Calling `.select_related()` on a related manager inside a loop builds a NEW queryset and silently bypasses the prefetch cache.** This caused a 102-query N+1 in the search fallback. Use `.all()` on a prefetched relation.
+- ✅ **Run `npm run benchmark`** before and after anything touching a list, the grid, or a serializer. Budgets live in `scripts/perf-budgets.json` and are enforced by `apps/web/tests/perf-budget.spec.ts`.
+- ⚠️ A waived budget is a **ratchet**: it fails if the route regresses AND fails with `STALE WAIVER` once the route comes back inside budget, so the waiver must then be deleted.
 
 ### Search
 
@@ -226,7 +250,7 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 
 ### Security
 
-- 🔒 Rate-limit every write endpoint (ratings, comments, topics, moments, reports). ~1k users can still spam.
+- 🔒 **Rate limiting is IMPLEMENTED** (2026-08-08): `podcast/api/throttling.py` attaches one `WriteThrottle` to the whole `NinjaAPI` in `config/api.py`, so a new write endpoint cannot ship unthrottled by omission. Keyed on `request.auth` (never a client-supplied id), safe methods exempt, **fails open** on a cache outage so a Redis blip cannot make the site read-only. Tune with `API_WRITE_RATE_LIMIT` (default `60/min`); `""` disables it and is local-debug only.
 - 🔒 Comments, topic labels, and moment labels are **user input rendered publicly**. Escape on output, never `dangerouslySetInnerHTML` them.
 - 🔒 Never trust a client-supplied `user_id`. Derive the actor from the verified token, always.
 - 🔒 `.env` files are never committed. `.env.example` is.
@@ -384,7 +408,30 @@ UnicodeEncodeError: 'charmap' codec can't encode characters in position 0-8
 
 `next dev` auto-falls-forward to **3001** because another project holds 3000. Always read the actual port out of the dev-server output instead of assuming 3000 - probing 3000 hits a **different app** and returns a confusing 200 with none of your content.
 
-### 4. 🚨 NEVER test a Cyrillic endpoint with `curl` from Git Bash
+### 4. 🚨 `next dev` needs a bigger heap, or the big channel page KILLS it
+
+Rendering `/channels/комеди-клуб-подкаст-comedy-club-podcast` (1,318 episodes, ~2,024 grid cells) exhausts the default Node heap in **dev mode only**. The render worker dies with:
+
+```
+Jest worker encountered 2 child process exceptions, exceeding retry limit
+```
+
+and then the **whole dev server stops answering** - every subsequent request fails to connect, including pages that have nothing to do with the grid. It looks like a bug in whatever page you load next.
+
+- ✅ `apps/web`'s `dev` script sets `NODE_OPTIONS=--max-old-space-size=4096` via `cross-env`. Do not remove it.
+- ✅ Verified: default heap dies on render 1; 4 GB heap survives 4 consecutive renders.
+- ℹ️ **Production is unaffected** - `next start` serves the same page in ~360 ms. This is dev-mode overhead (source maps, the RSC debug channel), not a production problem.
+- 🚧 The real fix is reducing the page, not raising the ceiling. See `specs/05-performance/03-optimization-results.md`.
+
+### 5. 🐌 `localhost:8000` stalls ~2.1s per request - use `127.0.0.1`
+
+Django's `runserver` binds **IPv4 only**, but `localhost` resolves to `::1` first on this machine. Clients that do not implement Happy Eyeballs wait for the IPv6 connection to fail before retrying IPv4.
+
+- Node's `fetch` is unaffected (it races both), so Next.js and any node script look fine.
+- **Python's `http.client` and Playwright's request context are NOT** - the e2e suite fails with `ECONNREFUSED ::1:8000` until you pass `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`.
+- ✅ Prefer `http://127.0.0.1:8000` everywhere. A "slow API" on this box is usually this, not the query.
+
+### 6. 🚨 NEVER test a Cyrillic endpoint with `curl` from Git Bash
 
 Git Bash mangles non-ASCII **command-line arguments** before the native `curl.exe` ever receives them. Cyrillic is not representable in the ANSI codepage, so every letter becomes `?`:
 
@@ -419,6 +466,9 @@ uv run python manage.py makemigrations    # NEVER hand-write migrations
 uv run celery -A config worker -l info
 uv run celery -A config beat -l info
 uv run python manage.py backfill_channel <youtube_channel_id>   # yt-dlp bulk
+uv run python manage.py repair_metadata --probe 10               # 🚨 ALWAYS after a big backfill
+uv run python manage.py repair_metadata --channel @handle        # re-fetch degraded rows
+uv run python manage.py refresh_channel_meta                     # avatars, banners, sub counts
 uv run python manage.py sync_channels                            # Data API daily
 uv run python manage.py reindex                                  # rebuild Meilisearch
 uv run pytest
@@ -502,6 +552,59 @@ YYYYMMDD-feature-name        e.g. 20260808-p1-ingestion
 // 2. Internal alias (@/components, @/lib)
 // 3. Relative (./helpers)
 ```
+
+---
+
+## 🧪 Testing
+
+**666 automated tests. Run them all with `npm run test` from the repo root.**
+
+```bash
+npm run test                 # everything: Vitest + Playwright + pytest
+npm run test:web             # turbo test -> Vitest then Playwright
+npm run test:api             # pytest only
+
+cd apps/web && npx vitest run           # 117 unit + contract tests
+cd apps/web && npx playwright test      # 232 E2E (116 x desktop + mobile)
+cd apps/web && npx playwright test --ui # debug interactively
+cd apps/api && uv run pytest -q         # 317 backend tests
+```
+
+| Layer | Tool | Location |
+| ----- | ---- | -------- |
+| Frontend E2E | **Playwright** (Chromium only) | `apps/web/e2e/` |
+| Frontend unit | **Vitest** (node env, no jsdom) | `apps/web/tests/` |
+| Backend | **pytest + pytest-django** | `apps/api/podcast/tests/` |
+| A11y | **`@axe-core/playwright`** | `apps/web/e2e/a11y.spec.ts` |
+
+❌ **Never** add Jest, Cypress, Selenium, Enzyme, or a React component renderer. Server Components are covered by Playwright against a real server.
+
+### 🚨 Never weaken a test to make it pass
+
+If a test fails, **fix the app**. A test that was loosened to go green is worse than no test, because it reports safety that does not exist. Specifically banned:
+
+- ❌ `test.skip` / `pytest.mark.skip` to dodge a failure
+- ❌ `try/catch` that swallows an assertion
+- ❌ `expect(true).toBe(true)` or `expect(x).toBeGreaterThanOrEqual(0)` as filler
+- ❌ Widening the console allow-list in `e2e/fixtures.ts` to silence a real error
+- ❌ Adding an entry to `KNOWN_HARDCODED_STRINGS` instead of moving the string into `lib/copy.ts`
+
+If a row genuinely cannot be covered, leave it **uncovered with a written reason**. An honest gap beats a green test that proves nothing.
+
+### Rules that keep the suite honest
+
+- ✅ **Import `test`/`expect` from `e2e/fixtures`, never from `@playwright/test`.** The fixture wires the console-error guard; importing directly bypasses it silently.
+- ✅ **Assert against the live API response, never a hardcoded score or count.** Ratings change. The invariant is "the UI matches the API".
+- ✅ **Guard every loop with a fixture check** (`expect(found).toBeGreaterThan(0)`), so a test cannot pass by iterating over nothing.
+- ✅ **Prove a `page.route` interception actually fired** with a hit counter. `/status` renders in a **Server Component**, so its health fetch never crosses the browser and `page.route` cannot see it - a test that intercepts it passes vacuously.
+- ✅ E2E runs at **both** 1280x800 and 390x844. Most of this audience is on a phone.
+- 🇧🇬 **Never issue a Cyrillic query through a shell.** Build it with `URLSearchParams` inside the test. See the Git Bash gotcha above.
+
+### Why E2E exists at all
+
+Three bugs shipped during the initial build and **all three passed `typecheck`, `lint` AND `build`**: a root `loading.tsx` that turned every `notFound()` into a soft 404, an `Error` instance in the RSC render tree that hung the request for 60s, and `subsets: ["latin"]` that silently dropped Cyrillic to a fallback font. Static gates cannot see any of them. Each now has a named regression test.
+
+Full spec: [`specs/02-test-hardening/`](specs/02-test-hardening/05-results.md).
 
 ---
 

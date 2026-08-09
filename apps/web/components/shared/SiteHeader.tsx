@@ -15,6 +15,10 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
         <Link
           href="/"
+          // The wordmark below is hidden under `sm` and the icon is decorative,
+          // so on a phone this link would otherwise be focusable with no
+          // accessible name at all. axe flags it as `link-name` (serious).
+          aria-label={copy.nav.homeLink}
           className="flex shrink-0 items-center gap-2 font-semibold tracking-tight"
         >
           <Mic className="h-5 w-5" aria-hidden />

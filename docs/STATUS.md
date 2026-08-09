@@ -1,7 +1,7 @@
 # 📊 STATUS
 
 **Updated:** 2026-08-08
-**Overall:** 🟢 **Waves 1-13 built.** 39 API endpoints, 208 backend tests, and a live Next.js frontend with the IMDb-style ratings grid.
+**Overall:** 🟢 **Waves 1-13 built and test-hardened.** 39 API paths / 48 operations, a live Next.js frontend with the IMDb-style ratings grid, and **712 automated tests** (339 pytest + 137 Vitest + 236 Playwright) that all run from `npm run test`.
 
 > Wave definitions live in [`specs/01-initial-build/01-waves.md`](../specs/01-initial-build/01-waves.md).
 
@@ -31,30 +31,56 @@ Legend: ⬜ not started · 🔵 in progress · 🟡 partial/blocked · ✅ done
 
 ## ✅ Verification evidence
 
-Everything below was **run**, not assumed.
+**Every claim below is a committed, re-runnable test.** Run them all with
+`npm run test` from the repo root.
+
+Before 2026-08-08 this section listed manual, throwaway checks. They were real
+checks, but nothing in the repo could repeat them, so the next change silently
+un-verified the app. `specs/02-test-hardening/` replaced them with automated
+suites; the counts here come from actual runs.
+
+### Automated suites
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Backend | `cd apps/api && uv run pytest -q` | **339 passed** |
+| Frontend unit + contract | `cd apps/web && npx vitest run` | **137 passed** |
+| Frontend E2E | `cd apps/web && npx playwright test` | **236 passed** (118 tests x desktop 1280x800 + mobile 390x844) |
+| Everything, cold start | `npm run test` | **712 passed** |
+| Performance | `npm run benchmark` | See `specs/05-performance/` |
+| Static gates | `npx turbo typecheck lint build` | **4/4 successful** |
+| Python lint | `cd apps/api && uv run ruff check .` | All checks passed |
+
+### What the suites actually pin down
+
+| Area | Guarded by |
+|------|-----------|
+| 7 routes render with live data | `e2e/public-browse.spec.ts` |
+| Dead channel + episode URLs return a **hard 404** | `e2e/status-codes.spec.ts`, incl. a structural guard that no `app/loading.tsx` exists |
+| Ratings grid matches the API cell for cell | `e2e/ratings-grid.spec.ts` - walks every cell, pins identity by `href` + `aria-label` |
+| Bulgarian search, incl. typo tolerance and mojibake | `e2e/search.spec.ts` |
+| Typed client: every status, timeout, abort, parse, verb, Cyrillic round trip | `tests/api-client.spec.ts` |
+| Score bands agree with `podcast/services/grid.py` | `tests/score-bands.spec.ts` - parses the Python thresholds |
+| No hardcoded UI strings, no em-dash, no emoji in JSX | `tests/copy.spec.ts` (exact-match ratchet, currently empty) |
+| Committed `generated.ts` matches live OpenAPI | `tests/contract.spec.ts` + `scripts/check-api-types-drift.mjs` |
+| Dark theme on first paint, Geist loaded **with Cyrillic coverage** | `e2e/invisible-failures.spec.ts` |
+| No unexpected browser console errors on any route | `e2e/fixtures.ts` console guard, on by default |
+| No horizontal page overflow at 390px | `e2e/invisible-failures.spec.ts` |
+| Recheck-button toasts: healthy / degraded / unreachable / slow | `e2e/resilience.spec.ts` |
+| axe: zero critical or serious violations, 7 routes x 2 viewports | `e2e/a11y.spec.ts` |
+| Auth rejection, role matrix, rate limits, privacy, elite scoring | `podcast/tests/test_authz_matrix.py`, `test_rate_limits.py`, `test_privacy.py`, `test_scoring_elite.py` |
+
+### Still verified manually (infrastructure, not app logic)
 
 | Check | Result |
 |-------|--------|
-| `pytest` | **208 passed** |
-| `ruff check .` | All checks passed |
 | `makemigrations --check` | No drift |
 | Fresh-DB `migrate` | Clean, 27 tables |
-| API endpoints registered | **39** |
+| API endpoints registered | **39 paths / 48 operations** |
 | Celery tasks registered | **9**, 3 beat schedules |
 | Celery worker (Docker) | Live, executed real tasks through Redis |
-| Score sweep via broker | `{'episodes': 74}` |
 | Reindex via broker | `74 indexed, 15 stale removed, 1.36s` |
-| Backfill idempotency | 2nd run: 0 created, 74 updated |
-| `npx turbo typecheck lint build` | **4/4 successful** |
-| Frontend pages rendering | 7/7 return 200 with expected content |
-| Ratings grid | **71 cells**, 3 year rows x 37 episode columns, **0 mismatches vs API** |
-| Grid sticky year column | Holds at the container edge across 2263px of horizontal scroll |
-| HTTP status codes | 6 real routes 200, 3 dead routes **404** (no soft 404s) |
-| API client suite | **54 runtime assertions + 5 compile-time rejections** |
-| Type pipeline reproducibility | Regenerated from live OpenAPI: **byte-identical** |
-| Hand-written API types in `apps/web` | **zero** (grepped) |
 | Degraded path (Redis stopped) | API `status: degraded`, `/status` renders Down; full recovery + Celery reconnect |
-| 390px viewport | Zero horizontal overflow |
 
 ### 🎯 The product thesis, proven end to end
 
@@ -221,7 +247,7 @@ docker compose --profile workers down      # stop them
 |------|--------|----------|
 | Clerk keys | Real auth (arch is done, one env var to swap) | 🟡 Medium |
 | `YOUTUBE_API_KEY` | Data API sync (yt-dlp fallback works) | 🟢 Low |
-| Remaining 5-7 channel URLs | Full backfill | 🟢 Low |
+| Remaining 4-6 channel URLs | Full backfill | 🟢 Low |
 | R2 credentials | Screenshot storage (local disk works) | 🟢 Low |
 
 ---
@@ -251,3 +277,12 @@ docker compose --profile workers down      # stop them
 | 2026-08-08 | Never place `loading.tsx` at the app root - it converts every `notFound()` into a soft 404. |
 | 2026-08-08 | `app/not-found.tsx` exists so a dead link renders a real 404 page instead of a bare header. |
 | 2026-08-08 | shadcn's `base-nova` style is built on **Base UI**, not Radix: compose with `render={<Link/>}`, not `asChild`, and pass `nativeButton={false}` when the rendered element is an anchor. |
+| 2026-08-09 | 📥 **`@comedyclubpodcast` backfilled: 1,318 episodes** (979 videos + 339 streams, 27 shorts excluded). Corpus is now 1,392 across 2 channels. |
+| 2026-08-09 | 🚨 **A big backfill gets soft-blocked and yt-dlp does not error** - it returns reduced metadata, so the run reported "0 errors" while 1,036 rows lost `duration`/`availability`. **`0 errors` is not a completeness check; `duration_sec IS NULL` is.** |
+| 2026-08-09 | 🔧 Added `manage.py repair_metadata` - serial, delayed re-fetch that **only writes from a full response**, so running it while blocked is a no-op rather than data loss. Run it after every backfill over ~100 episodes. |
+| 2026-08-09 | ✅ **Repair completed: all 1,036 degraded rows recovered, 0 remaining, re-indexed (1,392 docs).** `availability_corrected` was **0** - the members-only count held at 37, so no episode was wrongly flagged public. The sweep was interrupted at 964 and resumed cleanly for the last 72, proving the resume path. |
+| 2026-08-09 | 📈 Corpus estimate revised: one channel alone is 1,318 episodes, so plan for **5,000-10,000+**, not the brief's ~1,000. |
+| 2026-08-09 | 🎨 **Channel avatars/banners/subscriber counts populated and rendered.** Unlike thumbnails these URLs are **stored, not derived** - the avatar is an opaque hash nothing predicts - but still never mirrored to R2. `manage.py refresh_channel_meta` refreshes them in one cheap request per channel. See `specs/04-channel-ingestion/02-channel-avatars.md`. |
+| 2026-08-09 | 🗂️ **A `-column` index is `DESC NULLS FIRST`; every list endpoint sorts `DESC NULLS LAST`.** Postgres cannot use one for the other, so the `Episode` sort indexes were dead and every browse query was a seq scan + sort. Seven expression indexes now mirror the real `ORDER BY`, tiebreak included. See `docs/02-schema-decisions.md` § 10. |
+| 2026-08-09 | ⚡ `episode_list_queryset()` uses `.only(BRIEF_FIELDS)`. Reading any other field off a list row is one lazy SELECT **per row** - add the field to `BRIEF_FIELDS`, never drop the `only()`. |
+| 2026-08-09 | 🐛 The Postgres search fallback was N+1 (102 queries for a 50-hit page). Calling `.select_related()` on a related manager builds a **new** queryset and bypasses the prefetch cache - use `.all()`. Guarded by `podcast/tests/test_query_counts.py`. |

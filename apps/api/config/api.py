@@ -4,19 +4,53 @@ Routers are registered here and nowhere else, so the OpenAPI schema (and therefo
 the generated TypeScript types in packages/api-types) has exactly one source.
 """
 
+import json
 import logging
 
 from django.conf import settings
 from django.db import connection
 from ninja import NinjaAPI, Schema
+from ninja.renderers import JSONRenderer
 
 logger = logging.getLogger("podcast")
+
+
+class CompactUnicodeJSONRenderer(JSONRenderer):
+    """🇧🇬 Emit real UTF-8 instead of `\\uXXXX` escapes.
+
+    Django-Ninja's default renderer uses `ensure_ascii=True`, which turns every
+    Cyrillic character into a 6-byte `\\uXXXX` escape. On a Bulgarian-language
+    API that is not a rounding error: the channel grid alone expanded 103,968
+    Cyrillic characters into 406 KB of pure escape overhead on ONE response.
+
+    Every payload here is `Content-Type: application/json; charset=utf-8`, so
+    non-ASCII bytes are exactly what the spec expects a client to receive.
+
+    The compact separators drop the space after every `,` and `:`, which is
+    another few percent across list endpoints that repeat keys per row.
+    """
+
+    json_dumps_params = {"ensure_ascii": False, "separators": (",", ":")}
+
+    def render(self, request, data, *, response_status):
+        return json.dumps(data, cls=self.encoder_class, **self.json_dumps_params)
+
+
+def _write_throttle():
+    """🔒 One rate limiter for the whole API, so a new write endpoint cannot ship
+    unthrottled by omission. Only unsafe methods are counted - see throttling.py."""
+    from podcast.api.throttling import WriteThrottle
+
+    return [WriteThrottle()]
+
 
 api = NinjaAPI(
     title="Comedy Club Community API",
     version="0.1.0",
     description="Searchable community hub for Bulgarian YouTube podcast channels.",
     docs_url="/docs",
+    throttle=_write_throttle(),
+    renderer=CompactUnicodeJSONRenderer(),
 )
 
 

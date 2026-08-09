@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 
 from django.conf import settings
 
+from .channel_images import avatar_url as pick_avatar_url
+from .channel_images import banner_url as pick_banner_url
 from .thumbnails import best_thumbnail_url
 
 logger = logging.getLogger("podcast")
@@ -67,6 +69,10 @@ class ChannelPayload:
     handle: str = ""
     channel_url: str = ""
     description: str = ""
+    # 🚨 Stored, not derived - the avatar hash is opaque. See ingestion/channel_images.py.
+    avatar_url: str = ""
+    banner_url: str = ""
+    subscriber_count: int | None = None
     videos: list[dict] = field(default_factory=list)
     errors: list[dict] = field(default_factory=list)
 
@@ -309,12 +315,17 @@ def fetch_channel(
     if match:
         handle = f"@{match.group(1)}"
 
+    thumbnails = meta.get("thumbnails") or []
+
     return ChannelPayload(
         youtube_channel_id=channel_id,
         name=meta.get("channel") or meta.get("uploader") or meta.get("title") or handle,
         handle=handle,
         channel_url=meta.get("channel_url") or base_url,
         description=meta.get("description") or "",
+        avatar_url=pick_avatar_url(thumbnails),
+        banner_url=pick_banner_url(thumbnails),
+        subscriber_count=meta.get("channel_follower_count"),
         videos=videos,
         errors=errors,
     )

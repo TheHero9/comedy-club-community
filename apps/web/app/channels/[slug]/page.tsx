@@ -5,10 +5,12 @@ import { ArrowLeft, Star, Users } from "lucide-react";
 
 import { EpisodeGrid } from "@/components/episode/EpisodeCard";
 import { RatingsGrid } from "@/components/grid/RatingsGrid";
+import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { Badge } from "@/components/ui/badge";
 import { isApiError } from "@/lib/api/client";
 import { getChannel, getChannelGrid, listEpisodes } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
+import { decodeRouteParam } from "@/lib/route-params";
 
 export const revalidate = 60;
 
@@ -21,7 +23,8 @@ function scoreKind(value: string | string[] | undefined): ScoreKind {
 export async function generateMetadata({
   params,
 }: PageProps<"/channels/[slug]">): Promise<Metadata> {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeRouteParam(rawSlug);
   try {
     const channel = await getChannel(slug);
     return {
@@ -37,7 +40,8 @@ export default async function ChannelPage({
   params,
   searchParams,
 }: PageProps<"/channels/[slug]">) {
-  const { slug } = await params;
+  const { slug: rawSlug } = await params;
+  const slug = decodeRouteParam(rawSlug);
   const query = await searchParams;
   const score = scoreKind(query.score);
 
@@ -67,14 +71,17 @@ export default async function ChannelPage({
           {copy.channels.title}
         </Link>
 
-        <h1 className="text-3xl font-bold tracking-tight">{channel.name}</h1>
+        <div className="flex items-center gap-4">
+          <ChannelAvatar name={channel.name} avatarUrl={channel.avatar_url} size="lg" />
+          <h1 className="min-w-0 text-3xl font-bold tracking-tight">{channel.name}</h1>
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           {channel.handle ? <span>{channel.handle}</span> : null}
           <span>{copy.channels.episodeCount(channel.episode_count)}</span>
           {grid.overall_average !== null ? (
             <span className="flex items-center gap-1">
               <Star className="h-3.5 w-3.5" aria-hidden />
-              {grid.overall_average.toFixed(2)} avg
+              {copy.grid.seasonAverage(grid.overall_average.toFixed(2))}
             </span>
           ) : null}
           <span>{copy.grid.ratedOf(grid.rated_count, grid.total_count)}</span>

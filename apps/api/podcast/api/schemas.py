@@ -400,12 +400,19 @@ class SearchOut(Schema):
 
 
 class GridCellOut(Schema):
+    """One episode inside the heatmap.
+
+    🚨 Keep this LEAN. Every field is multiplied by the channel's episode count,
+    and the biggest channel is already 1,318 episodes. Fields that only a hover
+    card or a detail view needs (`slug`, `upload_date`, `duration_sec`,
+    `thumbnail_url`) were removed on 2026-08-09: they were 47% of the payload and
+    no consumer read them. `thumbnail_url` is derivable from `youtube_id`
+    anyway - the project rule is to store the video id and build the CDN URL at
+    render time. Anything richer comes from /api/episodes/{youtube_id}.
+    """
+
     youtube_id: str
-    slug: str
     title: str
-    upload_date: date | None
-    duration_sec: int | None
-    thumbnail_url: str
     content_kind: str
     members_only: bool
     # NULL score means "not rated yet", which is NOT zero.

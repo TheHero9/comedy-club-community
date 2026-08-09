@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ChevronRight, Mic } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
+import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { listChannels } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
 
@@ -29,9 +30,7 @@ export default async function ChannelsPage() {
               href={`/channels/${channel.slug}`}
               className="flex items-center gap-4 rounded-lg border bg-card p-4 transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted">
-                <Mic className="h-5 w-5" aria-hidden />
-              </span>
+              <ChannelAvatar name={channel.name} avatarUrl={channel.avatar_url} />
 
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{channel.name}</span>

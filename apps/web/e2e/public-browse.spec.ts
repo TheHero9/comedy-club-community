@@ -1,0 +1,377 @@
+/**
+ * Matrix section 1 - route rendering (Lane A).
+ *
+ * Every public route must render real data from the live Django API. These are
+ * deliberately cross-checked against `GET /api/...` rather than against copied
+ * numbers: ratings and episode counts change, so a hardcoded expectation turns
+ * into a false failure the first time someone rates something.
+ *
+ * `test` and `expect` come from ./fixtures, never from @playwright/test - the
+ * fixture wires the console-error guard that fails a test whose page logged an
+ * unexpected browser error. Those errors are invisible to typecheck, lint and
+ * build.
+ */
+import type { Page } from "@playwright/test";
+
+import type { Schema } from "@ccc/api-types";
+import { copy } from "@/lib/copy";
+
+import { apiJson, expect, test } from "./fixtures";
+
+type Channel = Schema<"ChannelOut">;
+type EpisodeBrief = Schema<"EpisodeBriefOut">;
+type EpisodeDetail = Schema<"EpisodeOut">;
+type EpisodeList = Schema<"EpisodeListOut">;
+type Health = Schema<"HealthOut">;
+type SearchResults = Schema<"SearchOut">;
+
+/** A Bulgarian query that is known to match content in the dev database. */
+const BULGARIAN_QUERY = "Каспаров";
+
+/** How many episodes `/episodes` asks for on the first page. */
+const EPISODES_PAGE_SIZE = 24;
+
+/**
+ * Pick a real episode from the API instead of hardcoding an id, so the suite
+ * survives a reseed.
+ */
+async function newestEpisode(page: Page): Promise<EpisodeBrief> {
+  const list = await apiJson<EpisodeList>(page, "/api/episodes?limit=1&sort=newest");
+  expect(
+    list.items.length,
+    "the dev database has no episodes, so there is nothing to render",
+  ).toBeGreaterThan(0);
+  return list.items[0]!;
+}
+
+async function firstChannel(page: Page): Promise<Channel> {
+  const channels = await apiJson<Channel[]>(page, "/api/channels");
+  expect(
+    channels.length,
+    "the dev database has no channels, so there is nothing to render",
+  ).toBeGreaterThan(0);
+  return channels[0]!;
+}
+
+/**
+ * Deliberately a SECOND implementation of `formatDuration` from
+ * lib/score-bands.ts. Importing the app helper would make the assertion agree
+ * with itself even if the helper were wrong.
+ */
+function expectedDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(secs).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${minutes}:${ss}`;
+}
+
+/**
+ * next/image rewrites a remote src to `/_next/image?url=<encoded>&w=...`.
+ * Unwrap it so the assertion compares the real upstream URL.
+ */
+function upstreamImageUrl(src: string | null): string | null {
+  if (!src) return null;
+  if (!src.startsWith("/_next/image")) return src;
+  return new URLSearchParams(src.split("?")[1] ?? "").get("url");
+}
+
+async function metaContent(page: Page, selector: string): Promise<string | null> {
+  const tag = page.locator(selector);
+  if ((await tag.count()) === 0) return null;
+  return tag.first().getAttribute("content");
+}
+
+test("1.1 home page renders with real data", async ({ page }) => {
+  const response = await page.goto("/");
+
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(copy.app.tagline);
+
+  // At least one episode card. The home page composes three episode sections,
+  // so an empty result here means the API contract broke, not that the DB is
+  // empty - `newestEpisode` would have failed first in that case.
+  await newestEpisode(page);
+  expect(await page.locator('main a[href^="/e/"]').count()).toBeGreaterThan(0);
+});
+
+test("1.2 channels page lists every channel the API returns", async ({ page }) => {
+  const channels = await apiJson<Channel[]>(page, "/api/channels");
+  expect(channels.length).toBeGreaterThan(0);
+
+  const response = await page.goto("/channels");
+  expect(response?.status()).toBe(200);
+
+  const links = page.locator('main a[href^="/channels/"]');
+  await expect(links).toHaveCount(channels.length);
+
+  for (const channel of channels) {
+    const link = page.locator(`main a[href="/channels/${channel.slug}"]`);
+    await expect(link).toHaveCount(1);
+    await expect(link).toContainText(channel.name);
+    await expect(link).toContainText(copy.channels.episodeCount(channel.episode_count));
+  }
+});
+
+test("1.3 channel page renders name, episode count and the ratings grid", async ({
+  page,
+}) => {
+  const channel = await firstChannel(page);
+
+  const response = await page.goto(`/channels/${channel.slug}`);
+  expect(response?.status()).toBe(200);
+
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(channel.name);
+  await expect(
+    page.getByText(copy.channels.episodeCount(channel.episode_count)).first(),
+  ).toBeVisible();
+
+  // Grid presence only - every cell value is cross-checked in section 3.
+  const grid = page.getByRole("table");
+  await expect(grid).toBeVisible();
+  await expect(grid.locator("caption")).toHaveText(copy.grid.caption(channel.name));
+});
+
+test("1.4 episodes page renders one card per episode, each linking to /e/", async ({
+  page,
+}) => {
+  const list = await apiJson<EpisodeList>(
+    page,
+    `/api/episodes?limit=${EPISODES_PAGE_SIZE}&offset=0&sort=newest`,
+  );
+  expect(list.items.length).toBeGreaterThan(0);
+
+  const response = await page.goto("/episodes");
+  expect(response?.status()).toBe(200);
+
+  const hrefs = await page
+    .locator('main a[href^="/e/"]')
+    .evaluateAll((elements) => elements.map((element) => element.getAttribute("href")));
+
+  expect(hrefs).toHaveLength(list.items.length);
+  for (const href of hrefs) {
+    expect(href).toMatch(/^\/e\/[^/?#]+$/);
+  }
+  expect([...hrefs].sort()).toEqual(
+    list.items.map((item) => `/e/${item.youtube_id}`).sort(),
+  );
+});
+
+/**
+ * 1.4b - pagination.
+ *
+ * `/episodes` used to render page one and a one-way "Load more" link, so
+ * episodes 25 to 1392 had no reachable, crawlable URL at all. Pagination is now
+ * offset-driven and rendered by a Server Component, which means every page of
+ * every filter combination is a real URL that works with JavaScript disabled.
+ *
+ * The assertion is against the API rather than against fixed ids, for the same
+ * reason as 1.4: a reseed must not turn this into a false failure.
+ */
+test("1.4b episodes page 2 renders the matching API offset window", async ({ page }) => {
+  const second = await apiJson<EpisodeList>(
+    page,
+    `/api/episodes?limit=${EPISODES_PAGE_SIZE}&offset=${EPISODES_PAGE_SIZE}&sort=newest`,
+  );
+  test.skip(
+    second.items.length === 0,
+    "the dev database holds a single page of episodes, so there is no page 2",
+  );
+
+  const response = await page.goto(`/episodes?offset=${EPISODES_PAGE_SIZE}`);
+  expect(response?.status()).toBe(200);
+
+  const hrefs = await page
+    .locator('main a[href^="/e/"]')
+    .evaluateAll((elements) => elements.map((element) => element.getAttribute("href")));
+
+  expect([...hrefs].sort()).toEqual(
+    second.items.map((item) => `/e/${item.youtube_id}`).sort(),
+  );
+
+  // Page one is the canonical URL, so "Previous" must drop `offset` entirely
+  // rather than link to `?offset=0`.
+  await expect(page.locator('main nav a[rel="prev"]')).toHaveAttribute(
+    "href",
+    "/episodes",
+  );
+  await expect(page.locator('main nav a[rel="next"]')).toHaveAttribute(
+    "href",
+    `/episodes?offset=${EPISODES_PAGE_SIZE * 2}`,
+  );
+});
+
+test("1.4c pagination preserves the active filters", async ({ page }) => {
+  const response = await page.goto("/episodes?sort=oldest");
+  expect(response?.status()).toBe(200);
+
+  // A page-two link that forgot the sort would silently send the user back to
+  // "newest" halfway through browsing.
+  await expect(page.locator('main nav a[rel="next"]')).toHaveAttribute(
+    "href",
+    `/episodes?sort=oldest&offset=${EPISODES_PAGE_SIZE}`,
+  );
+  await expect(page.locator('main nav a[rel="prev"]')).toHaveCount(0);
+});
+
+test("1.5 episode page renders title, thumbnail and duration", async ({ page }) => {
+  const brief = await newestEpisode(page);
+  const episode = await apiJson<EpisodeDetail>(
+    page,
+    `/api/episodes/${brief.youtube_id}`,
+  );
+
+  const response = await page.goto(`/e/${episode.youtube_id}`);
+  expect(response?.status()).toBe(200);
+
+  // The title is Bulgarian. Comparing it to the API value also proves the
+  // response was not mangled into mojibake on the way through.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(episode.title);
+
+  const thumbnail = page.locator("main img").first();
+  await expect(thumbnail).toBeVisible();
+  expect(upstreamImageUrl(await thumbnail.getAttribute("src"))).toBe(
+    episode.thumbnail_url,
+  );
+
+  expect(
+    episode.duration_sec,
+    "the fixture episode has no duration, so 1.5 cannot check the duration",
+  ).toBeTruthy();
+  await expect(
+    page.getByText(expectedDuration(episode.duration_sec!), { exact: false }).first(),
+  ).toBeVisible();
+});
+
+test("1.6 search page renders results for a Bulgarian query", async ({ page }) => {
+  // Built with URLSearchParams, never a shell argument: Git Bash mangles
+  // Cyrillic on the command line, which silently turns the query into `????????`.
+  const results = await apiJson<SearchResults>(
+    page,
+    `/api/search?${new URLSearchParams({ q: BULGARIAN_QUERY, limit: "24" }).toString()}`,
+  );
+  expect(
+    results.total,
+    `"${BULGARIAN_QUERY}" matched nothing in the API, so the UI has nothing to render`,
+  ).toBeGreaterThan(0);
+
+  const response = await page.goto(
+    `/search?q=${encodeURIComponent(BULGARIAN_QUERY)}`,
+  );
+  expect(response?.status()).toBe(200);
+
+  await expect(page.getByText(copy.search.results(results.total))).toBeVisible();
+  expect(await page.locator('main a[href^="/e/"]').count()).toBeGreaterThan(0);
+});
+
+test("1.7 status page renders the API health card and its dependency rows", async ({
+  page,
+}) => {
+  // apiJson asserts the response is ok, so reaching this line means the API is
+  // up and the card must render dependency rows rather than the error state.
+  const health = await apiJson<Health>(page, "/api/health");
+  expect(health.status).toBeTruthy();
+
+  const response = await page.goto("/status");
+  expect(response?.status()).toBe(200);
+
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    copy.home.systemSectionTitle,
+  );
+  await expect(page.getByText(copy.health.cardTitle).first()).toBeVisible();
+  await expect(page.getByText(copy.health.dependencies.database)).toBeVisible();
+  await expect(page.getByText(copy.health.dependencies.redis)).toBeVisible();
+});
+
+test("1.8 every link in the site header resolves", async ({ page }) => {
+  // The dev server compiles routes on demand, so a cold sweep is slow.
+  test.slow();
+
+  await page.goto("/");
+
+  const hrefs = await page
+    .locator("header a")
+    .evaluateAll((elements) =>
+      elements
+        .map((element) => element.getAttribute("href"))
+        .filter((href): href is string => Boolean(href)),
+    );
+
+  const unique = [...new Set(hrefs)];
+  expect(unique.length, "the header rendered no links at all").toBeGreaterThan(0);
+
+  for (const href of unique) {
+    const response = await page.goto(href);
+    expect(response?.status(), `header link ${href} did not resolve`).toBe(200);
+  }
+});
+
+test("1.9 an episode card links through to a real episode page", async ({ page }) => {
+  await page.goto("/episodes");
+
+  const card = page.locator('main a[href^="/e/"]').first();
+  const href = await card.getAttribute("href");
+  expect(href).toMatch(/^\/e\/[^/?#]+$/);
+
+  await card.click();
+  await page.waitForURL((url) => url.pathname === href);
+
+  const heading = page.getByRole("heading", { level: 1 });
+  await expect(heading).toBeVisible();
+  expect((await heading.textContent())?.trim().length ?? 0).toBeGreaterThan(0);
+});
+
+test("1.10 home page exposes title and description metadata", async ({ page }) => {
+  await page.goto("/");
+
+  expect(await page.title()).toBe(copy.app.name);
+  expect(await metaContent(page, 'meta[name="description"]')).toBe(
+    copy.app.description,
+  );
+});
+
+/**
+ * Matrix row 1.10, Open Graph half.
+ *
+ * This shipped broken: `app/layout.tsx` declared `title` and `description` but
+ * no `openGraph` block, and Next does NOT synthesise Open Graph tags from those.
+ * Every share of the site root rendered a bare link preview - on a site whose
+ * entire purpose is being discoverable. Nothing in typecheck, lint or build says
+ * a word about it; only reading the rendered `<head>` does.
+ */
+test("1.10 home page exposes Open Graph and Twitter card tags", async ({ page }) => {
+  await page.goto("/");
+
+  expect(await metaContent(page, 'meta[property="og:title"]')).toBe(copy.app.name);
+  expect(await metaContent(page, 'meta[property="og:description"]')).toBe(
+    copy.app.description,
+  );
+  expect(await metaContent(page, 'meta[property="og:type"]')).toBe("website");
+  expect(await metaContent(page, 'meta[name="twitter:card"]')).toBe(
+    "summary_large_image",
+  );
+});
+
+test("1.11 episode page uses the YouTube thumbnail as its OG image", async ({
+  page,
+}) => {
+  const brief = await newestEpisode(page);
+  const episode = await apiJson<EpisodeDetail>(
+    page,
+    `/api/episodes/${brief.youtube_id}`,
+  );
+  expect(episode.thumbnail_url).toBeTruthy();
+
+  await page.goto(`/e/${episode.youtube_id}`);
+
+  // Thumbnails are a derived Google CDN URL, never an upload. The OG image must
+  // be that same URL - if it ever points at our own host, something started
+  // mirroring images.
+  expect(await metaContent(page, 'meta[property="og:image"]')).toBe(
+    episode.thumbnail_url,
+  );
+  expect(episode.thumbnail_url).toContain(episode.youtube_id);
+
+  expect(await metaContent(page, 'meta[property="og:title"]')).toBe(episode.title);
+});

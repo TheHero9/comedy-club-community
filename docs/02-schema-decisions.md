@@ -134,6 +134,42 @@ updated_at = models.DateTimeField(auto_now=True)
 
 ---
 
+### 10. `Episode` sort indexes with an explicit `NULLS LAST` ordering
+
+Added 2026-08-09 (migrations `0002_episode_ep_upload_desc_nl_idx_and_more`, `0003_episode_ep_duration_desc_nl_idx`). **Indexes only - no field, relation or meaning changed.**
+
+```python
+models.Index(F("upload_date").desc(nulls_last=True), F("id").desc(), name="ep_upload_desc_nl_idx")
+models.Index(F("public_score").desc(nulls_last=True), F("id").desc(), name="ep_public_desc_nl_idx")
+models.Index(F("elite_score").desc(nulls_last=True),  F("id").desc(), name="ep_elite_desc_nl_idx")
+models.Index(F("duration_sec").desc(nulls_last=True), F("id").desc(), name="ep_duration_desc_nl_idx")
+models.Index(F("rating_count").desc(),                F("id").desc(), name="ep_rating_count_desc_idx")
+models.Index(F("channel_id"), F("upload_date").desc(nulls_last=True), F("id").desc(), name="ep_ch_upload_desc_nl_idx")
+models.Index(F("channel_id"), F("public_score").desc(nulls_last=True), F("id").desc(), name="ep_ch_public_desc_nl_idx")
+```
+
+**Why:** `Index(fields=["-upload_date"])` compiles to `DESC NULLS FIRST`. Every list endpoint sorts `DESC NULLS LAST`, because NULL means "not rated yet" and an unrated episode must not sit at the top of "top rated" (`podcast/api/public.py::_ordering`). **Postgres cannot use a NULLS FIRST index to satisfy a NULLS LAST sort**, so `podcast_epi_upload__7a4f38_idx` and `podcast_epi_public__6b2d91_idx` were never used by `/api/episodes` - `pg_stat_user_indexes` reported `idx_scan = 0` for the public_score one. Every browse query was a full sequential scan plus a sort.
+
+The trailing `id DESC` is the pagination tiebreak from `_ordering()`; without it in the index the sort still cannot be answered from the index.
+
+**Evidence** (`EXPLAIN ANALYZE`, table grown to 8,352 rows inside a rolled-back transaction to model the target scale):
+
+| Query | Before | After |
+| ----- | ------ | ----- |
+| `sort=newest` limit 24 | Seq Scan + top-N sort, cost 1624, **23.4 ms** | Index Scan `ep_upload_desc_nl_idx`, cost 24, **0.23 ms** |
+| `sort=top` | cost 1624, 21.6 ms | cost 29, 0.23 ms |
+| `sort=most_rated` | cost 1624, 31.6 ms | cost 27, 0.23 ms |
+| `sort=top_elite` | cost 1624, 22.2 ms | cost 28, 0.25 ms |
+| `sort=longest` | cost 1624, 23.3 ms | cost 29, 0.24 ms |
+| `channel=X&sort=newest` | cost 1396, 20.9 ms | cost 19.6, 0.22 ms |
+| `channel=X&sort=top` | cost 1396, 20.7 ms | cost 19.7, 0.24 ms |
+
+The two `channel_id`-leading indexes only pay off if the queryset filters on `channel_id`, not on `channel__slug` - a join stops the planner using them. `list_episodes` therefore resolves the slug to an id first.
+
+The pre-existing `-upload_date` index is **kept**: `Episode.Meta.ordering` and the Postgres search fallback both sort `DESC NULLS FIRST`, and it serves `sort=oldest` as a backward scan.
+
+---
+
 ## Also changed
 
 - **`Episode.slug`** must use `slugify(..., allow_unicode=True)` or Bulgarian titles slugify to an empty string. This is a bug in the canonical file, not a deviation.

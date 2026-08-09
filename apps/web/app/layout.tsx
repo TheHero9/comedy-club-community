@@ -28,6 +28,21 @@ export const metadata: Metadata = {
     template: `%s | ${copy.app.shortName}`,
   },
   description: copy.app.description,
+  // Next does NOT synthesise Open Graph tags from `title`/`description`, so
+  // without this block every share of a non-episode page renders a bare link
+  // preview. This is a content site whose whole point is being discoverable.
+  openGraph: {
+    type: "website",
+    siteName: copy.app.name,
+    title: copy.app.name,
+    description: copy.app.description,
+    locale: "bg_BG",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: copy.app.name,
+    description: copy.app.description,
+  },
 };
 
 export const viewport: Viewport = {

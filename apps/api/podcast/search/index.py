@@ -222,7 +222,15 @@ INDEX_SETTINGS: dict[str, Any] = {
         # Facet lists in the UI should lead with the busiest channel/topic.
         "sortFacetValuesBy": {"*": "count"},
     },
-    "pagination": {"maxTotalHits": 1000},
+    # 🚨 This CLAMPS `estimatedTotalHits`, so it is a correctness setting, not just
+    # a pagination guard: any query matching more episodes than this reports
+    # exactly this number, and the /search page prints it as the result count.
+    # It became reachable when the corpus went 74 -> 1392 episodes: "подкаст"
+    # matches every episode of the "Комеди Клуб Подкаст" channel (channel_name is
+    # searchable) and reported a flat, wrong "1000 results".
+    # ⚠️ MUST stay comfortably above the episode count. Revisit when the corpus
+    # approaches this number.
+    "pagination": {"maxTotalHits": 5000},
     # Hard ceiling on a single search. The wave targets sub-50ms; this stops a
     # pathological query from ever holding a request open.
     "searchCutoffMs": 200,
@@ -529,16 +537,25 @@ def search(
     sort: Sequence[str] | None = None,
     facets: Sequence[str] | None = None,
     highlight: bool = False,
+    attributes: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Search the episodes index.
 
     Never raises. When Meilisearch is down the result comes back empty with
     `available: False`, which is the signal for the API layer to fall back to
     Postgres full-text search behind the same endpoint.
+
+    ⚡ `attributes` maps to Meilisearch's `attributesToRetrieve`. A document has 31
+    fields including a description of up to 5,000 chars, and the /search endpoint
+    reads exactly three of them, so leaving this unset ships up to 50 KB per query
+    across the wire to be thrown away. Pass the fields you actually read.
+    Leave it None to retrieve everything (what `highlight=True` callers want).
     """
     params: dict[str, Any] = {"limit": limit, "offset": offset}
     if filters:
         params["filter"] = filters
+    if attributes:
+        params["attributesToRetrieve"] = list(attributes)
     if sort:
         params["sort"] = list(sort)
     if facets:

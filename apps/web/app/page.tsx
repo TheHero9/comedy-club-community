@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Search, Trophy, Users } from "lucide-react";
+import { ArrowRight, Search, Trophy } from "lucide-react";
 
 import { EpisodeGrid } from "@/components/episode/EpisodeCard";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +50,7 @@ export default async function HomePage() {
             {copy.channels.episodeCount(episodeTotal)}
           </Badge>
           <Badge variant="secondary" className="font-normal">
-            {channels.length === 1 ? "1 channel" : `${channels.length} channels`}
+            {copy.channels.channelCount(channels.length)}
           </Badge>
         </div>
       </section>
@@ -91,11 +91,17 @@ export default async function HomePage() {
                         {copy.episode.ratings(entry.episode.rating_count)}
                       </span>
                     </span>
+                    {/* A plain span, not <Badge>. The shadcn badge variant
+                        emits a 573-byte class string per instance; inside a
+                        list that is pure repetition. The two one-off badges in
+                        the hero above still use the component. */}
                     {entry.episode.elite_score !== null ? (
-                      <Badge variant="secondary" className="hidden shrink-0 gap-1 sm:flex">
-                        <Users className="h-3 w-3" aria-hidden />
-                        {formatScore(entry.episode.elite_score)}
-                      </Badge>
+                      <span
+                        className="hidden shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium tabular-nums text-secondary-foreground sm:inline"
+                        title={copy.episode.eliteScore}
+                      >
+                        {copy.episode.eliteChip(formatScore(entry.episode.elite_score))}
+                      </span>
                     ) : null}
                   </Link>
                 </li>

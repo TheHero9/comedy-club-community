@@ -217,12 +217,26 @@ def delete_watch_event(request, event_id: int):
     return {"detail": "Watch event removed"}
 
 
+WATCH_HISTORY_LIMIT = 50
+
+
 def _watch_summary(user, episode) -> dict:
-    events = WatchEvent.objects.filter(user=user, episode=episode).order_by("-watched_on")
+    """One SELECT for the page plus one aggregate.
+
+    ⚠️ This used to run four queries (`count()`, `exists()`, `first()` and the
+    slice) for what is two facts. `count()` still has to be a separate aggregate
+    because the page is capped at WATCH_HISTORY_LIMIT.
+    """
+    events = list(
+        WatchEvent.objects.filter(user=user, episode=episode)
+        .order_by("-watched_on", "-id")[:WATCH_HISTORY_LIMIT]
+    )
+    total = WatchEvent.objects.filter(user=user, episode=episode).count()
+
     return {
         "episode_id": episode.id,
-        "watch_count": events.count(),
-        "last_watched_on": events.first().watched_on if events.exists() else None,
+        "watch_count": total,
+        "last_watched_on": events[0].watched_on if events else None,
         "events": [
             {
                 "id": event.id,
@@ -230,7 +244,7 @@ def _watch_summary(user, episode) -> dict:
                 "watched_on": event.watched_on,
                 "note": event.note,
             }
-            for event in events[:50]
+            for event in events
         ],
     }
 

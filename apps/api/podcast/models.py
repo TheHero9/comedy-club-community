@@ -124,6 +124,55 @@ class Episode(models.Model):
             models.Index(fields=["-upload_date"]),
             models.Index(fields=["-public_score"]),
             models.Index(fields=["content_kind", "-upload_date"]),
+            # --- Sort indexes that match the API's ORDER BY exactly ----------
+            # 🚨 Every list endpoint sorts NULLS LAST, because an unrated episode
+            # must not top "top rated". A plain `-column` index is DESC NULLS
+            # FIRST, and Postgres CANNOT use it for a NULLS LAST sort - so the
+            # four indexes above were dead for /api/episodes and every list query
+            # was a full seq scan plus a sort. Measured on a simulated 8,352-row
+            # table: cost 1624 -> 24, execution 23ms -> 0.3ms.
+            # The trailing `-id` is the pagination tiebreak, and it has to be in
+            # the index or the sort cannot be satisfied from it.
+            models.Index(
+                models.F("upload_date").desc(nulls_last=True),
+                models.F("id").desc(),
+                name="ep_upload_desc_nl_idx",
+            ),
+            models.Index(
+                models.F("public_score").desc(nulls_last=True),
+                models.F("id").desc(),
+                name="ep_public_desc_nl_idx",
+            ),
+            models.Index(
+                models.F("elite_score").desc(nulls_last=True),
+                models.F("id").desc(),
+                name="ep_elite_desc_nl_idx",
+            ),
+            models.Index(
+                models.F("rating_count").desc(),
+                models.F("id").desc(),
+                name="ep_rating_count_desc_idx",
+            ),
+            models.Index(
+                models.F("duration_sec").desc(nulls_last=True),
+                models.F("id").desc(),
+                name="ep_duration_desc_nl_idx",
+            ),
+            # Per-channel browse. Without these, filtering one channel out of
+            # eight walks the global sort index and discards ~7/8 of what it
+            # reads; the smaller the channel, the worse it gets.
+            models.Index(
+                models.F("channel_id"),
+                models.F("upload_date").desc(nulls_last=True),
+                models.F("id").desc(),
+                name="ep_ch_upload_desc_nl_idx",
+            ),
+            models.Index(
+                models.F("channel_id"),
+                models.F("public_score").desc(nulls_last=True),
+                models.F("id").desc(),
+                name="ep_ch_public_desc_nl_idx",
+            ),
         ]
 
     def __str__(self):
