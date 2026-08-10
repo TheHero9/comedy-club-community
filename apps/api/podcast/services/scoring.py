@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, F
 
 from podcast.models import Episode, Rating
 
@@ -89,6 +89,84 @@ def recompute_all(batch_size: int = 500) -> int:
         recompute_episode(episode)
         count += 1
     logger.info("Score sweep complete: %d episodes", count)
+    return count
+
+
+def recompute_many(
+    episode_ids: list[int] | None = None,
+    *,
+    reindex: bool = True,
+    batch_size: int = 1000,
+) -> int:
+    """Set-based form of `recompute_episode` for backfills and bulk seeding.
+
+    Two aggregate queries and one bulk UPDATE, instead of four queries and one
+    UPDATE per episode. The DEFINITIONS are identical to `compute_scores` - this
+    is the same arithmetic expressed over a set, and `test_recompute_many_matches_
+    per_episode` pins that equivalence so the two can never drift.
+
+    🚨 An episode with no ratings must still be written, otherwise deleting the
+    last rating would leave a stale score behind. So the aggregate maps are
+    lookups with a null default, not the iteration source.
+
+    `reindex=False` skips queuing a re-index task per episode. Use it for a bulk
+    load and then run `manage.py reindex` once - a thousand queued tasks to
+    rebuild a thousand documents one at a time is strictly worse.
+    """
+    episodes = Episode.objects.all()
+    if episode_ids is not None:
+        if not episode_ids:
+            return 0
+        episodes = episodes.filter(pk__in=episode_ids)
+
+    scope = Rating.objects.filter(episode__in=episodes.values("pk"))
+
+    public = {
+        row["episode_id"]: row
+        for row in scope.values("episode_id").annotate(avg=Avg("score"), n=Count("id"))
+    }
+    elite = {
+        row["episode_id"]: row
+        for row in scope.filter(
+            # The membership must be for THIS episode's channel. Without the F()
+            # join condition any verified membership anywhere would count, which
+            # is the single easiest way to get the elite score wrong.
+            user__channel_memberships__is_verified=True,
+            user__channel_memberships__channel=F("episode__channel"),
+        )
+        .values("episode_id")
+        .annotate(avg=Avg("score"), n=Count("id", distinct=True))
+    }
+
+    pending: list[Episode] = []
+    count = 0
+    fields = ["public_score", "rating_count", "elite_score", "elite_rating_count"]
+
+    for episode in episodes.only("id").iterator(chunk_size=batch_size):
+        p = public.get(episode.pk)
+        e = elite.get(episode.pk)
+        episode.public_score = round(p["avg"], 3) if p and p["avg"] is not None else None
+        episode.rating_count = p["n"] if p else 0
+        episode.elite_score = round(e["avg"], 3) if e and e["avg"] is not None else None
+        episode.elite_rating_count = e["n"] if e else 0
+        pending.append(episode)
+
+        if len(pending) >= batch_size:
+            Episode.objects.bulk_update(pending, fields)
+            count += len(pending)
+            pending = []
+
+    if pending:
+        Episode.objects.bulk_update(pending, fields)
+        count += len(pending)
+
+    if reindex:
+        from podcast.services.indexing import schedule_episode_reindex
+
+        for episode_id in episodes.values_list("pk", flat=True):
+            schedule_episode_reindex(episode_id)
+
+    logger.info("Bulk score recompute: %d episodes (reindex=%s)", count, reindex)
     return count
 
 
