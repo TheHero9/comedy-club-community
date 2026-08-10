@@ -3,8 +3,8 @@
 **Date:** 2026-08-10
 **Goal:** fill the dev database with realistic community data so the redesign can be
 judged with content in it, then verify the whole app against that data.
-**Outcome:** the app verified green, and **two false claims in our own documentation
-were caught by the seed data itself.**
+**Outcome:** the app verified green, and **a false completeness claim in our own
+documentation was caught by the seed data itself.**
 
 ---
 
@@ -13,16 +13,31 @@ were caught by the seed data itself.**
 The seeding was routine. What it surfaced was not:
 
 > `@comedyclubpodcast` was recorded on 2026-08-09 as **"metadata complete after
-> `repair_metadata`"**, with `availability_corrected: 0` cited as proof that no
-> episode had been wrongly flagged public.
+> `repair_metadata`"**, with "all 1,036 degraded rows recovered, 0 remaining".
 >
 > On 2026-08-10, **1,076 of its 1,318 rows still had `duration_sec IS NULL`** - the
-> documented marker of a degraded row - and re-running the repair reclassified
-> **9 episodes from public to members-only**.
+> documented marker of a degraded row.
 
 Nothing in the app was failing. Every test was green. The wrong claim survived
 because it was recorded from the *intent* of a command rather than from a count
 taken afterwards.
+
+The re-run then recovered all 1,076 rows and reported **`0 availability
+corrections`**, so the other half of that 2026-08-09 entry - that nothing had been
+mis-flagged as public - was correct. The loss was `duration` and `view_count` only.
+
+### A second, self-inflicted error worth recording
+
+Mid-investigation this document claimed **9 episodes had been reclassified from
+public to members-only**. That was wrong, and wrong in an instructive way: it came
+from comparing `Episode.objects.filter(members_only=True).count()` - a **corpus-wide**
+46 - against a **per-channel** 37 noted earlier. 46 was 9 (`@ivankirkov1`) + 37
+(`@comedyclubpodcast`) the entire time; nothing had changed.
+
+✅ **Read the `availability_corrected` number `repair_metadata` prints.** Do not
+reconstruct a metric from a filter whose scope differs from the one you are
+comparing against. The irony is exact: the finding was that a claim had been
+recorded without checking the count, and the write-up then mis-scoped a count.
 
 ### How it actually surfaced
 
