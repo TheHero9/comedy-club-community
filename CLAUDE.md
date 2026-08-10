@@ -197,6 +197,8 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 - ✅ When a user gets verified, their existing ratings automatically start counting toward elite. Never backfill or duplicate rows to make this work.
 - ❌ **NEVER** call `episode.public_score()` / `elite_score()` in a loop. Those are convenience methods only. For list pages, **annotate the queryset** or read the denormalized columns.
 - ✅ Denormalize `public_score`, `elite_score`, `rating_count`, `elite_rating_count` onto `Episode` and recompute them on rating write plus a periodic Celery sweep. Ask before adding those columns (schema deviation, see above).
+- 🚨 **`podcast/services/scoring.py` has TWO writers and they must never diverge.** `recompute_episode` is the per-write path; `recompute_many` is the set-based path for backfills and seeding (two aggregates + one `bulk_update`, and `reindex=False` so a bulk load does not queue one Celery task per episode). `test_scoring_bulk.py` compares the two **against each other**, never against hardcoded numbers, so tuning one alone fails the suite. Nothing else may write those four columns.
+- 🚨 **In the bulk path the elite aggregate needs `F("episode__channel")` on the membership join.** Without it, any verified membership anywhere counts, and every single-channel test still passes.
 
 ### Ingestion
 
@@ -226,6 +228,8 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
   - ✅ **Always run `manage.py repair_metadata --probe 10` after any backfill over ~100 episodes.** It re-fetches degraded rows serially with a delay, and **only writes from a full response**, so running it while still blocked changes nothing rather than overwriting good data with nulls. It aborts after 25 consecutive degraded responses instead of wasting an hour.
   - ⏳ **The block lasts hours, not minutes.** Probing 8 videos serially right after the run recovered **0/8**. There is no "retry harder" here - only wait.
   - ❌ **Never judge a backfill by its error count.** `0 errors` means nothing survived an exception; it does not mean the data is complete. Check `duration_sec IS NULL` instead.
+  - 🚨 **A `repair_metadata` run that was never verified is not a repair.** On 2026-08-10 the channel table here said "metadata complete after `repair_metadata`" while **1,076 of 1,318 rows still had `duration_sec IS NULL`** - the repair had been started against a live block, correctly written nothing, and the claim was recorded anyway. It surfaced only because the demo seeder produced a quarter of the expected `Moment` rows (moments need a duration). 9 episodes were being served as public that are actually members-only.
+  - ✅ **So: finish with the COUNT, not with the command.** `Episode.objects.filter(duration_sec__isnull=True).count()` is the only thing that closes a backfill. `repair_metadata --probe 10` reporting "Block appears lifted" means *start the real run now*, not *done*.
 - ⚠️ yt-dlp is scraping and **will** break on YouTube changes. It already warns about the missing JavaScript runtime (only needed for format decipher, which we never request). Never make the daily sync depend on it.
 - ⚠️ **Findings come from ONE channel.** Chapter availability, description quality and shorts/streams ratios will differ. **Re-probe each new channel** with `tools/youtube-metadata/fetch_video.py` before assuming its shape.
 
@@ -234,7 +238,7 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 | Handle | Channel ID | Episodes | Status |
 | ------ | ---------- | -------- | ------ |
 | `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 74 (72 videos + 2 streams) | ✅ Ingested 2026-08-08, metadata complete |
-| `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Ingested 2026-08-09, metadata complete after `repair_metadata` |
+| `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Ingested 2026-08-09; **metadata NOT complete until 2026-08-10** - see below |
 | _(4-6 more TBD)_ | | | ⏳ Awaiting list |
 
 ⚠️ **`@comedyclubpodcast` alone is 1,318 episodes** - the brief's "~1,000 across all channels"
@@ -505,6 +509,9 @@ uv run python manage.py sync_channels                            # Data API dail
 uv run python manage.py backfill_transcripts --probe 10          # free captions: is it worth it?
 uv run python manage.py backfill_transcripts --since 2024-01-01  # where the captions actually are
 uv run python manage.py backfill_transcripts --tracks <VIDEO_ID> # what tracks exist on one video
+uv run python manage.py seed_demo                                # DEV ONLY: fake community data on real episodes
+uv run python manage.py seed_demo --channel @ivankirkov1         # scope it to one channel
+uv run python manage.py seed_demo --clear                        # exact inverse; episodes untouched
 uv run python manage.py reindex                                  # rebuild BOTH Meilisearch indexes
 uv run python manage.py reindex --only transcripts               # just the transcript index
 uv run pytest
@@ -593,7 +600,7 @@ YYYYMMDD-feature-name        e.g. 20260808-p1-ingestion
 
 ## 🧪 Testing
 
-**746 automated tests. Run them all with `npm run test` from the repo root.**
+**753 automated tests. Run them all with `npm run test` from the repo root.**
 
 ```bash
 npm run test                 # everything: Vitest + Playwright + pytest
@@ -603,7 +610,7 @@ npm run test:api             # pytest only
 cd apps/web && npx vitest run           # 137 unit + contract tests
 cd apps/web && npx playwright test      # 259 E2E (desktop 1280x800 + mobile 390x844)
 cd apps/web && npx playwright test --ui # debug interactively
-cd apps/api && uv run pytest -q         # 350 backend tests
+cd apps/api && uv run pytest -q         # 357 backend tests
 ```
 
 | Layer | Tool | Location |

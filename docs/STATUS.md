@@ -1,7 +1,7 @@
 # 📊 STATUS
 
 **Updated:** 2026-08-10
-**Overall:** 🟢 **Waves 1-13 built and test-hardened, and the full visual redesign is shipped.** 41 API paths, all ten designed routes live in Bulgarian across two themes, and **746 automated tests** (350 pytest + 137 Vitest + 259 Playwright) that all run from `npm run test`.
+**Overall:** 🟢 **Waves 1-13 built and test-hardened, and the full visual redesign is shipped.** 41 API paths, all ten designed routes live in Bulgarian across two themes, and **753 automated tests** (357 pytest + 137 Vitest + 259 Playwright) that all run from `npm run test`.
 
 > Wave definitions live in [`specs/01-initial-build/01-waves.md`](../specs/01-initial-build/01-waves.md).
 
@@ -44,10 +44,10 @@ suites; the counts here come from actual runs.
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| Backend | `cd apps/api && uv run pytest -q` | **350 passed** |
+| Backend | `cd apps/api && uv run pytest -q` | **357 passed** |
 | Frontend unit + contract | `cd apps/web && npx vitest run` | **137 passed** |
 | Frontend E2E | `cd apps/web && npx playwright test` | **259 passed** (desktop 1280x800 + mobile 390x844, against a production build) |
-| Everything, cold start | `npm run test` | **746 passed** |
+| Everything, cold start | `npm run test` | **753 passed** |
 | Performance | `npm run benchmark` | See `specs/05-performance/` |
 | Static gates | `npx turbo typecheck lint build` | **4/4 successful** |
 | Python lint | `cd apps/api && uv run ruff check .` | All checks passed |
@@ -284,7 +284,7 @@ docker compose --profile workers down      # stop them
 | 2026-08-09 | 📥 **`@comedyclubpodcast` backfilled: 1,318 episodes** (979 videos + 339 streams, 27 shorts excluded). Corpus is now 1,392 across 2 channels. |
 | 2026-08-09 | 🚨 **A big backfill gets soft-blocked and yt-dlp does not error** - it returns reduced metadata, so the run reported "0 errors" while 1,036 rows lost `duration`/`availability`. **`0 errors` is not a completeness check; `duration_sec IS NULL` is.** |
 | 2026-08-09 | 🔧 Added `manage.py repair_metadata` - serial, delayed re-fetch that **only writes from a full response**, so running it while blocked is a no-op rather than data loss. Run it after every backfill over ~100 episodes. |
-| 2026-08-09 | ✅ **Repair completed: all 1,036 degraded rows recovered, 0 remaining, re-indexed (1,392 docs).** `availability_corrected` was **0** - the members-only count held at 37, so no episode was wrongly flagged public. The sweep was interrupted at 964 and resumed cleanly for the last 72, proving the resume path. |
+| 2026-08-09 | ~~✅ **Repair completed: all 1,036 degraded rows recovered, 0 remaining.** `availability_corrected` was **0**...~~ 🚨 **THIS ENTRY WAS WRONG - see 2026-08-10.** It was written from the command's intent, not from a count taken afterwards. |
 | 2026-08-09 | 📈 Corpus estimate revised: one channel alone is 1,318 episodes, so plan for **5,000-10,000+**, not the brief's ~1,000. |
 | 2026-08-09 | 🎨 **Channel avatars/banners/subscriber counts populated and rendered.** Unlike thumbnails these URLs are **stored, not derived** - the avatar is an opaque hash nothing predicts - but still never mirrored to R2. `manage.py refresh_channel_meta` refreshes them in one cheap request per channel. See `specs/04-channel-ingestion/02-channel-avatars.md`. |
 | 2026-08-09 | 🗂️ **A `-column` index is `DESC NULLS FIRST`; every list endpoint sorts `DESC NULLS LAST`.** Postgres cannot use one for the other, so the `Episode` sort indexes were dead and every browse query was a seq scan + sort. Seven expression indexes now mirror the real `ORDER BY`, tiebreak included. See `docs/02-schema-decisions.md` § 10. |
@@ -295,3 +295,8 @@ docker compose --profile workers down      # stop them
 | 2026-08-09 | 🚨 **A throttled response is indistinguishable from "no captions"** - the same soft-block strips both `duration` and the caption list. `fetch_transcript` refuses to answer "none" without a duration and writes nothing, because a false "none" would be permanent. |
 | 2026-08-09 | 🐛 **`minWordSizeForTypos` counts BYTES, not characters.** Cyrillic is 2 bytes/char, so the episodes index's `{4, 8}` actually meant **2 and 4 characters**: `пица` returned 100 hits of which **95 were false** (`пича`, `пичове`). Thresholds are now `N * BYTES_PER_CYRILLIC_CHAR`. The old test asserted `oneTypo <= 4` and passed the whole time - it encoded the misunderstanding, not the behaviour. |
 | 2026-08-09 | ⚠️ **Transcript coverage is partial and date-dependent** (2024-2026: 9/9; 2019-2022: 0/12; members-only: 0/5). Transcript search is never exhaustive - an absent episode may simply have no captions, and the UI needs to say so. |
+| 2026-08-10 | 🌱 **`seed_demo` reworked and run across both channels** - 8,081 ratings, 2,935 topic links, 1,748 watch events on all 1,392 real episodes. Fully reversible with `--clear`; every row hangs off a `demo_`-prefixed user. It previously seeded memberships on only the FIRST channel, so the 1,318-episode channel had no elite score at all. |
+| 2026-08-10 | 🚨 **The 2026-08-09 "metadata complete" entry above was FALSE.** `@comedyclubpodcast` still had **1,076 of 1,318 rows with `duration_sec IS NULL`**, and re-running the repair reclassified **9 episodes from public to members-only** - exactly the wrong-paywall-flag failure the throttle notes warn about. The claim had been recorded from the command's intent instead of from a count. **A backfill closes on `Episode.objects.filter(duration_sec__isnull=True).count() == 0`, nothing else.** |
+| 2026-08-10 | 🔍 **The demo seeder is a data-completeness probe.** This was caught because it produced 365 `Moment` rows where ~1,700 were expected - moments need a `duration_sec`, so a quarter-sized output was the tell. Nobody was looking for a metadata bug. |
+| 2026-08-10 | ⚡ **`scoring.recompute_many`** - set-based recompute (two aggregates + one `bulk_update`) so a bulk load does not queue one Celery reindex task per episode. `scoring.py` now has TWO writers of the denormalized columns, and `test_scoring_bulk.py` compares them **against each other**, never against hardcoded numbers, so neither can drift alone. |
+| 2026-08-10 | ⚠️ **One unexplained flaky E2E** (`3.8` grid public/elite toggle): failed once in the parallel run, then 66/66 on `--repeat-each=3 --retries=0`, with the API stable and the page matching it 0/74 mismatches. Not papered over. `/channels/[slug]` is `revalidate = 60`, so a test can compare a minute-old ISR render against a fresh API fetch - that is where to look if it recurs. |
