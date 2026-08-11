@@ -131,6 +131,36 @@ export async function apiJson<T>(page: Page, path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/**
+ * Assert the page has exactly ONE `<h1>` and that it is visible.
+ *
+ * 🚨 Why this is not two plain assertions in a row.
+ *
+ * React's streaming SSR does not render late content in place. It writes it
+ * into a hidden staging container at the end of `<body>` and then MOVES it, so
+ * for a moment the document genuinely holds two copies of the heading. Written
+ * as
+ *
+ *     await expect(page.locator("h1")).toHaveCount(1);
+ *     await expect(page.locator("h1")).toBeVisible();
+ *
+ * the first assertion can pass in a gap between the two copies existing, and
+ * the second then hits `strict mode violation: resolved to 2 elements`.
+ * Reproduced 2026-08-11 on `/status` (the one route with a scoped
+ * `loading.tsx`, so the only one that streams a fallback): ~3 failures in 25
+ * runs under parallel load, and it is what failed one of three full suite runs.
+ *
+ * Retrying BOTH together is what makes it correct. The guarantee is unchanged -
+ * exactly one h1, and visible - it just has to hold at a single instant rather
+ * than across two separately-timed checks.
+ */
+export async function expectSingleVisibleH1(page: Page): Promise<void> {
+  await expect(async () => {
+    await expect(page.locator("h1")).toHaveCount(1);
+    await expect(page.locator("h1")).toBeVisible();
+  }).toPass({ timeout: 20_000 });
+}
+
 /** True when the page scrolls horizontally, which it never should. */
 export async function hasHorizontalOverflow(page: Page): Promise<boolean> {
   return page.evaluate(() => {

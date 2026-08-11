@@ -11,7 +11,14 @@ import type { Result } from "axe-core";
 
 import { copy } from "@/lib/copy";
 
-import { apiJson, expect, PUBLIC_ROUTES, test, visibleGrid } from "./fixtures";
+import {
+  apiJson,
+  expect,
+  expectSingleVisibleH1,
+  PUBLIC_ROUTES,
+  test,
+  visibleGrid,
+} from "./fixtures";
 
 const CHANNEL_SLUG = "ivan-kirkov";
 
@@ -152,8 +159,7 @@ test.describe("12. accessibility", () => {
   for (const route of PUBLIC_ROUTES) {
     test(`12.4 ${route} has exactly one <h1>`, async ({ page }) => {
       await page.goto(route);
-      await expect(page.locator("h1")).toHaveCount(1);
-      await expect(page.locator("h1")).toBeVisible();
+      await expectSingleVisibleH1(page);
     });
   }
 
@@ -169,13 +175,11 @@ test.describe("12. accessibility", () => {
 
     for (const route of PUBLIC_ROUTES) {
       await page.goto(route);
-      // /status has a scoped loading.tsx, so Next streams a fallback before the
-      // page resolves and BOTH subtrees are briefly in the DOM during the swap.
-      // Waiting for exactly one h1 is what settles that; `toBeVisible` throws a
-      // strict-mode violation mid-transition instead of waiting. The sibling
-      // test above owns the "exactly one h1" guarantee itself.
-      await expect(page.locator("h1")).toHaveCount(1);
-      await expect(page.locator("h1")).toBeVisible();
+      // /status has a scoped loading.tsx, so Next streams a fallback and React
+      // stages the resolved subtree in a hidden container before moving it -
+      // two h1s exist for an instant. `expectSingleVisibleH1` retries both
+      // conditions together; see its docstring.
+      await expectSingleVisibleH1(page);
       const levels = await page.evaluate(() =>
         Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6")).map((h) =>
           Number(h.tagName.slice(1)),

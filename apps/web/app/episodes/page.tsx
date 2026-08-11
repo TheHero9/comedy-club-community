@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import {
+  isAtLimitCeiling,
   KIND_OPTIONS,
   PAGE_SIZE,
   readFilters,
@@ -148,7 +149,7 @@ export default async function EpisodesPage({
             ))}
           </div>
 
-          {episodes.meta.has_more ? (
+          {episodes.meta.has_more && !isAtLimitCeiling(filters) ? (
             // A link, not a client-side append: the deeper list stays
             // shareable and server-rendered. `scroll={false}` keeps the user
             // exactly where they were.

@@ -1,7 +1,12 @@
 # 📊 STATUS
 
-**Updated:** 2026-08-10
-**Overall:** 🟢 **Waves 1-13 built and test-hardened, and the full visual redesign is shipped.** 41 API paths, all ten designed routes live in Bulgarian across two themes, and **753 automated tests** (357 pytest + 137 Vitest + 259 Playwright) that all run from `npm run test`.
+**Updated:** 2026-08-11
+**Overall:** 🟢 **Waves 1-13 built and test-hardened, and the full visual redesign is shipped.** 41 API paths, all ten designed routes live in Bulgarian across two themes, and **958 automated tests** (423 pytest + 166 Vitest + 369 Playwright) that all run from `npm run test`.
+
+> 🆕 **2026-08-11 hardening sweep:** 7 real bugs found and fixed, including the
+> root cause of the "unexplained flaky E2E" recorded below on 2026-08-10 - it was
+> **Postgres connection exhaustion**, disguised as a data mismatch by Next's
+> stale fetch cache. Full write-up: [`specs/09-edge-case-hardening/`](../specs/09-edge-case-hardening/01-findings.md).
 
 > Wave definitions live in [`specs/01-initial-build/01-waves.md`](../specs/01-initial-build/01-waves.md).
 
@@ -44,10 +49,10 @@ suites; the counts here come from actual runs.
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| Backend | `cd apps/api && uv run pytest -q` | **357 passed** |
-| Frontend unit + contract | `cd apps/web && npx vitest run` | **137 passed** |
-| Frontend E2E | `cd apps/web && npx playwright test` | **259 passed** (desktop 1280x800 + mobile 390x844, against a production build) |
-| Everything, cold start | `npm run test` | **753 passed** |
+| Backend | `cd apps/api && uv run pytest -q` | **423 passed** |
+| Frontend unit + contract | `cd apps/web && npx vitest run` | **166 passed** (19 of them the perf budgets, which skip if no server is up) |
+| Frontend E2E | `cd apps/web && npx playwright test` | **369 passed** (desktop 1280x800 + mobile 390x844, against a production build) |
+| Everything, cold start | `npm run test` | **958 passed** |
 | Performance | `npm run benchmark` | See `specs/05-performance/` |
 | Static gates | `npx turbo typecheck lint build` | **4/4 successful** |
 | Python lint | `cd apps/api && uv run ruff check .` | All checks passed |
@@ -72,6 +77,13 @@ suites; the counts here come from actual runs.
 | No horizontal page overflow at 390px | `e2e/invisible-failures.spec.ts` |
 | Recheck-button toasts: healthy / degraded / unreachable / slow | `e2e/resilience.spec.ts` |
 | axe: zero critical or serious violations, 7 routes x 2 viewports | `e2e/a11y.spec.ts` |
+| Hostile query strings, NUL bytes, SQLi, traversal, emoji, 3 KB values on every route | `e2e/edge-cases.spec.ts` (55 cases x 2 viewports) |
+| A NUL byte is a 400 everywhere, incl. a sweep over every parameterless GET | `podcast/tests/test_null_bytes.py` |
+| A query that tokenizes to nothing returns 0 hits, not the catalogue | `podcast/tests/test_search_unsearchable_queries.py` |
+| `CONN_MAX_AGE` stays 0 in dev and 600 in prod | `podcast/tests/test_db_connection_policy.py` |
+| `seed_demo` is idempotent and `--clear` is its exact inverse | `podcast/tests/test_seed_demo.py` |
+| The web `limit` clamp equals the API's `MAX_LIMIT` (parsed from the Python) | `tests/filter-model.spec.ts` |
+| The four `/me/*` lists render; an unknown list is a hard 404 | `e2e/edge-cases.spec.ts` |
 | Auth rejection, role matrix, rate limits, privacy, elite scoring | `podcast/tests/test_authz_matrix.py`, `test_rate_limits.py`, `test_privacy.py`, `test_scoring_elite.py` |
 
 ### Still verified manually (infrastructure, not app logic)
@@ -300,6 +312,14 @@ docker compose --profile workers down      # stop them
 | 2026-08-10 | ⚠️ **A "9 episodes reclassified" claim made during that investigation was itself wrong** - it came from comparing a corpus-wide `members_only` count (46 = 9 + 37 across both channels) against a per-channel figure (37). Read the `availability_corrected` number `repair_metadata` prints; do not reconstruct it from a filter with a different scope. |
 | 2026-08-10 | 🔍 **The demo seeder is a data-completeness probe.** This was caught because it produced 365 `Moment` rows where ~1,700 were expected - moments need a `duration_sec`, so a quarter-sized output was the tell. Nobody was looking for a metadata bug. |
 | 2026-08-10 | ⚡ **`scoring.recompute_many`** - set-based recompute (two aggregates + one `bulk_update`) so a bulk load does not queue one Celery reindex task per episode. `scoring.py` now has TWO writers of the denormalized columns, and `test_scoring_bulk.py` compares them **against each other**, never against hardcoded numbers, so neither can drift alone. |
-| 2026-08-10 | ⚠️ **One unexplained flaky E2E** (`3.8` grid public/elite toggle): failed once in the parallel run, then 66/66 on `--repeat-each=3 --retries=0`, with the API stable and the page matching it 0/74 mismatches. Not papered over. `/channels/[slug]` is `revalidate = 60`, so a test can compare a minute-old ISR render against a fresh API fetch - that is where to look if it recurs. |
+| 2026-08-10 | ~~⚠️ **One unexplained flaky E2E** (`3.8` grid public/elite toggle)... `/channels/[slug]` is `revalidate = 60`, so a test can compare a minute-old ISR render against a fresh API fetch - that is where to look if it recurs.~~ ✅ **EXPLAINED 2026-08-11 - see below.** The instinct about the cache was right; the reason the cache was stale was not staleness. |
+| 2026-08-11 | 🚨 **The flake was Postgres connection exhaustion.** `conn_max_age=600` is correct for production but wrong under `runserver`, which spawns an unbounded thread per request and holds one connection per thread. **8 concurrent requests produced 14 failures of 32**, 65 connections stayed idle after the load, and E2E failures accumulated across runs (1 -> 4 -> 10). `CONN_MAX_AGE = 0` in `dev.py`: 48 concurrent -> 192/192 OK. |
+| 2026-08-11 | 🔍 **Why it read as a data mismatch rather than an outage: Next serves the STALE fetch-cache entry when a revalidation request fails.** The API 500 never reached the browser, so the page rendered plausible-but-outdated scores. When a test says the page and the API disagree, check whether the API was erroring. |
+| 2026-08-11 | 🔒 **A NUL byte 500ed ten endpoints.** Legal in a URL and in JSON, passes every Pydantic constraint, fails inside psycopg. Fixed once in `podcast/middleware.RejectNullBytesMiddleware` so a new endpoint cannot ship vulnerable by omission. SQLi and path traversal were already handled correctly. |
+| 2026-08-11 | 🚨 **`/search?q=???` returned all 1,393 episodes as matches.** Non-empty after `strip()`, so it reached Meilisearch, which read it as a placeholder search. `has_searchable_text()` now guards both search endpoints. |
+| 2026-08-11 | 🚨 **The ELEVENTH click on "Зареди още" served a 500.** The web clamp was 200 against the API's `MAX_LIMIT = 100`, and load-more grows `limit` by 9 per click. `tests/filter-model.spec.ts` now parses the Python constant so the two cannot drift. ⚠️ `/episodes` still cannot page past 100 - left as an explicit pagination decision, not silently changed. |
+| 2026-08-11 | 🐛 **`seed_demo --seed` was never reproducible.** Unordered queries plus six `random.*` calls made *inside* existence checks, so a second run wrote a whole new generation of rows (201 -> 342 ratings) while printing a normal summary. Every draw now happens before the check. |
+| 2026-08-11 | 🚨 **`--clear` would have stranded every `Report`.** `SET_NULL` reporter + `GenericForeignKey` target means no cascade reaches it, and the queue renders orphans happily because `_report_out` never dereferences the target. |
+| 2026-08-11 | ⚡ **Big channel page 2076.3 KB -> 1724.1 KB.** Every cell carried `aria-label` and `title` set to the same string; the RSC flight payload (56% of the page) then serialized it again. `GridInteraction` already renders a real hover preview, so the native tooltip was firing *alongside* it. **Ceiling NOT raised** - demo seeding alone ate three quarters of the ratchet's headroom, so the structural fix is now due. |
 | 2026-08-10 | ⚡ **The redesign's dense grid paid for itself: `/channels/<big>` went 2271.2 KB -> 1355.2 KB and 464 ms -> 65 ms, WHILE that channel went from 0 to 1,043 rated cells.** The grid API held at 322.3 KB (up just 2.3 KB for 1,043 newly-populated cells), which says the remaining bulk is empty holes, not data. Both waiver ratchets re-measured and tightened; the page ceiling drops 2400 KB -> 1800 KB. |
 | 2026-08-10 | ✅ **Metadata repair genuinely closed: 1,066 rows repaired, `duration_sec IS NULL` is now 0 across all 1,392 episodes, 0 availability corrections, 0 errors.** Re-indexed. This time the closing evidence is the count, not the command. |

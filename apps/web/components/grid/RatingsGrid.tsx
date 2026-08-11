@@ -272,7 +272,6 @@ function RoomyCell({
     <a
       href={`/e/${cell.youtube_id}`}
       aria-label={cellLabel(cell)}
-      title={cellLabel(cell)}
       {...cellDataAttributes(cell, season, index)}
       className={cn(
         "relative flex h-11 items-center outline-none",
@@ -401,11 +400,22 @@ function DenseCell({
   // The class list is deliberately minimal: it is repeated once per episode, so
   // at 1,318 episodes every character costs ~1.3 KB of HTML. Hover and focus
   // treatment lives on the table as a single descendant rule instead.
+  //
+  // 🚨 No `title` attribute, deliberately. It used to carry the same string as
+  // `aria-label`, which cost a second full copy of the episode title on every
+  // one of 2,024 cells - and then a THIRD, because the RSC flight payload
+  // serializes the whole tree again. Measured 2026-08-11: dropping it took the
+  // page from 2076.3 KB to 1723.9 KB.
+  //
+  // It was not buying anything either. `GridInteraction` renders a real hover
+  // preview from the `data-*` attributes below, so the native tooltip fired
+  // ALONGSIDE that card rather than instead of it. The accessible name is
+  // unaffected: `aria-label` is what screen readers use, and `e2e/a11y.spec.ts`
+  // still asserts it ends with the score.
   return (
     <a
       href={`/e/${cell.youtube_id}`}
       aria-label={label}
-      title={label}
       {...cellDataAttributes(cell, season, index)}
       className={cn("block h-6 w-5 rounded-[3px]", style.cell)}
     />

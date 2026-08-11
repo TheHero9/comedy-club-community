@@ -307,6 +307,17 @@ test.describe("3. ratings grid", () => {
     await elite.click();
     await page.waitForURL(/score=elite/);
 
+    // 🚨 `waitForURL` resolves on the History API update, which during a soft
+    // navigation happens BEFORE the new RSC payload is applied. Reading the grid
+    // at that instant can capture the PUBLIC table still in the DOM, and the
+    // failure then looks like wrong scores rather than a mistimed read - which
+    // is how this test spent a session logged as an unexplained flake.
+    //
+    // `aria-current` is set by the SERVER from `score === "elite"`, so it can
+    // only be true once the elite render has actually landed. Asserting it is
+    // additive: it pins the toggle's accessibility state as well.
+    await expect(elite).toHaveAttribute("aria-current", "true");
+
     const rendered = await readGrid(page, "desktop");
     const renderedScores = rendered.rows.flat().map((node) => node.text);
     const expectedScores = eliteGrid.seasons.flatMap((_season, seasonIndex) =>

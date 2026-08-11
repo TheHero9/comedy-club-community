@@ -1,4 +1,5 @@
 import { copy } from "@/lib/copy";
+import { stripControlCharacters } from "@/lib/sanitize";
 
 /**
  * The browse filter model.
@@ -38,6 +39,22 @@ export const DEFAULT_SORT = "newest";
 /** Page size, and the step "Зареди още" adds. */
 export const PAGE_SIZE = 9;
 
+/**
+ * 🚨 The API's own ceiling: `MAX_LIMIT = 100` in `podcast/api/public.py`, where
+ * `limit` is declared `Query(24, ge=1, le=MAX_LIMIT)`.
+ *
+ * This constant used to be 200 here, and the mismatch was a real 500. Anything
+ * above 100 was forwarded verbatim, Django-Ninja rejected it with a 422, the
+ * server component threw, and the page rendered an error. It was not only
+ * reachable by hand-editing the URL: "Зареди още" adds PAGE_SIZE to `limit` on
+ * every click, so the ELEVENTH click (9 -> 108) crossed the ceiling and served
+ * a 500 to an ordinary user browsing a catalogue of 1,393 episodes.
+ *
+ * If the API's MAX_LIMIT ever moves, this must move with it -
+ * `tests/filter-model.spec.ts` parses the Python constant and fails on drift.
+ */
+export const MAX_API_LIMIT = 100;
+
 export const SORT_OPTIONS: FilterOption[] = [
   { value: "newest", label: copy.browse.sortNewest },
   { value: "oldest", label: copy.browse.sortOldest },
@@ -63,6 +80,23 @@ function first(value: string | string[] | undefined): string {
   return value ?? "";
 }
 
+/**
+ * `sort` and `kind` are allow-listed below, but `channel` and `person` are
+ * forwarded to the API verbatim - they are slugs, and the app does not hold the
+ * list of valid ones on this code path.
+ *
+ * 🚨 So they are stripped of C0/C1 control characters first. A NUL byte is
+ * legal in a URL (`%00`) and reaches the API as an ordinary string; the API now
+ * rejects it with a 400, but a 400 from a server component is still an
+ * unhandled throw and a 500 page. Removing the character here means a URL a
+ * fuzzer produced degrades into an empty result instead of an error.
+ *
+ * 🇧🇬 The range is control characters ONLY. Cyrillic is far above it and passes
+ * through untouched, which the tests pin - a filter that ate Bulgarian slugs
+ * would break the actual product.
+ */
+const sanitizeSlug = stripControlCharacters;
+
 export function readFilters(
   query: Record<string, string | string[] | undefined>,
 ): ActiveFilters {
@@ -73,13 +107,22 @@ export function readFilters(
     kind: KIND_OPTIONS.some((option) => option.value === first(query.kind))
       ? first(query.kind)
       : "",
-    channel: first(query.channel),
-    person: first(query.person),
+    channel: sanitizeSlug(first(query.channel)),
+    person: sanitizeSlug(first(query.person)),
+    // 🚨 `Math.floor` is not cosmetic. `Number("2.5")` is finite and positive,
+    // so a hand-typed `?limit=2.5` used to be forwarded as a float, which the
+    // API's `int` parameter rejects with a 422 - and the server component threw
+    // rather than degrading, so the page answered 500.
     limit:
-      Number.isFinite(rawLimit) && rawLimit > 0
-        ? Math.min(rawLimit, 200)
+      Number.isFinite(rawLimit) && rawLimit >= 1
+        ? Math.min(Math.floor(rawLimit), MAX_API_LIMIT)
         : PAGE_SIZE,
   };
+}
+
+/** True once "load more" has nothing left to ask the API for. */
+export function isAtLimitCeiling(filters: ActiveFilters): boolean {
+  return filters.limit >= MAX_API_LIMIT;
 }
 
 /** Query params for `/api/episodes`, omitting everything unset. */

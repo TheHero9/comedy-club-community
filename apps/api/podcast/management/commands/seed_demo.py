@@ -23,6 +23,7 @@ import random
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Sum
@@ -39,7 +40,9 @@ from podcast.models import (
     Favorite,
     Moment,
     Person,
+    PersonalTag,
     Rating,
+    Report,
     Topic,
     UserProfile,
     WatchEvent,
@@ -85,6 +88,40 @@ COMMENTS = [
     "Не очаквах такъв обрат в разговора.",
     "Първите двайсет минути са бавни, после тръгва.",
     "Върнах се да го чуя пак заради последната част.",
+]
+
+# 🔒 PRIVATE per-user notes. Deliberately phrased as things someone writes for
+# THEMSELVES ("to rewatch", "for the podcast list") rather than as public topic
+# labels. If these read like topics, a leak of private data onto a public
+# endpoint would look like correct output in a screenshot.
+PERSONAL_TAG_TEXTS = [
+    "да гледам пак",
+    "за цитиране",
+    "препоръчано от Мария",
+    "недовършен",
+    "за списъка с любими",
+    "чака втора част",
+    "показах го на брат ми",
+    "най-смешният досега",
+    "за бавна вечер",
+    "проверка на факти",
+]
+
+REPORT_REASONS = [
+    "Спам съдържание",
+    "Обиден език",
+    "Грешен таймкод",
+    "Етикетът няма връзка с епизода",
+    "Разкрива развръзката без предупреждение",
+    "Дублиран коментар",
+    "Подвеждащо описание",
+]
+
+RESOLUTION_NOTES = [
+    "Скрито от модератор.",
+    "Проверено, няма нарушение.",
+    "Етикетът е коригиран.",
+    "Потвърдено и премахнато.",
 ]
 
 MOMENT_LABELS = [
@@ -152,8 +189,16 @@ class Command(BaseCommand):
             raise CommandError("--coverage must be between 0 (exclusive) and 1")
 
         channels = self._resolve_channels(options["channel"])
+        # 🚨 `order_by("id")` is what makes `--seed` mean anything. Without it
+        # Postgres may hand back the rows in a different physical order on each
+        # run, so the same RNG sequence lands on DIFFERENT episodes - and a
+        # second run, instead of being a no-op, writes a fresh set of rows on
+        # top of the first. Measured: re-running doubled every table
+        # (201 -> 342 ratings) while reporting a normal-looking summary.
         episodes = list(
-            Episode.objects.filter(channel__in=channels).select_related("channel")
+            Episode.objects.filter(channel__in=channels)
+            .select_related("channel")
+            .order_by("id")
         )
         if not episodes:
             raise CommandError(
@@ -172,6 +217,11 @@ class Command(BaseCommand):
         self._create_participants(episodes, users)
         counts = self._create_engagement(users, episodes, coverage)
         self._create_topics(episodes, users, coverage)
+        counts["tags"] = self._create_personal_tags(users, episodes, coverage)
+        # Reports run LAST: they point at the comments, moments, topic links and
+        # ratings the steps above just created, so an earlier call would find
+        # empty pools and silently seed nothing.
+        counts["reports"] = self._create_reports(users, episodes)
 
         self.stdout.write("  recomputing scores...")
         # reindex=False: this queues nothing. A bulk load followed by one
@@ -282,13 +332,17 @@ class Command(BaseCommand):
                 )
             if random.random() < 0.35:
                 guest = random.choice(guests)
+                # 🚨 Drawn BEFORE the existence check, never inside it. See the
+                # note on `_create_engagement` - a draw that only happens for
+                # new rows makes the second run diverge from the first.
+                added_by = random.choice(users)
                 if (episode.pk, guest.pk) not in existing:
                     rows.append(
                         EpisodeParticipant(
                             episode=episode,
                             person=guest,
                             role="guest",
-                            added_by=random.choice(users),
+                            added_by=added_by,
                         )
                     )
 
@@ -301,6 +355,23 @@ class Command(BaseCommand):
     def _create_engagement(
         self, users: list[User], episodes: list[Episode], coverage: float
     ) -> dict:
+        """Ratings, comments, moments, favorites and watch events.
+
+        🚨 RNG DISCIPLINE, and it is not optional anywhere in this command:
+        **every `random.*` call happens BEFORE the "does this row already exist"
+        check, never inside it.**
+
+        A draw that only runs for NEW rows makes the random stream diverge the
+        moment anything already exists. The seed then stops meaning what
+        `--seed` advertises, and a second run - instead of being a no-op - lands
+        on a different set of (user, episode) pairs and writes a whole new
+        generation of rows on top of the first. Measured 2026-08-11: re-running
+        doubled every table (201 -> 342 ratings, 72 -> 142 reports) while
+        printing a perfectly normal-looking summary.
+
+        So the draws below look wasteful on a repeat run. That waste IS the
+        determinism.
+        """
         episode_ids = [e.pk for e in episodes]
 
         # Pre-load what already exists so a second run adds nothing. Rating and
@@ -342,37 +413,39 @@ class Command(BaseCommand):
 
             # Skew high: people rate podcasts they chose to watch.
             for user in random.sample(users, k=random.randint(0, len(users))):
-                if (user.pk, episode.pk) in rated:
-                    continue
                 score = random.choices(
                     range(1, 11), weights=[1, 1, 2, 3, 5, 8, 12, 18, 16, 10]
                 )[0]
+                if (user.pk, episode.pk) in rated:
+                    continue
                 ratings.append(Rating(user=user, episode=episode, score=score))
 
             for user in random.sample(users, k=random.randint(0, 3)):
+                body = random.choice(COMMENTS)
+                is_spoiler = random.random() < 0.15
                 if (user.pk, episode.pk) in commented:
                     continue
                 comments.append(
                     Comment(
                         user=user,
                         episode=episode,
-                        body=random.choice(COMMENTS),
-                        is_spoiler=random.random() < 0.15,
+                        body=body,
+                        is_spoiler=is_spoiler,
                     )
                 )
 
             if episode.duration_sec:
                 for label in random.sample(MOMENT_LABELS, k=random.randint(0, 3)):
+                    author = random.choice(users)
+                    at = random.randint(60, max(61, episode.duration_sec - 60))
                     if (episode.pk, label) in momented:
                         continue
                     moments.append(
                         Moment(
                             episode=episode,
-                            user=random.choice(users),
+                            user=author,
                             label=label,
-                            timestamp_sec=random.randint(
-                                60, max(61, episode.duration_sec - 60)
-                            ),
+                            timestamp_sec=at,
                         )
                     )
 
@@ -382,14 +455,14 @@ class Command(BaseCommand):
                 favorites.append(Favorite(user=user, episode=episode))
 
             for user in random.sample(users, k=random.randint(0, 3)):
+                days_ago = random.randint(0, 400)
                 if (user.pk, episode.pk) in watched:
                     continue
                 watches.append(
                     WatchEvent(
                         user=user,
                         episode=episode,
-                        watched_on=today
-                        - timezone.timedelta(days=random.randint(0, 400)),
+                        watched_on=today - timezone.timedelta(days=days_ago),
                     )
                 )
 
@@ -429,18 +502,26 @@ class Command(BaseCommand):
             )
         )
 
-        wanted: list[tuple[Episode, Topic]] = []
+        # 🚨 `candidates` holds EVERY (episode, topic) the RNG picked, including
+        # ones that already exist. The votes loop below iterates over this list,
+        # so filtering it here would shorten that loop on a second run and shift
+        # the random stream for everything after it - which is precisely how the
+        # seeder stopped being reproducible. The existence check belongs at the
+        # INSERT, not in the list the RNG walks.
+        candidates: list[tuple[Episode, Topic, User]] = []
         for episode in episodes:
             if random.random() > coverage:
                 continue
             for topic in random.sample(topics, k=random.randint(1, 4)):
-                if (episode.pk, topic.pk) not in existing:
-                    wanted.append((episode, topic))
+                # Drawn for every candidate, not only the new ones.
+                added_by = random.choice(users)
+                candidates.append((episode, topic, added_by))
 
         EpisodeTopic.objects.bulk_create(
             [
-                EpisodeTopic(episode=episode, topic=topic, added_by=random.choice(users))
-                for episode, topic in wanted
+                EpisodeTopic(episode=episode, topic=topic, added_by=added_by)
+                for episode, topic, added_by in candidates
+                if (episode.pk, topic.pk) not in existing
             ],
             batch_size=1000,
             ignore_conflicts=True,
@@ -461,20 +542,21 @@ class Command(BaseCommand):
         )
 
         votes = []
-        for episode, topic in wanted:
+        for episode, topic, _added_by in candidates:
             link_id = links.get((episode.pk, topic.pk))
             if link_id is None:
                 continue
             for user in random.sample(users, k=random.randint(1, 5)):
+                # A minority downvote is what makes the sort order mean
+                # anything; all-positive scores sort as insertion order.
+                value = 1 if random.random() < 0.85 else -1
                 if (link_id, user.pk) in voted:
                     continue
                 votes.append(
                     EpisodeTopicVote(
                         episode_topic_id=link_id,
                         user=user,
-                        # A minority downvote is what makes the sort order mean
-                        # anything; all-positive scores sort as insertion order.
-                        value=1 if random.random() < 0.85 else -1,
+                        value=value,
                     )
                 )
 
@@ -482,7 +564,129 @@ class Command(BaseCommand):
             votes, batch_size=1000, ignore_conflicts=True
         )
         self._recompute_topic_scores(episode_ids)
-        self.stdout.write(f"  topics: +{len(wanted)} links, +{len(votes)} votes")
+        fresh = sum(
+            1 for e, t, _ in candidates if (e.pk, t.pk) not in existing
+        )
+        self.stdout.write(f"  topics: +{fresh} links, +{len(votes)} votes")
+
+    def _create_personal_tags(
+        self, users: list[User], episodes: list[Episode], coverage: float
+    ) -> int:
+        """🔒 PRIVATE per-user keywords, on a MINORITY of episodes.
+
+        Deliberately sparser than any public signal (~18% of covered episodes).
+        Personal tags are a power-user feature; seeding them at the same density
+        as ratings would make a privacy leak on a public endpoint look normal -
+        a tag on every episode is indistinguishable from a topic chip at a
+        glance, which is exactly the confusion this data should NOT create.
+        """
+        episode_ids = [e.pk for e in episodes]
+        existing = set(
+            PersonalTag.objects.filter(episode_id__in=episode_ids).values_list(
+                "user_id", "episode_id", "text"
+            )
+        )
+
+        rows = []
+        for episode in episodes:
+            if random.random() > coverage * 0.18:
+                continue
+            for user in random.sample(users, k=random.randint(1, 2)):
+                for text in random.sample(
+                    PERSONAL_TAG_TEXTS, k=random.randint(1, 3)
+                ):
+                    if (user.pk, episode.pk, text) in existing:
+                        continue
+                    rows.append(
+                        PersonalTag(user=user, episode=episode, text=text)
+                    )
+
+        PersonalTag.objects.bulk_create(rows, batch_size=1000, ignore_conflicts=True)
+        self.stdout.write(f"  personal tags: +{len(rows)} (private)")
+        return len(rows)
+
+    def _create_reports(self, users: list[User], episodes: list[Episode]) -> int:
+        """Fill the moderation queue across ALL FOUR reportable types and all
+        three statuses.
+
+        🚨 The queue must not be seeded pending-only. A queue containing nothing
+        but `pending` never exercises the resolved/dismissed filters, and the
+        `status=all` branch of `list_reports` would render identically to the
+        default - a broken filter would look correct.
+        """
+        episode_ids = [e.pk for e in episodes]
+        moderators = [
+            u
+            for u in users
+            if u.profile.role in {UserProfile.Role.MODERATOR, UserProfile.Role.ADMIN}
+        ]
+
+        # Only the four types `REPORTABLE` in the moderation router accepts. A
+        # report pointing at anything else is not reachable through the API and
+        # would be seed data that no code path can produce.
+        # `order_by("id")` on every pool: an unordered LIMIT is not a stable
+        # slice, so the same seed would sample different targets each run.
+        def pool(model, cap):
+            return list(
+                model.objects.filter(episode_id__in=episode_ids)
+                .order_by("id")
+                .values_list("id", flat=True)[:cap]
+            )
+
+        pools = {
+            Comment: pool(Comment, 400),
+            Moment: pool(Moment, 200),
+            EpisodeTopic: pool(EpisodeTopic, 400),
+            Rating: pool(Rating, 400),
+        }
+
+        existing = set(
+            Report.objects.values_list("reporter_id", "content_type_id", "object_id")
+        )
+
+        now = timezone.now()
+        rows = []
+        for model, ids in pools.items():
+            if not ids:
+                continue
+            content_type = ContentType.objects.get_for_model(model)
+            for target_id in random.sample(ids, k=min(len(ids), 18)):
+                # Every draw happens unconditionally, before the skip. See
+                # `_create_engagement`.
+                reporter = random.choice(users)
+                status = random.choices(
+                    [
+                        Report.Status.PENDING,
+                        Report.Status.RESOLVED,
+                        Report.Status.DISMISSED,
+                    ],
+                    weights=[5, 3, 2],
+                )[0]
+                reason = random.choice(REPORT_REASONS)
+                resolver = random.choice(moderators)
+                note = random.choice(RESOLUTION_NOTES)
+
+                if (reporter.pk, content_type.pk, target_id) in existing:
+                    continue
+
+                handled = status != Report.Status.PENDING
+                rows.append(
+                    Report(
+                        reporter=reporter,
+                        reason=reason,
+                        content_type=content_type,
+                        object_id=target_id,
+                        status=status,
+                        resolved_by=resolver if handled else None,
+                        resolved_at=now if handled else None,
+                        resolution_note=note if handled else "",
+                    )
+                )
+
+        Report.objects.bulk_create(rows, batch_size=500, ignore_conflicts=True)
+        pending = sum(1 for r in rows if r.status == Report.Status.PENDING)
+        self.stdout.write(f"  reports: +{len(rows)} ({pending} pending)")
+        return len(rows)
 
     def _recompute_topic_scores(self, episode_ids: list[int]) -> None:
         """Set-based equivalent of `topic_service.recompute_topic_score`."""
@@ -501,6 +705,15 @@ class Command(BaseCommand):
         users = User.objects.filter(username__startswith=SEED_PREFIX)
         user_ids = list(users.values_list("id", flat=True))
 
+        # 🚨 Reports go FIRST and EXPLICITLY. `Report.reporter` is SET_NULL and
+        # the target is a GenericForeignKey, so neither deleting the demo users
+        # nor deleting the reported comments removes a Report row. Left to the
+        # cascade, `--clear` would strand every report as an ownerless row
+        # pointing at a primary key that no longer exists - and the moderation
+        # queue renders it fine, because `_report_out` never dereferences the
+        # target. The leak would be invisible until the ids got reused.
+        Report.objects.filter(reporter_id__in=user_ids).delete()
+        PersonalTag.objects.filter(user_id__in=user_ids).delete()
         Rating.objects.filter(user_id__in=user_ids).delete()
         Comment.objects.filter(user_id__in=user_ids).delete()
         Moment.objects.filter(user_id__in=user_ids).delete()

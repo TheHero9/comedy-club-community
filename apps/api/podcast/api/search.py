@@ -46,6 +46,18 @@ MEILI_HIT_FIELDS = ("id", "topics", "moments")
 MAX_MATCHED_LABELS = 5
 
 
+def has_searchable_text(query: str) -> bool:
+    """True if a query contains anything a tokenizer can actually match on.
+
+    🇧🇬 `str.isalnum()` is Unicode-aware, so Cyrillic counts: "Каспаров" is
+    searchable, "???" and "..." are not, and a bare number like "2024" still is.
+    Exported because the transcript endpoint applies the identical rule - two
+    search endpoints disagreeing about what an unsearchable query means is how
+    one of them ends up returning the whole corpus.
+    """
+    return any(character.isalnum() for character in query)
+
+
 def _meilisearch_available() -> bool:
     try:
         from podcast.search.client import is_available
@@ -68,9 +80,23 @@ def search(
     offset: int = Query(0, ge=0),
 ):
     query = (q or "").strip()
-    if not query:
+
+    # 🚨 `has_searchable_text` is not the same test as `not query`, and the
+    # difference is the whole point. A query of "???" is non-empty, so it used to
+    # reach Meilisearch - which tokenizes it to nothing, treats that as a
+    # placeholder search, and answers with the ENTIRE catalogue. The endpoint
+    # then reported 1,393 episodes as matches for "???".
+    #
+    # Returning everything is the worst possible failure for a search box: it
+    # looks like a working feature. It is also precisely the symptom CLAUDE.md
+    # documents for Cyrillic mangled by a shell (every letter becomes "?"), so
+    # the API answering it honestly is what keeps that diagnosis readable.
+    #
+    # The endpoint has always held that an empty query returns 0 hits rather
+    # than everything. A query that tokenizes to empty is the same question.
+    if not has_searchable_text(query):
         return {
-            "query": "",
+            "query": query,
             "hits": [],
             "total": 0,
             "limit": limit,
@@ -271,7 +297,9 @@ def search_transcripts(
         "available": True,
         "processing_ms": 0,
     }
-    if not query:
+    # Same rule as `/search`: a query with nothing alphanumeric in it tokenizes
+    # to a placeholder search, which would return every indexed segment.
+    if not has_searchable_text(query):
         return empty
 
     from podcast.search.transcript_index import build_filter

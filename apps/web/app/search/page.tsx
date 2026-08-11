@@ -8,6 +8,7 @@ import { Page } from "@/components/shell/Page";
 import { buttonVariants, LinkButton } from "@/components/ui/button";
 import { listTopics, search } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
+import { stripControlCharacters } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -27,9 +28,17 @@ const EXAMPLE_QUERIES = copy.search.examples;
 const RESULT_LIMIT = 20;
 const POPULAR_TOPIC_LIMIT = 8;
 
+/**
+ * 🚨 Control characters are stripped before the query goes anywhere.
+ *
+ * `?q=a%00b` reaches this page as an ordinary string, and the API rejects a NUL
+ * byte with a 400 - which, raised inside a Server Component, is an unhandled
+ * throw and therefore a 500 page. The query is also echoed back into the
+ * results heading and the search box, so it is user input rendered publicly.
+ */
 function readQuery(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) return (value[0] ?? "").trim();
-  return (value ?? "").trim();
+  const raw = Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+  return stripControlCharacters(raw).trim();
 }
 
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {

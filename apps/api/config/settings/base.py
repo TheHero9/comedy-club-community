@@ -66,6 +66,10 @@ INSTALLED_APPS = [
 # Measured on 1392 episodes: /api/episodes?limit=24 22,494B -> 2,795B (-88%).
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # 🔒 Ahead of everything that touches the database. A NUL byte in a query
+    # param or a JSON body is a 500 from psycopg otherwise - see the module
+    # docstring for the six endpoints this covers.
+    "podcast.middleware.RejectNullBytesMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",

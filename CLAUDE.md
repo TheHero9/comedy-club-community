@@ -285,6 +285,19 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
 - 🔒 **Authorization is checked on the API, always.** Never rely on the frontend hiding a button. Moderator/admin actions check `UserProfile.role`.
 - 🔒 Verification screenshots are **private** (signed URLs / admin-only). They are proof-of-membership images from real people.
 
+### Local dev server (both cost real debugging time on 2026-08-11)
+
+- 🚨 **`CONN_MAX_AGE` is 0 in `dev.py` and must stay there.** `base.py` sets 600, which is right for production (gunicorn has a fixed worker count, so connections are bounded). `manage.py runserver` spawns a **new thread per request** with no bound, and Django holds one connection per thread, so a 600s max age exhausts Postgres' default `max_connections = 100`. Measured: **8 concurrent requests produced 14 failures of 32**, 65 connections stayed idle afterwards, and E2E failures ACCUMULATED across runs (1 -> 4 -> 10). With 0: 48 concurrent, 192/192 OK. Pinned by `test_db_connection_policy.py`.
+- 🚨 **Next.js serves a STALE fetch-cache entry when revalidation fails, so an API 500 shows up as WRONG DATA, not as an error.** This is why the above hid for a session: the ratings-grid test failed with plausible-but-outdated scores and was logged as an "unexplained flake". When a test says the page and the API disagree, check whether the API was erroring, not just whether the numbers changed.
+- ⚠️ **A `runserver` started with `--noreload` does not pick up settings changes.** Restart it, then confirm with `Get-CimInstance Win32_Process` if a fix appears to do nothing.
+
+### Input validation (non-negotiable)
+
+- 🚨 **A NUL byte must never reach Postgres.** `U+0000` is legal in a URL (`%00`) and in a JSON string (`\u0000`), passes every Pydantic constraint, and 500s inside psycopg. It is rejected once, in `podcast/middleware.RejectNullBytesMiddleware` (path + query + JSON body, recursive), for the same reason the throttle is attached to the whole `NinjaAPI`: **a new endpoint cannot ship vulnerable by omission.** Never add a per-endpoint NUL check instead.
+- 🚨 **Fixing the API is only half of it: a 4xx raised inside a Server Component is an unhandled throw and therefore a 500 page.** Query-string input is normalised at the edge too - `lib/sanitize.ts` strips C0/C1 control characters in `readFilters` and the search page. 🇧🇬 Control characters ONLY; a sanitiser that ate Cyrillic would break every real slug while still passing a NUL test.
+- 🚨 **`MAX_API_LIMIT` in `components/browse/filter-model.ts` must equal `MAX_LIMIT` in `podcast/api/public.py`.** It was 200 against the API's 100, and "Зареди още" grows `limit` by 9 per click - so the **eleventh click served a 500** to an ordinary user. `tests/filter-model.spec.ts` parses the Python constant and fails on drift. Also floor the value: `Number("2.5")` is finite and positive and a float against an `int` param is a 422.
+- 🚨 **A query that tokenizes to nothing is not the same as a non-empty query.** `/search?q=???` reached Meilisearch, which read it as a placeholder search and returned **the entire catalogue as matches**. Use `has_searchable_text()`; both `/search` and `/search/transcripts` share it.
+
 ### Security
 
 - 🔒 **Rate limiting is IMPLEMENTED** (2026-08-08): `podcast/api/throttling.py` attaches one `WriteThrottle` to the whole `NinjaAPI` in `config/api.py`, so a new write endpoint cannot ship unthrottled by omission. Keyed on `request.auth` (never a client-supplied id), safe methods exempt, **fails open** on a cache outage so a Redis blip cannot make the site read-only. Tune with `API_WRITE_RATE_LIMIT` (default `60/min`); `""` disables it and is local-debug only.
