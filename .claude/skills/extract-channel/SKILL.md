@@ -1,6 +1,6 @@
 ---
 name: extract-channel
-description: Ingest a YouTube channel's full back catalogue (videos + streams, never shorts) into the database, with the throttle-detection and repair steps that a large backfill requires. Use when adding a new podcast channel, re-running a backfill, or when episodes are missing duration/availability.
+description: Ingest a YouTube channel's full back catalogue (videos + streams, never shorts) into the database, including its free YouTube captions as searchable transcript segments, with the throttle-detection and repair steps that a large backfill requires. Use when adding a new podcast channel, re-running a backfill, or when episodes are missing duration/availability/transcripts.
 ---
 
 # Extracting a channel
@@ -148,7 +148,43 @@ uv run python manage.py refresh_channel_meta @handle    # or omit for all channe
 is stored - and it changes when the owner changes their picture. Re-run this
 periodically. Still never mirrored to R2.
 
-## Step 6 - Verify what actually landed
+## Step 6 - Transcripts: fetch the channel's free captions
+
+Every ingested channel also gets its transcripts extracted. YouTube already holds a
+Bulgarian auto-caption track (`bg-orig`) for part of the catalogue - free, no ASR, no
+API key. They land in **separate tables built for search**: `Transcript` (one status
+row per episode) + `TranscriptSegment` (~60s windows, `start_sec` = exact YouTube deep
+link), indexed into the **second Meilisearch index** `transcript_segments`. Transcript
+text never enters the `episodes` index - two indexes, two questions: `episodes` =
+"which episodes are ABOUT this", `transcript_segments` = "where was this SAID".
+
+⏳ **Do not run this right after a throttled backfill.** A caption fetch is a second
+request per episode, and a degraded response looks *exactly* like "no captions". The
+fetcher refuses to record "none" without a `duration` (raises `TranscriptThrottled`,
+writes nothing), so running while blocked wastes time but never poisons data.
+
+```bash
+# 1. Probe coverage first - is this channel worth a long run?
+uv run python manage.py backfill_transcripts --channel @handle --probe 10
+
+# 2. Full channel run. Serial and slow on purpose; resumable; aborts itself
+#    after 10 consecutive throttled responses.
+uv run python manage.py backfill_transcripts --channel @handle
+```
+
+- ✅ **Run it for the whole channel, not just recent uploads.** "No captions" is stored
+  as `status="unavailable"` with a `checked_at`, so old caption-less episodes are
+  checked once, not re-fetched forever (re-checked after `TRANSCRIPT_RECHECK_DAYS`).
+  `--since 2024-01-01` is only for a quick first pass - coverage sampled 2024-2026 was
+  9/9, 2019-2022 was 0/12.
+- 🔒 **Members-only episodes have NO captions** (0 of 5 checked). Expect them all in
+  the `no captions` count - that is correct, not a failure. We never touch the media.
+- ✅ Indexing queues via Celery automatically; if no worker is running, finish with
+  `uv run python manage.py reindex --only transcripts`.
+- ⚠️ Never present transcript search as exhaustive - coverage is partial and
+  date-dependent by nature.
+
+## Step 7 - Verify what actually landed
 
 ```bash
 uv run python manage.py reindex     # only if the repair changed anything
@@ -158,16 +194,21 @@ Then check field completeness, not row counts:
 
 ```bash
 PYTHONIOENCODING=utf-8 uv run python manage.py shell -c "
-from podcast.models import Channel, Episode
+from podcast.models import Channel, Episode, Transcript, TranscriptSegment
 from podcast.services.metadata_repair import degraded_queryset
 from django.db.models import Count
 ch = Channel.objects.get(handle='@handle')
 qs = Episode.objects.filter(channel=ch)
+tr = Transcript.objects.filter(episode__channel=ch)
 print('episodes :', qs.count())
 print('degraded :', degraded_queryset(ch).count())
 print('no date  :', qs.filter(upload_date__isnull=True).count())
 print('no thumb :', qs.filter(thumbnail_url='').count())
 for r in qs.values('availability').annotate(n=Count('id')): print(' ', r)
+print('transcripts stored :', tr.filter(status=Transcript.Status.OK).count())
+print('known caption-less :', tr.filter(status=Transcript.Status.UNAVAILABLE).count())
+print('never checked      :', qs.exclude(id__in=tr.values('episode_id')).count())
+print('segments           :', TranscriptSegment.objects.filter(transcript__episode__channel=ch).count())
 "
 ```
 
@@ -177,6 +218,8 @@ for r in qs.values('availability').annotate(n=Count('id')): print(' ', r)
 | missing `upload_date` / `thumbnail_url` / `title` | 0 |
 | null `view_count` | equals the `subscriber_only` count (members-only omit it) |
 | duplicate `youtube_id` | 0 |
+| transcripts `never checked` | **0** - every episode has a `stored` or `unavailable` verdict |
+| members-only with a stored transcript | 0 (they have no captions) |
 
 ---
 
@@ -208,6 +251,11 @@ for r in qs.values('availability').annotate(n=Count('id')): print(' ', r)
   prober; `data/` holds the per-channel dumps.
 - Full post-mortem: `specs/04-channel-ingestion/01-comedyclubpodcast-run.md`
 - Avatars: `specs/04-channel-ingestion/02-channel-avatars.md`
+- Transcripts: `specs/06-transcripts/02-architecture.md` (two-index design, windowing,
+  throttle-vs-no-captions distinction)
 - Code: `podcast/ingestion/`, `podcast/services/ingestion.py`,
-  `podcast/services/metadata_repair.py`
-- Regression tests: `podcast/tests/test_ingestion.py` (throttled-response protection)
+  `podcast/services/metadata_repair.py`, `podcast/services/transcripts.py`,
+  `podcast/ingestion/transcripts.py`, `podcast/search/transcript_index.py`
+- Regression tests: `podcast/tests/test_ingestion.py` (throttled-response protection);
+  transcript search behaviour is covered in `podcast/tests/test_api_search.py` and
+  `podcast/tests/test_search_unsearchable_queries.py`
