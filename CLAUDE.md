@@ -255,14 +255,18 @@ yt-dlp soft-block. Demo data has been fully cleared (`seed_demo --clear`); the D
 holds ONLY real extracted YouTube data. Cyrillic handles work percent-encoded since
 2026-08-13 (`normalize_channel_target` unquotes).
 
-**Still owed (when the yt-dlp block lifts - it does NOT affect the Data API):**
-1. `backfill_transcripts --channel <each of the 5 new channels>` - captions are
-   yt-dlp-only, so they still wait on the block.
-2. Optional belt-and-braces: a yt-dlp availability sweep over the 5 new channels.
-   Current flags match all known members-only counts and the members-only rows were
-   exactly the ones that returned full during the block, so no wrongness is expected -
-   but only yt-dlp can *state* availability. The Data API never can (measured: it
-   returns members-only videos without saying so - see `ingestion/youtube_api.py`).
+✅ **Transcripts: full catalogue swept 2026-08-13/14.** 578 of 1,961 episodes
+(29.5%) have a transcript - **61,448 searchable segments**; 1,381 episodes checked
+and recorded as caption-less; 2 episodes still pending on a caption-endpoint 429
+(`MoMnxWU9zq8`, `dfrZOLgSlTM` - they stay in the pending queryset and any later
+`backfill_transcripts` run picks them up). Coverage is wildly channel-dependent:
+BFF 99%, Kirkov 88%, Дело 404 86%, CCP 28%, News 6%, Клюки 1%, Sport 0% - never
+present transcript search as exhaustive.
+
+✅ **Availability: CONFIRMED by full yt-dlp re-backfill of all 5 new channels
+(2026-08-14, 0 degraded).** The distribution matched the inferred flags exactly
+(55 members-only: 37+9+8+1), so no degraded-era row was ever mislabeled. The re-run
+also picked up 89 chapters on Клюки.
 
 ⚠️ **`@comedyclubpodcast` alone is 1,318 episodes** - the brief's "~1,000 across all channels"
 estimate is wrong by an order of magnitude. Budget search, sync quota and page size for
