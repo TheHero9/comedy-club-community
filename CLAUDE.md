@@ -240,7 +240,8 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 | ------ | ---------- | -------- | ------ |
 | `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 74 (72 videos + 2 streams) | ✅ Ingested 2026-08-08, metadata complete |
 | `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Ingested 2026-08-09; **metadata NOT complete until 2026-08-10** - see below |
-| _(4-6 more TBD)_ | | | ⏳ Awaiting list |
+| `@comedyclubsport7786` | `UCqe-KdhynYVaIC5YA1Rl4IA` | 47 (47 videos, no streams/shorts tabs) | ✅ Ingested 2026-08-13, metadata complete, 0 degraded; ⏳ transcripts pending (caption fetch throttled, all 47 unchecked - see `specs/04-channel-ingestion/03-comedyclubsport-run.md`) |
+| _(3-5 more TBD)_ | | | ⏳ Awaiting list |
 
 ⚠️ **`@comedyclubpodcast` alone is 1,318 episodes** - the brief's "~1,000 across all channels"
 estimate is wrong by an order of magnitude. Budget search, sync quota and page size for
