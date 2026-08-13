@@ -18,6 +18,7 @@ dependencies = [
     "pillow>=11.0",
     "pyjwt[crypto]>=2.10",
     "meilisearch>=0.33",
+    "gunicorn>=23.0",
 ]
 
 [dependency-groups]
