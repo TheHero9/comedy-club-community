@@ -193,6 +193,14 @@ YOUTUBE_API_KEY = env_str("YOUTUBE_API_KEY", "")
 YOUTUBE_INGEST_TABS = ("videos", "streams")
 YOUTUBE_INGEST_WORKERS = 8
 
+# 🚨 How many recent entries per tab the DAILY SYNC fetches when it has no
+# YOUTUBE_API_KEY and falls back to yt-dlp. The 2026-08-13 incident: the keyless
+# fallback re-scraped all 1,318 @comedyclubpodcast videos, tripped YouTube's
+# soft-block partway, and (running a pre-protection image) overwrote 1,171 good
+# rows with degraded data. A daily sync's job is picking up NEW uploads; it must
+# never re-fetch a whole back catalogue. Explicit `limit` args still win.
+YOUTUBE_SYNC_FALLBACK_LIMIT = 25
+
 # ---------------------------------------------------------------------------
 # Transcripts
 # ---------------------------------------------------------------------------

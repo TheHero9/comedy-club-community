@@ -56,10 +56,23 @@ uv run python manage.py repair_metadata --channel @КомедиКлубКлюк�
 uv run python manage.py repair_metadata --channel @ComedyClubNews --delay 2
 uv run python manage.py repair_metadata --channel @BFFPepiQ --delay 2
 uv run python manage.py repair_metadata --channel @delo404podcast --delay 2
-# then transcripts for all five new channels, then reindex
+uv run python manage.py repair_metadata --channel @comedyclubpodcast --delay 2   # re-degraded by the sync incident, see below
+# then transcripts for all five new channels, then:
+uv run python manage.py seed_demo --clear   # owner directive: only real YouTube data stays
+uv run python manage.py reindex
 ```
 
 Closes ONLY on the counts: per-channel `degraded_queryset(ch).count() == 0`.
+
+## 🚨 Postscript, same evening: the sync incident
+
+While verifying this batch, the corpus-wide degraded count read **1,680**, not 509.
+The daily sync (fired by Beat on container start, keyless yt-dlp fallback, running a
+**stale 2026-08-08 worker image** without the upsert downgrade protection) had
+re-scraped `@comedyclubpodcast`, tripped the soft-block that then hit this whole
+evening, and overwritten **1,171 rows** the 2026-08-10 repair had closed. Fixes:
+fallback capped (`YOUTUBE_SYNC_FALLBACK_LIMIT`), images rebuilt, gotcha documented.
+Full detail in `docs/STATUS.md` 2026-08-13 entries.
 
 ## 🐛 Side find: percent-encoded Cyrillic URLs were unparseable
 

@@ -33,10 +33,17 @@ def sync_channel(self, channel_target: str, limit: int | None = None) -> dict:
     from podcast.services.ingestion import backfill_channel
 
     if not settings.YOUTUBE_API_KEY:
+        # 🚨 Keyless fallback = scraping. Cap it to recent uploads: on 2026-08-13
+        # an uncapped fallback re-scraped a 1,318-video catalogue, tripped the
+        # soft-block and degraded 1,171 previously-complete rows. New uploads live
+        # at the top of the tab, so a small window loses nothing.
+        if limit is None:
+            limit = settings.YOUTUBE_SYNC_FALLBACK_LIMIT
         logger.warning(
-            "YOUTUBE_API_KEY is not set - syncing %s via yt-dlp. This is scraping "
-            "and is not safe as a recurring job.",
+            "YOUTUBE_API_KEY is not set - syncing %s via yt-dlp (capped at %d "
+            "newest per tab). This is scraping and is not safe as a recurring job.",
             channel_target,
+            limit,
         )
 
     try:

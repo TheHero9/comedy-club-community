@@ -249,11 +249,26 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 ⚠️ **2026-08-13 batch debt:** the four `⚠️` channels above were knowingly backfilled while
 YouTube's soft-block was active (owner said go; a rerun session was already planned).
 Titles/dates/ids/thumbnails are complete; `duration_sec` is NULL and `availability`
-defaulted to `"public"` on the degraded rows. **Close-out:**
-`repair_metadata --probe 10`, then `repair_metadata --channel <each>`, then
-`backfill_transcripts --channel <each>` (also owed for `@comedyclubsport7786`), and the
-degraded count per channel must reach 0. Cyrillic handles work percent-encoded since
+defaulted to `"public"` on the degraded rows. Cyrillic handles work percent-encoded since
 2026-08-13 (`normalize_channel_target` unquotes).
+
+🚨 **Same day, worse: `@comedyclubpodcast` is degraded AGAIN (1,171 of 1,318).** The
+daily sync fired on container start with no `YOUTUBE_API_KEY`, fell back to yt-dlp,
+re-scraped the whole catalogue into the soft-block - and the worker was running a
+**stale 2026-08-08 image** that predates `upsert_episode`'s downgrade protection, so
+throttled responses overwrote rows the 08-10 repair had closed. Fixed structurally
+(fallback capped via `YOUTUBE_SYNC_FALLBACK_LIMIT`, images rebuilt), data still owed.
+
+**Close-out checklist (one session, when the block lifts - hours):**
+1. `repair_metadata --probe 10` - gate on "block lifted".
+2. `repair_metadata --channel <X> --delay 2` for the four batch channels **and
+   `@comedyclubpodcast`**; per-channel degraded count must reach **0**.
+3. `backfill_transcripts --channel <each of the 5 new>` (also still owed:
+   `@comedyclubsport7786`).
+4. **Then delete ALL demo/mockup community data** (owner directive 2026-08-13):
+   `manage.py seed_demo --clear` - exact inverse of the seeder, episodes untouched.
+   Only real extracted YouTube data remains after this.
+5. `manage.py reindex`, then re-verify counts.
 
 ⚠️ **`@comedyclubpodcast` alone is 1,318 episodes** - the brief's "~1,000 across all channels"
 estimate is wrong by an order of magnitude. Budget search, sync quota and page size for
@@ -298,7 +313,15 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
 - 🔒 **Authorization is checked on the API, always.** Never rely on the frontend hiding a button. Moderator/admin actions check `UserProfile.role`.
 - 🔒 Verification screenshots are **private** (signed URLs / admin-only). They are proof-of-membership images from real people.
 
-### Local dev server (both cost real debugging time on 2026-08-11)
+### Local dev server (all three cost real debugging time)
+
+- 🚨 **`ccc-worker`/`ccc-beat` run code BAKED INTO their Docker image, not the working
+  tree.** There is no source volume mount, so a backend fix does NOT reach Celery until
+  `docker compose --profile workers build worker beat && docker compose --profile workers up -d worker beat`.
+  On 2026-08-13 a worker image built 08-08 ran the daily sync with pre-protection
+  `upsert_episode` and degraded 1,171 rows the 08-10 repair had already fixed. After
+  ANY change under `apps/api/` that tasks touch, rebuild the images - and remember Beat
+  fires overdue jobs (like the daily sync) **immediately on container start**.
 
 - 🚨 **`CONN_MAX_AGE` is 0 in `dev.py` and must stay there.** `base.py` sets 600, which is right for production (gunicorn has a fixed worker count, so connections are bounded). `manage.py runserver` spawns a **new thread per request** with no bound, and Django holds one connection per thread, so a 600s max age exhausts Postgres' default `max_connections = 100`. Measured: **8 concurrent requests produced 14 failures of 32**, 65 connections stayed idle afterwards, and E2E failures ACCUMULATED across runs (1 -> 4 -> 10). With 0: 48 concurrent, 192/192 OK. Pinned by `test_db_connection_policy.py`.
 - 🚨 **Next.js serves a STALE fetch-cache entry when revalidation fails, so an API 500 shows up as WRONG DATA, not as an error.** This is why the above hid for a session: the ratings-grid test failed with plausible-but-outdated scores and was logged as an "unexplained flake". When a test says the page and the API disagree, check whether the API was erroring, not just whether the numbers changed.
