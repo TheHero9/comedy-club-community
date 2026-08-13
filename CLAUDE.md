@@ -238,10 +238,22 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 
 | Handle | Channel ID | Episodes | Status |
 | ------ | ---------- | -------- | ------ |
-| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 74 (72 videos + 2 streams) | ✅ Ingested 2026-08-08, metadata complete |
+| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 75 (74 at backfill + 1 via daily sync 2026-08-11) | ✅ Ingested 2026-08-08, metadata complete |
 | `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Ingested 2026-08-09; **metadata NOT complete until 2026-08-10** - see below |
 | `@comedyclubsport7786` | `UCqe-KdhynYVaIC5YA1Rl4IA` | 47 (47 videos, no streams/shorts tabs) | ✅ Ingested 2026-08-13, metadata complete, 0 degraded; ⏳ transcripts pending (caption fetch throttled, all 47 unchecked - see `specs/04-channel-ingestion/03-comedyclubsport-run.md`) |
-| _(3-5 more TBD)_ | | | ⏳ Awaiting list |
+| `@КомедиКлубКлюкиПодкаст` | `UCi6J4WBZMHtZ2YIAqfDyoww` | 139 (138 videos + 1 stream) | ⚠️ Ingested 2026-08-13 **during an active soft-block**: 137/139 degraded, `repair_metadata` owed. Transcripts not started. |
+| `@ComedyClubNews` | `UCQ-cZDkcZUYG5Hb9IeHz4Dw` | 245 (236 videos + 9 streams) | ⚠️ Ingested 2026-08-13 during the block: 243/245 degraded, repair owed. Transcripts not started. |
+| `@BFFPepiQ` | `UClo9PMxg3fLWOAMBE6ggl1w` | 80 (79 videos + 1 stream) | ⚠️ Ingested 2026-08-13 during the block: 80/80 degraded, repair owed. Transcripts not started. |
+| `@delo404podcast` | `UCu3iYvciVyiwRKysLHA_wFg` | 57 (57 videos; 17 shorts excluded) | ⚠️ Ingested 2026-08-13 during the block: 49/57 degraded, repair owed. Transcripts not started. |
+
+⚠️ **2026-08-13 batch debt:** the four `⚠️` channels above were knowingly backfilled while
+YouTube's soft-block was active (owner said go; a rerun session was already planned).
+Titles/dates/ids/thumbnails are complete; `duration_sec` is NULL and `availability`
+defaulted to `"public"` on the degraded rows. **Close-out:**
+`repair_metadata --probe 10`, then `repair_metadata --channel <each>`, then
+`backfill_transcripts --channel <each>` (also owed for `@comedyclubsport7786`), and the
+degraded count per channel must reach 0. Cyrillic handles work percent-encoded since
+2026-08-13 (`normalize_channel_target` unquotes).
 
 ⚠️ **`@comedyclubpodcast` alone is 1,318 episodes** - the brief's "~1,000 across all channels"
 estimate is wrong by an order of magnitude. Budget search, sync quota and page size for

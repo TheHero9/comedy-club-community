@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -68,6 +69,11 @@ class _NullLogger:
 def classify_target(url: str) -> tuple[str, str, str | None]:
     """Return ("video", video_id, None) or ("channel", base_url, explicit_tab_or_None)."""
     url = url.strip()
+
+    # Cyrillic handles arrive percent-encoded when copied from a browser and
+    # "%" defeats every pattern below. A no-op for plain ASCII targets.
+    if "%" in url:
+        url = urllib.parse.unquote(url)
 
     for pattern in VIDEO_ID_PATTERNS:
         match = re.search(pattern, url)

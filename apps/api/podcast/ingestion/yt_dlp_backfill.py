@@ -21,6 +21,7 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from urllib.parse import unquote
 
 from django.conf import settings
 
@@ -87,6 +88,13 @@ def normalize_channel_target(value: str) -> str:
     value = (value or "").strip()
     if not value:
         raise IngestionError("No channel given")
+
+    # Cyrillic handles arrive percent-encoded when copied from a browser
+    # (youtube.com/@%D0%9A... for youtube.com/@КомедиКлуб...), and "%" defeats
+    # every pattern below. Decoding is safe for the ASCII forms too - they
+    # contain no escapes, so unquote is a no-op on them.
+    if "%" in value:
+        value = unquote(value)
 
     for pattern in CHANNEL_PATTERNS:
         match = re.search(pattern, value)

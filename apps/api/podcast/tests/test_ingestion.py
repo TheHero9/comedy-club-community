@@ -46,6 +46,21 @@ def test_video_ids_are_extracted(value):
     assert extract_video_id(value) == "FP1P8XXYzvE"
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        # As typed / as yt-dlp shows it
+        "https://www.youtube.com/@КомедиКлубКлюкиПодкаст/videos",
+        "@КомедиКлубКлюкиПодкаст",
+        # As copied from a browser address bar - percent-encoded UTF-8
+        "https://www.youtube.com/@%D0%9A%D0%BE%D0%BC%D0%B5%D0%B4%D0%B8%D0%9A%D0%BB%D1%83%D0%B1"
+        "%D0%9A%D0%BB%D1%8E%D0%BA%D0%B8%D0%9F%D0%BE%D0%B4%D0%BA%D0%B0%D1%81%D1%82",
+    ],
+)
+def test_cyrillic_channel_handles_normalize(value):
+    assert normalize_channel_target(value) == "https://www.youtube.com/@КомедиКлубКлюкиПодкаст"
+
+
 def test_unrecognisable_channel_raises():
     with pytest.raises(IngestionError):
         normalize_channel_target("https://example.com/not-youtube")
