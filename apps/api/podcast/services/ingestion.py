@@ -191,6 +191,16 @@ def upsert_episode(channel: Channel, data: dict) -> tuple[Episode, bool, int]:
             data["youtube_id"],
         )
 
+    # Absent means "unknown", never "reset to default" - same rule as
+    # upsert_channel's avatar. The Data API sync path cannot see availability at
+    # all, and letting its absence fall through to the "public" default would
+    # flip a stored members-only episode to public on every nightly sync.
+    if existing:
+        if not data.get("availability"):
+            defaults.pop("availability", None)
+        if not data.get("thumbnail_url"):
+            defaults.pop("thumbnail_url", None)
+
     episode, created = Episode.objects.update_or_create(
         youtube_id=data["youtube_id"], defaults=defaults
     )
@@ -206,6 +216,98 @@ def upsert_episode(channel: Channel, data: dict) -> tuple[Episode, bool, int]:
         chapters_created += int(made)
 
     return episode, created, chapters_created
+
+
+def sync_channel_via_api(channel: Channel, *, limit: int | None = 50) -> IngestionResult:
+    """Daily sync of one KNOWN channel through the YouTube Data API.
+
+    🎯 The intended steady state for the recurring sync: quota-based (a few
+    units per channel per day), immune to the yt-dlp soft-block, and TOS-blessed.
+    The yt-dlp path remains for one-time backfills and metadata repair.
+
+    Uses the derived `UULF` (videos tab) / `UULV` (streams tab) playlists, so
+    Shorts stay structurally excluded - same guarantee as yt-dlp's tab listing.
+
+    ⚠️ The API never STATES availability (it returns members-only videos but
+    nothing in the response says so - measured 2026-08-13). Existing rows keep
+    their stored availability via `upsert_episode`'s absent-means-unknown
+    guards; a brand-new members-only episode would arrive here flagged public
+    until the next yt-dlp pass corrects it.
+    """
+    from podcast.ingestion.thumbnails import best_thumbnail_url
+    from podcast.ingestion.youtube_api import (
+        playlist_video_ids,
+        uploads_playlists,
+        video_details,
+    )
+
+    result = IngestionResult(channel=channel)
+    playlists = uploads_playlists(channel.youtube_channel_id)
+
+    kind_by_id: dict[str, str] = {}
+    for kind, playlist_id in (
+        (Episode.ContentKind.VIDEO, playlists["videos"]),
+        (Episode.ContentKind.STREAM, playlists["streams"]),
+    ):
+        for video_id in playlist_video_ids(playlist_id, limit=limit):
+            kind_by_id.setdefault(video_id, kind)
+
+    details = video_details(kind_by_id)
+    known_ids = set(
+        Episode.objects.filter(youtube_id__in=kind_by_id).values_list(
+            "youtube_id", flat=True
+        )
+    )
+
+    for video_id, kind in kind_by_id.items():
+        info = details.get(video_id)
+        if not info:
+            continue  # invisible to the API (members-only/deleted) - never guess
+
+        data = {
+            "youtube_id": video_id,
+            "title": info["title"],
+            "description": info["description"],
+            "upload_date": info["upload_date"],
+            "duration_sec": info["duration_sec"],
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "content_kind": kind,
+            "view_count": info["view_count"],
+            "like_count": info["like_count"],
+            "yt_comment_count": info["yt_comment_count"],
+            # availability deliberately absent - the API cannot see it, and
+            # upsert_episode keeps the stored value for existing rows. A NEW
+            # row visible to the public API is public by definition.
+        }
+        if video_id not in known_ids:
+            # ⚠️ Provisional: the API cannot distinguish members-only, so a new
+            # episode lands as public until a yt-dlp pass states otherwise.
+            data["availability"] = Episode.Availability.PUBLIC
+            data["thumbnail_url"] = best_thumbnail_url(video_id)
+
+        try:
+            _, created, chapters = upsert_episode(channel, data)
+        except Exception as exc:
+            logger.exception("Sync failed to persist %s", video_id)
+            result.errors.append({"youtube_id": video_id, "error": str(exc)})
+            continue
+        result.created += int(created)
+        result.updated += int(not created)
+        result.chapters_created += chapters
+
+    from podcast.services.metadata_repair import degraded_queryset
+
+    result.degraded = degraded_queryset(channel).count()
+
+    channel.last_synced_at = timezone.now()
+    channel.save(update_fields=["last_synced_at"])
+
+    from podcast.services.indexing import schedule_channel_reindex
+
+    schedule_channel_reindex(channel.pk)
+
+    logger.info("API sync of %s complete: %s", channel.name, result.summary())
+    return result
 
 
 def backfill_channel(

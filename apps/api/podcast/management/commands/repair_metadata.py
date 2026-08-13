@@ -1,6 +1,7 @@
 """Re-fetch episodes that were ingested from a degraded YouTube response.
 
-    python manage.py repair_metadata --probe 10           # is the block lifted yet?
+    python manage.py repair_metadata --api                # Data API: fast, block-immune
+    python manage.py repair_metadata --probe 10           # is the yt-dlp block lifted yet?
     python manage.py repair_metadata --channel @comedyclubpodcast
     python manage.py repair_metadata --limit 100 --delay 2
 
@@ -9,7 +10,12 @@ yt-dlp keeps returning reduced metadata WITHOUT erroring, so the backfill report
 "0 errors" while silently losing duration and availability. See
 podcast/services/metadata_repair.py for the full story.
 
-Deliberately serial and slow. Speed is what caused the damage.
+⚡ `--api` uses the YouTube Data API (needs YOUTUBE_API_KEY): batches of 50 per quota
+unit, works even while yt-dlp is soft-blocked. It cannot see members-only videos, so
+those rows stay degraded for a later yt-dlp sweep - which is also the only path that
+can CORRECT a wrong availability. The two modes are complementary, not alternatives.
+
+The yt-dlp mode is deliberately serial and slow. Speed is what caused the damage.
 """
 
 from django.core.management.base import BaseCommand, CommandError
@@ -18,6 +24,7 @@ from podcast.models import Channel
 from podcast.services.metadata_repair import (
     degraded_queryset,
     repair_degraded_metadata,
+    repair_degraded_via_api,
 )
 
 
@@ -45,6 +52,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--no-abort", action="store_true",
             help="Do not stop early on a long run of degraded responses",
+        )
+        parser.add_argument(
+            "--api", action="store_true",
+            help="Repair via the YouTube Data API instead of yt-dlp. Immune to the "
+                 "soft-block; leaves members-only/deleted videos for the yt-dlp sweep.",
         )
 
     def _resolve_channel(self, value):
@@ -77,6 +89,22 @@ class Command(BaseCommand):
         if probe:
             self.stdout.write(self.style.WARNING(f"PROBE - testing {probe} episode(s) only"))
 
+        if options["api"]:
+            result = repair_degraded_via_api(
+                channel,
+                limit=limit,
+                progress=lambda message: self.stdout.write(message),
+            )
+            self.stdout.write(self.style.SUCCESS(result.summary()))
+            if result.still_degraded:
+                self.stdout.write(self.style.WARNING(
+                    f"{result.still_degraded} row(s) are invisible to the Data API "
+                    "(members-only or deleted). They stay degraded on purpose - the "
+                    "yt-dlp sweep repairs them and states their real availability."
+                ))
+            self._report_errors(result)
+            return
+
         result = repair_degraded_metadata(
             channel,
             limit=limit,
@@ -100,6 +128,9 @@ class Command(BaseCommand):
                     "Wait longer (hours) and probe again."
                 ))
 
+        self._report_errors(result)
+
+    def _report_errors(self, result):
         if result.errors:
             self.stdout.write(self.style.WARNING(f"\n{len(result.errors)} error(s):"))
             for error in result.errors[:20]:

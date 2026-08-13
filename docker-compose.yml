@@ -82,6 +82,8 @@ services:
       CELERY_TASK_ALWAYS_EAGER: "0"
       MEILI_URL: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterKeyForLocalDevOnly}
+      # Read from the root .env - keyed daily sync uses the Data API, never yt-dlp.
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -100,6 +102,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_TASK_ALWAYS_EAGER: "0"
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
     depends_on:
       redis: {condition: service_healthy}
 

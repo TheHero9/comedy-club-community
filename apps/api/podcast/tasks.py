@@ -24,30 +24,40 @@ logger = logging.getLogger("podcast")
 def sync_channel(self, channel_target: str, limit: int | None = None) -> dict:
     """Sync one channel.
 
-    Uses the YouTube Data API when a key is configured, otherwise falls back to
-    yt-dlp. yt-dlp is scraping and WILL break on YouTube changes, so this fallback
-    is a stopgap until YOUTUBE_API_KEY is set, not the intended steady state.
+    Uses the YouTube Data API when a key is configured (quota-based, immune to
+    the yt-dlp soft-block). Without a key it falls back to yt-dlp - scraping,
+    capped to recent uploads, and a stopgap rather than the steady state.
     """
     from django.conf import settings
 
-    from podcast.services.ingestion import backfill_channel
+    from podcast.models import Channel
+    from podcast.services.ingestion import backfill_channel, sync_channel_via_api
 
-    if not settings.YOUTUBE_API_KEY:
-        # 🚨 Keyless fallback = scraping. Cap it to recent uploads: on 2026-08-13
-        # an uncapped fallback re-scraped a 1,318-video catalogue, tripped the
-        # soft-block and degraded 1,171 previously-complete rows. New uploads live
-        # at the top of the tab, so a small window loses nothing.
-        if limit is None:
-            limit = settings.YOUTUBE_SYNC_FALLBACK_LIMIT
-        logger.warning(
-            "YOUTUBE_API_KEY is not set - syncing %s via yt-dlp (capped at %d "
-            "newest per tab). This is scraping and is not safe as a recurring job.",
-            channel_target,
-            limit,
-        )
+    channel = (
+        Channel.objects.filter(handle=channel_target).first()
+        or Channel.objects.filter(youtube_channel_id=channel_target).first()
+    )
 
     try:
-        result = backfill_channel(channel_target, limit=limit)
+        if settings.YOUTUBE_API_KEY and channel:
+            result = sync_channel_via_api(channel, limit=limit or 50)
+        else:
+            if not settings.YOUTUBE_API_KEY:
+                # 🚨 Keyless fallback = scraping. Cap it to recent uploads: on
+                # 2026-08-13 an uncapped fallback re-scraped a 1,318-video
+                # catalogue, tripped the soft-block and degraded 1,171 rows.
+                # New uploads live at the top of the tab, so a small window
+                # loses nothing.
+                if limit is None:
+                    limit = settings.YOUTUBE_SYNC_FALLBACK_LIMIT
+                logger.warning(
+                    "YOUTUBE_API_KEY is not set - syncing %s via yt-dlp (capped "
+                    "at %d newest per tab). This is scraping and is not safe as "
+                    "a recurring job.",
+                    channel_target,
+                    limit,
+                )
+            result = backfill_channel(channel_target, limit=limit)
     except Exception as exc:
         logger.exception("Sync failed for %s", channel_target)
         raise self.retry(exc=exc, countdown=300) from exc

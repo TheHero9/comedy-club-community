@@ -88,6 +88,9 @@ def repair_episode(episode: Episode) -> tuple[bool, bool]:
     valid = {choice.value for choice in Episode.Availability}
     if availability in valid and availability != episode.availability:
         updates["availability"] = availability
+        # .update() bypasses save(), which is where this flag is normally
+        # denormalized - keep it in lockstep here or badges/filters go stale.
+        updates["members_only"] = availability == Episode.Availability.SUBSCRIBER_ONLY
         availability_changed = True
     elif availability and availability not in valid:
         logger.info(
@@ -106,6 +109,62 @@ def repair_episode(episode: Episode) -> tuple[bool, bool]:
 
     Episode.objects.filter(pk=episode.pk).update(**updates)
     return True, availability_changed
+
+
+def repair_degraded_via_api(
+    channel=None,
+    *,
+    limit: int | None = None,
+    progress=None,
+) -> RepairResult:
+    """Repair degraded rows through the YouTube Data API - immune to the soft-block.
+
+    Batches of 50 ids per quota unit, so the entire catalogue costs a few dozen
+    units of the 10,000/day free quota, and it works WHILE yt-dlp is blocked.
+
+    ⚠️ Two deliberate limits versus the yt-dlp repair:
+    - `availability` is never written. The API returns members-only videos but
+      nothing in the response SAYS they are members-only (measured 2026-08-13),
+      so this repair cannot make availability corrections - only yt-dlp can.
+    - Ids the API does not return (deleted/private) are left degraded on
+      purpose: they stay in `degraded_queryset` and the yt-dlp sweep picks
+      them up once the block lifts. Absence is "unknown", never data.
+    """
+    from podcast.ingestion.youtube_api import YouTubeAPIError, video_details
+
+    episodes = list(degraded_queryset(channel)[: limit or None])
+    result = RepairResult(attempted=len(episodes))
+    if not episodes:
+        return result
+
+    try:
+        details = video_details([e.youtube_id for e in episodes])
+    except YouTubeAPIError as exc:
+        logger.warning("Data API repair failed: %s", exc)
+        result.errors.append({"youtube_id": "*", "error": str(exc)})
+        result.still_degraded = len(episodes)
+        return result
+
+    for index, episode in enumerate(episodes, start=1):
+        info = details.get(episode.youtube_id)
+        if not info or info.get("duration_sec") is None:
+            # Invisible to the API: members-only or deleted. Stays degraded for
+            # the yt-dlp sweep, which can also state its real availability.
+            result.still_degraded += 1
+            continue
+
+        updates: dict = {"duration_sec": info["duration_sec"]}
+        for field_name in ("view_count", "like_count", "yt_comment_count"):
+            if info.get(field_name) is not None:
+                updates[field_name] = info[field_name]
+        Episode.objects.filter(pk=episode.pk).update(**updates)
+        result.repaired += 1
+
+        if progress and index % 200 == 0:
+            progress(f"  {index}/{len(episodes)} - {result.repaired} repaired")
+
+    logger.info("Data API metadata repair complete: %s", result.summary())
+    return result
 
 
 def repair_degraded_metadata(

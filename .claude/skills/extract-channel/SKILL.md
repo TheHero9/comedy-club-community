@@ -120,6 +120,22 @@ and are searchable, but they have no duration, and their `availability` defaulte
 
 ## Step 4 - Repair, if needed
 
+⚡ **First choice since 2026-08-13: the Data API repair.** It is immune to the
+soft-block (quota-based, 50 rows per unit) and recovered 1,680 rows in one pass the
+day it was built. Needs `YOUTUBE_API_KEY` in `apps/api/.env`:
+
+```bash
+uv run python manage.py repair_metadata --api                    # all channels
+uv run python manage.py repair_metadata --api --channel @handle
+```
+
+- ⚠️ It repairs duration/view/like/comment counts but **never availability** - the
+  API returns members-only videos without saying so. Rows it cannot see
+  (deleted/private) stay degraded on purpose.
+- 🔒 A members-only flag can only be set/corrected by the yt-dlp path below.
+
+**yt-dlp fallback** (no key, or to state availability):
+
 ⏳ **Wait first.** The block lasts **hours, not minutes.** Probing immediately after a
 throttled run recovered 0/8. There is no "retry harder".
 

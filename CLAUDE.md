@@ -238,37 +238,31 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 
 | Handle | Channel ID | Episodes | Status |
 | ------ | ---------- | -------- | ------ |
-| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 75 (74 at backfill + 1 via daily sync 2026-08-11) | ✅ Ingested 2026-08-08, metadata complete |
-| `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Ingested 2026-08-09; **metadata NOT complete until 2026-08-10** - see below |
-| `@comedyclubsport7786` | `UCqe-KdhynYVaIC5YA1Rl4IA` | 47 (47 videos, no streams/shorts tabs) | ✅ Ingested 2026-08-13, metadata complete, 0 degraded; ⏳ transcripts pending (caption fetch throttled, all 47 unchecked - see `specs/04-channel-ingestion/03-comedyclubsport-run.md`) |
-| `@КомедиКлубКлюкиПодкаст` | `UCi6J4WBZMHtZ2YIAqfDyoww` | 139 (138 videos + 1 stream) | ⚠️ Ingested 2026-08-13 **during an active soft-block**: 137/139 degraded, `repair_metadata` owed. Transcripts not started. |
-| `@ComedyClubNews` | `UCQ-cZDkcZUYG5Hb9IeHz4Dw` | 245 (236 videos + 9 streams) | ⚠️ Ingested 2026-08-13 during the block: 243/245 degraded, repair owed. Transcripts not started. |
-| `@BFFPepiQ` | `UClo9PMxg3fLWOAMBE6ggl1w` | 80 (79 videos + 1 stream) | ⚠️ Ingested 2026-08-13 during the block: 80/80 degraded, repair owed. Transcripts not started. |
-| `@delo404podcast` | `UCu3iYvciVyiwRKysLHA_wFg` | 57 (57 videos; 17 shorts excluded) | ⚠️ Ingested 2026-08-13 during the block: 49/57 degraded, repair owed. Transcripts not started. |
+| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 75 (74 at backfill + 1 via daily sync 2026-08-11) | ✅ Metadata complete |
+| `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Metadata complete (degraded twice - 08-09 backfill, 08-13 sync incident - repaired both times) |
+| `@comedyclubsport7786` | `UCqe-KdhynYVaIC5YA1Rl4IA` | 47 (47 videos, no streams/shorts tabs) | ✅ Metadata complete; ⏳ transcripts pending |
+| `@КомедиКлубКлюкиПодкаст` | `UCi6J4WBZMHtZ2YIAqfDyoww` | 139 (138 videos + 1 stream) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
+| `@ComedyClubNews` | `UCQ-cZDkcZUYG5Hb9IeHz4Dw` | 245 (236 videos + 9 streams) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
+| `@BFFPepiQ` | `UClo9PMxg3fLWOAMBE6ggl1w` | 80 (79 videos + 1 stream) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
+| `@delo404podcast` | `UCu3iYvciVyiwRKysLHA_wFg` | 57 (57 videos; 17 shorts excluded) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
 
-⚠️ **2026-08-13 batch debt:** the four `⚠️` channels above were knowingly backfilled while
-YouTube's soft-block was active (owner said go; a rerun session was already planned).
-Titles/dates/ids/thumbnails are complete; `duration_sec` is NULL and `availability`
-defaulted to `"public"` on the degraded rows. Cyrillic handles work percent-encoded since
+✅ **Metadata is COMPLETE and verified corpus-wide (2026-08-13):** a full Data API
+sweep of all 1,961 rows found 0 missing durations/dates/titles/thumbnails, all 1,961
+ids returned by the API, and 0 duration mismatches. The evening's 1,680 degraded rows
+(509 batch-during-block + 1,171 from the sync incident) were all recovered via
+`repair_metadata --api` in one pass - the Data API is quota-based and immune to the
+yt-dlp soft-block. Demo data has been fully cleared (`seed_demo --clear`); the DB now
+holds ONLY real extracted YouTube data. Cyrillic handles work percent-encoded since
 2026-08-13 (`normalize_channel_target` unquotes).
 
-🚨 **Same day, worse: `@comedyclubpodcast` is degraded AGAIN (1,171 of 1,318).** The
-daily sync fired on container start with no `YOUTUBE_API_KEY`, fell back to yt-dlp,
-re-scraped the whole catalogue into the soft-block - and the worker was running a
-**stale 2026-08-08 image** that predates `upsert_episode`'s downgrade protection, so
-throttled responses overwrote rows the 08-10 repair had closed. Fixed structurally
-(fallback capped via `YOUTUBE_SYNC_FALLBACK_LIMIT`, images rebuilt), data still owed.
-
-**Close-out checklist (one session, when the block lifts - hours):**
-1. `repair_metadata --probe 10` - gate on "block lifted".
-2. `repair_metadata --channel <X> --delay 2` for the four batch channels **and
-   `@comedyclubpodcast`**; per-channel degraded count must reach **0**.
-3. `backfill_transcripts --channel <each of the 5 new>` (also still owed:
-   `@comedyclubsport7786`).
-4. **Then delete ALL demo/mockup community data** (owner directive 2026-08-13):
-   `manage.py seed_demo --clear` - exact inverse of the seeder, episodes untouched.
-   Only real extracted YouTube data remains after this.
-5. `manage.py reindex`, then re-verify counts.
+**Still owed (when the yt-dlp block lifts - it does NOT affect the Data API):**
+1. `backfill_transcripts --channel <each of the 5 new channels>` - captions are
+   yt-dlp-only, so they still wait on the block.
+2. Optional belt-and-braces: a yt-dlp availability sweep over the 5 new channels.
+   Current flags match all known members-only counts and the members-only rows were
+   exactly the ones that returned full during the block, so no wrongness is expected -
+   but only yt-dlp can *state* availability. The Data API never can (measured: it
+   returns members-only videos without saying so - see `ingestion/youtube_api.py`).
 
 ⚠️ **`@comedyclubpodcast` alone is 1,318 episodes** - the brief's "~1,000 across all channels"
 estimate is wrong by an order of magnitude. Budget search, sync quota and page size for
@@ -438,7 +432,11 @@ CLERK_ISSUER=
 CLERK_WEBHOOK_SECRET=
 
 # YouTube
-YOUTUBE_API_KEY=                     # Data API v3, for the daily sync
+YOUTUBE_API_KEY=                     # Data API v3. SET since 2026-08-13 (root .env for
+                                     # docker-compose + apps/api/.env for manage.py).
+                                     # Keyed: daily sync + repair use the quota-based
+                                     # Data API. Keyless: sync falls back to capped
+                                     # yt-dlp scraping (YOUTUBE_SYNC_FALLBACK_LIMIT).
 
 # Meilisearch
 MEILI_URL=http://localhost:7700
@@ -553,7 +551,8 @@ uv run celery -A config worker -l info
 uv run celery -A config beat -l info
 uv run python manage.py backfill_channel <youtube_channel_id>   # yt-dlp bulk
 uv run python manage.py repair_metadata --probe 10               # 🚨 ALWAYS after a big backfill
-uv run python manage.py repair_metadata --channel @handle        # re-fetch degraded rows
+uv run python manage.py repair_metadata --api                    # ⚡ Data API repair: block-immune, 50 rows/quota unit
+uv run python manage.py repair_metadata --channel @handle        # yt-dlp re-fetch (states availability; API cannot)
 uv run python manage.py refresh_channel_meta                     # avatars, banners, sub counts
 uv run python manage.py sync_channels                            # Data API daily
 uv run python manage.py backfill_transcripts --probe 10          # free captions: is it worth it?
