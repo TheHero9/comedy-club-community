@@ -384,12 +384,20 @@ def upload_verification_screenshot(
     if file.content_type not in ALLOWED_SCREENSHOT_TYPES:
         raise HttpError(415, "Screenshot must be a PNG, JPEG or WebP image")
 
+    was_verified = membership.is_verified
+
     membership.verification_screenshot = file
     # Re-uploading resets verification: the new evidence has not been reviewed.
     membership.is_verified = False
     membership.verified_at = None
     membership.verified_by = None
     membership.save()
+
+    # Losing verification changes the elite score of every episode they rated on
+    # this channel - same rule as delete_membership below. Without this the stale
+    # elite average survives until the hourly sweep.
+    if was_verified:
+        scoring.recompute_for_membership_change(membership.user_id, membership.channel_id)
 
     return membership_out(membership)
 

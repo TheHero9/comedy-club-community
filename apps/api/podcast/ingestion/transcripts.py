@@ -253,9 +253,22 @@ def download_caption_track(url: str) -> bytes:
             raise TranscriptThrottled(
                 f"Caption download rejected with HTTP {exc.code} - back off and retry later"
             ) from exc
+        if exc.code >= 500:
+            # A Google-side failure is transient. It proves nothing about whether
+            # the episode has captions, so it must never become "unavailable".
+            raise TranscriptThrottled(
+                f"Caption download failed with HTTP {exc.code} - transient, retry later"
+            ) from exc
         raise TranscriptUnavailable(f"Caption download failed with HTTP {exc.code}") from exc
     except OSError as exc:
-        raise TranscriptUnavailable(f"Caption download failed: {exc}") from exc
+        # 🚨 A timeout or connection reset is OUR network failing, not YouTube
+        # stating "no captions". The track was already FOUND by select_track, so
+        # recording unavailable here would be a false negative that sticks for
+        # TRANSCRIPT_RECHECK_DAYS - and under --force it would delete a stored
+        # transcript. Raise the retryable error instead; nothing gets written.
+        raise TranscriptThrottled(
+            f"Caption download failed: {exc} - transient, retry later"
+        ) from exc
 
 
 def fetch_transcript(

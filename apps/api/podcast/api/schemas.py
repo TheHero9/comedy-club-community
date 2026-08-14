@@ -169,7 +169,9 @@ class RatingOut(Schema):
 
 class WatchIn(Schema):
     watched_on: date | None = None
-    note: str = ""
+    # ⚠️ Caps mirror the model columns. Without them an over-length value passes
+    # Pydantic and dies in psycopg as a DataError - an unhandled 500, not a 422.
+    note: str = Field("", max_length=280)
 
 
 class WatchEventOut(Schema):
@@ -222,7 +224,8 @@ class MembershipOut(Schema):
 
 class MembershipIn(Schema):
     channel_id: int
-    tier: str = ""
+    # ⚠️ Cap mirrors ChannelMembership.tier (CharField 100); over-length would 500.
+    tier: str = Field("", max_length=100)
     member_since: date | None = None
 
 
@@ -240,9 +243,12 @@ class MeOut(Schema):
 
 
 class ProfileIn(Schema):
-    display_name: str | None = None
-    bio: str | None = None
-    avatar_url: str | None = None
+    # ⚠️ display_name/avatar_url caps mirror the model columns (CharField 100,
+    # URLField 200) - over-length input would otherwise be a psycopg DataError
+    # 500. bio is a TextField, so its cap is a sanity bound, not a column limit.
+    display_name: str | None = Field(None, max_length=100)
+    bio: str | None = Field(None, max_length=5000)
+    avatar_url: str | None = Field(None, max_length=200)
 
 
 class PublicProfileOut(Schema):
@@ -354,7 +360,7 @@ class ReportOut(Schema):
 
 class ReportResolveIn(Schema):
     status: str = Field(..., description="resolved | dismissed")
-    resolution_note: str = ""
+    resolution_note: str = Field("", max_length=280)
 
 
 # ---------------------------------------------------------------------------

@@ -79,7 +79,12 @@ def edit_comment(request, comment_id: int, payload: CommentIn):
     comment = get_object_or_404(Comment.objects.select_related("user"), id=comment_id)
     require_self_or_moderator(request.auth, comment.user_id)
 
-    comment.body = payload.body.strip()
+    body = payload.body.strip()
+    if not body:
+        # Same rule as create_comment: editing must not be a way to blank a comment.
+        raise HttpError(422, "Comment cannot be empty")
+
+    comment.body = body
     comment.is_spoiler = payload.is_spoiler
     comment.edited_at = timezone.now()
     comment.save(update_fields=["body", "is_spoiler", "edited_at"])
@@ -146,7 +151,11 @@ def remove_topic(request, episode_topic_id: int):
     episode_topic = get_object_or_404(EpisodeTopic, id=episode_topic_id)
     # A label with community votes should be voted down, not unilaterally removed.
     require_self_or_moderator(request.auth, episode_topic.added_by_id or -1)
+    episode_id = episode_topic.episode_id
     episode_topic.delete()
+    # The label was indexed text - removing it changes what this episode matches,
+    # exactly like adding it did.
+    schedule_episode_reindex(episode_id)
     return {"detail": "Topic removed from episode"}
 
 
@@ -218,5 +227,9 @@ def add_moment(request, youtube_id: str, payload: MomentIn):
 def delete_moment(request, moment_id: int):
     moment = get_object_or_404(Moment, id=moment_id)
     require_self_or_moderator(request.auth, moment.user_id or -1)
+    episode_id = moment.episode_id
     moment.delete()
+    # Moment labels are indexed text - a deleted (possibly moderated-away) label
+    # must stop matching, not linger until the nightly rebuild.
+    schedule_episode_reindex(episode_id)
     return {"detail": "Moment deleted"}

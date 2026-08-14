@@ -32,6 +32,13 @@ app.conf.beat_schedule = {
         "task": "podcast.rebuild_search_index",
         "schedule": crontab(hour=5, minute=0),
     },
+    # Same self-heal for the transcript index. Without it, segments of a deleted
+    # episode (or a transcript later marked unavailable) would linger in
+    # /search/transcripts until someone manually ran `manage.py reindex`.
+    "reindex-transcripts-nightly": {
+        "task": "podcast.rebuild_transcript_index",
+        "schedule": crontab(hour=5, minute=30),
+    },
 }
 
 

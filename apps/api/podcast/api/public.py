@@ -7,10 +7,7 @@ private data (personal tags, screenshots, emails).
 
 from __future__ import annotations
 
-import json
-
 from django.db.models import Count, F, Q
-from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from ninja import Query, Router
 from ninja.errors import HttpError
@@ -105,21 +102,11 @@ def get_channel_grid(
     except ValueError as exc:
         raise HttpError(422, str(exc)) from exc
 
-    # 🇧🇬 Rendered here instead of by the global renderer in `config/api.py`.
-    # Django's default `json.dumps(..., ensure_ascii=True)` expands every
-    # Cyrillic character into a 6-byte `\uXXXX` escape. This is the single
-    # largest Cyrillic response in the API - measured 2026-08-09 on the 1,318
-    # episode channel: 103,968 escapes, i.e. 406 KB of pure escape overhead on
-    # one 1,045 KB response, plus ~31 KB from the default spaced separators.
-    # Validating through ChannelGridOut first keeps the OpenAPI contract honest,
-    # so this is a transport optimisation only, never a schema bypass.
-    # 💡 Worth promoting to the whole API (one `renderer=` argument on the
-    # NinjaAPI instance) - every Bulgarian payload pays this tax.
-    payload = ChannelGridOut.model_validate(grid).model_dump(mode="json")
-    return HttpResponse(
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-        content_type="application/json; charset=utf-8",
-    )
+    # 🇧🇬 The compact non-escaping JSON this endpoint used to hand-render (the
+    # 406 KB \uXXXX tax on the 1,318-episode channel) is now what the global
+    # `CompactUnicodeJSONRenderer` in `config/api.py` emits for the whole API,
+    # so the normal response path produces byte-identical output.
+    return grid
 
 
 @router.get("/channels/{slug}", response=ChannelOut)

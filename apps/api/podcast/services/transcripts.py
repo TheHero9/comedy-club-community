@@ -145,6 +145,13 @@ def mark_unavailable(episode: Episode) -> Transcript:
         },
     )
     transcript.segments.all().delete()
+
+    # A previously STORED transcript may have documents in the segment index
+    # (captions can vanish, and --force re-fetches an already-stored episode).
+    # Queue their removal once the delete commits; the helper never raises.
+    from podcast.services.indexing import schedule_transcript_removal
+
+    transaction.on_commit(lambda: schedule_transcript_removal(episode.pk))
     return transcript
 
 

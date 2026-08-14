@@ -12,6 +12,7 @@ the wrappers `podcast/tasks.py` needs.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
@@ -267,6 +268,10 @@ BATCH_TIMEOUT_MS = 120_000
 
 DEFAULT_BATCH_SIZE = 500
 
+# Guards the once-per-process settings push in `ensure_index_once`.
+_settings_lock = threading.Lock()
+_settings_applied = False
+
 
 # ---------------------------------------------------------------------------
 # Index lifecycle
@@ -297,15 +302,57 @@ def ensure_index(*, wait: bool = True) -> Any:
     task = index.update_settings(INDEX_SETTINGS)
     if wait:
         _wait(task, SETTINGS_TIMEOUT_MS)
+
+    # 🚨 A bare assignment, NOT `with _settings_lock` - ensure_index_once calls
+    # this while already holding that non-reentrant lock, and taking it again
+    # here self-deadlocks on the process's first index write (hung the whole
+    # test suite on 2026-08-14 before it ever shipped). The lock guards the
+    # do-once dance; the boolean write itself is atomic under the GIL.
+    global _settings_applied
+    _settings_applied = True
     return index
+
+
+def ensure_index_once() -> None:
+    """Apply the index settings once per process, before the first write.
+
+    🚨 Without this, `add_documents` against a missing index creates it with
+    DEFAULT settings - every attribute searchable, NOTHING filterable. The
+    symptom is not an indexing error but a later search failure ("Attribute
+    `channel_slug` is not filterable") on exactly the filtered code paths, so an
+    unfiltered query keeps working and hides it. The transcript index hit this
+    for real on 2026-08-09; this is the same guard for the episodes index.
+
+    Cheap after the first call. `reindex` still applies settings explicitly.
+
+    ⚠️ `wait=False`, deliberately. Meilisearch executes tasks on one index in
+    enqueue order, so the settings task is guaranteed to apply before the
+    `add_documents` that follows it - blocking here adds latency to the first
+    write of every process for nothing. It also matters for the test suite:
+    the mocked client's task never reaches a terminal status, so a synchronous
+    wait would poll for the full 120s timeout per call (found the hard way -
+    this hung the suite on 2026-08-14).
+    """
+    global _settings_applied
+    if _settings_applied:
+        return
+    with _settings_lock:
+        if _settings_applied:
+            return
+        ensure_index(wait=False)
+        _settings_applied = True
 
 
 def drop_index(*, wait: bool = True) -> None:
     """Delete the whole index. Used by `reindex --drop`."""
+    global _settings_applied
     logger.warning("Deleting Meilisearch index %r", EPISODES_INDEX)
     task = get_client().delete_index(EPISODES_INDEX)
     if wait:
         _wait(task, SETTINGS_TIMEOUT_MS)
+    # The index is gone, so the next write must re-apply settings.
+    with _settings_lock:
+        _settings_applied = False
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +363,9 @@ def drop_index(*, wait: bool = True) -> None:
 def _add_documents(documents: Sequence[dict[str, Any]], *, wait: bool = False) -> int:
     if not documents:
         return 0
+    # Every write path funnels through here, so this is the one place that has
+    # to guarantee the index exists WITH its settings. See ensure_index_once().
+    ensure_index_once()
     task = get_index().add_documents(list(documents), primary_key=PRIMARY_KEY)
     if wait:
         _wait(task)

@@ -10,7 +10,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from ninja.security import HttpBearer
 
 from podcast.models import UserProfile
@@ -39,6 +39,12 @@ def provision_user(
     Keyed on `UserProfile.clerk_user_id`, never on email - an email can change and
     is not a stable identity. Idempotent: repeated calls return the same row.
     """
+    # ⚠️ Identity-provider values are unbounded; the columns are not. An 120-char
+    # display name from Clerk must become a truncated profile, not a DataError 500
+    # on the very first authenticated request.
+    display_name = (display_name or "")[:100]
+    avatar_url = (avatar_url or "")[:200]
+
     profile = UserProfile.objects.select_related("user").filter(
         clerk_user_id=external_id
     ).first()
@@ -63,13 +69,25 @@ def provision_user(
         suffix += 1
         candidate = f"{base_username[:140 - len(str(suffix)) - 1]}-{suffix}"
 
-    user = User.objects.create_user(username=candidate, email=email)
-    UserProfile.objects.create(
-        user=user,
-        clerk_user_id=external_id,
-        display_name=display_name or candidate,
-        avatar_url=avatar_url,
-    )
+    try:
+        with transaction.atomic():
+            user = User.objects.create_user(username=candidate, email=email)
+            UserProfile.objects.create(
+                user=user,
+                clerk_user_id=external_id,
+                display_name=display_name or candidate,
+                avatar_url=avatar_url,
+            )
+    except IntegrityError:
+        # Two first-requests raced (a fresh SPA session fires parallel API calls
+        # with the same brand-new token). The unique constraint on clerk_user_id
+        # did its job - read the winner instead of 500ing the loser.
+        profile = UserProfile.objects.select_related("user").filter(
+            clerk_user_id=external_id
+        ).first()
+        if profile:
+            return profile.user
+        raise
     logger.info("Provisioned user %s for external id %s", candidate, external_id)
     return user
 

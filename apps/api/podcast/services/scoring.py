@@ -69,10 +69,10 @@ def recompute_for_rating(rating: Rating) -> Episode:
 
 def recompute_channel(channel_id: int) -> int:
     """Refresh every episode of one channel. Used after a verification changes."""
-    count = 0
-    for episode in Episode.objects.filter(channel_id=channel_id).select_related("channel"):
-        recompute_episode(episode)
-        count += 1
+    episode_ids = list(
+        Episode.objects.filter(channel_id=channel_id).values_list("pk", flat=True)
+    )
+    count = recompute_many(episode_ids)
     logger.info("Recomputed scores for %d episodes on channel %s", count, channel_id)
     return count
 
@@ -82,12 +82,14 @@ def recompute_all(batch_size: int = 500) -> int:
 
     Runs on a Celery Beat schedule. Because it recomputes from Rating rather than
     adjusting in place, any drift from a missed signal is corrected automatically.
+
+    ⚡ Set-based via `recompute_many`: two aggregates plus batched bulk_updates,
+    instead of ~4 queries, one UPDATE and one queued Meilisearch reindex task PER
+    EPISODE PER HOUR. `reindex=False` because rating writes already reindex their
+    episode inline, and the nightly `rebuild_search_index` sweep repairs the rare
+    drift this catches - re-queuing the whole catalogue hourly repaired nothing.
     """
-    count = 0
-    queryset = Episode.objects.select_related("channel").only("id", "channel_id")
-    for episode in queryset.iterator(chunk_size=batch_size):
-        recompute_episode(episode)
-        count += 1
+    count = recompute_many(None, reindex=False, batch_size=batch_size)
     logger.info("Score sweep complete: %d episodes", count)
     return count
 
@@ -175,14 +177,16 @@ def recompute_for_membership_change(user_id: int, channel_id: int) -> int:
 
     Only that channel's episodes can be affected, and only ones the user rated.
     """
-    episode_ids = Rating.objects.filter(
-        user_id=user_id, episode__channel_id=channel_id
-    ).values_list("episode_id", flat=True)
+    episode_ids = list(
+        Rating.objects.filter(
+            user_id=user_id, episode__channel_id=channel_id
+        ).values_list("episode_id", flat=True)
+    )
 
-    count = 0
-    for episode in Episode.objects.filter(pk__in=list(episode_ids)).select_related("channel"):
-        recompute_episode(episode)
-        count += 1
+    # Set-based: two aggregates + one bulk_update, however many episodes they
+    # rated. The per-episode loop made verifying one heavy rater hundreds of
+    # sequential query cycles inside the admin request.
+    count = recompute_many(episode_ids)
     logger.info(
         "Verification change for user %s on channel %s touched %d episodes",
         user_id, channel_id, count,
