@@ -438,6 +438,72 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------------------------------------------------------------------------
+   Dense grid cells: styled by ATTRIBUTE, not by a per-cell class list.
+
+   🚨 Why this is CSS and not Tailwind utilities. The dense cell's class string
+   is IDENTICAL on every anchor, and the biggest channel renders 1,318 of them:
+   105 characters x 1,318 = 138 KB of HTML saying the same thing, and the RSC
+   flight payload serializes the tree a second time, so it was charged twice.
+   Keying off `data-band` - which the cell already ships - says it once.
+
+   Colours reference the SAME tokens the utilities did (`--band-*`, `--unrated*`,
+   `--ink`), so the bands are still declared exactly once and stay identical in
+   both themes. Sizes mirror `h-6 w-5`; they are written in rem rather than
+   `calc(var(--spacing) * n)` because `--spacing` is Tailwind-internal here and
+   an undefined var would silently collapse the whole grid.
+
+   Verified 2026-08-14 by diffing getComputedStyle before and after in both
+   colour schemes: display, size, radius, background, colour, border and
+   box-sizing all byte-identical.
+   --------------------------------------------------------------------------- */
+table[data-grid="dense"] td {
+  padding: 0;
+}
+
+table[data-grid="dense"] a[data-cell],
+table[data-grid="dense"] td > span[aria-hidden] {
+  display: block;
+  width: 1.25rem; /* w-5 */
+  height: 1.5rem; /* h-6 */
+}
+
+table[data-grid="dense"] a[data-cell] {
+  border-radius: 3px;
+  /* 🚨 Unrated is NOT a band: --card-ish neutral with a DASHED border, never a
+     filled colour and never the garbage band. Rated cells override below. */
+  background-color: var(--unrated);
+  color: var(--unrated-foreground);
+  border: 1px dashed var(--unrated-border);
+}
+
+table[data-grid="dense"] a[data-band] {
+  border: 0;
+  color: var(--ink);
+}
+
+table[data-grid="dense"] a[data-band="masterpiece"] {
+  background-color: var(--band-masterpiece);
+}
+table[data-grid="dense"] a[data-band="awesome"] {
+  background-color: var(--band-awesome);
+}
+table[data-grid="dense"] a[data-band="great"] {
+  background-color: var(--band-great);
+}
+table[data-grid="dense"] a[data-band="good"] {
+  background-color: var(--band-good);
+}
+table[data-grid="dense"] a[data-band="regular"] {
+  background-color: var(--band-regular);
+}
+table[data-grid="dense"] a[data-band="bad"] {
+  background-color: var(--band-bad);
+}
+table[data-grid="dense"] a[data-band="garbage"] {
+  background-color: var(--band-garbage);
+}
+
 /* Skeletons pulse OPACITY only. A moving gradient sweeping across 20 cards
    reads as the page loading 20 separate times. */
 @keyframes skeleton-pulse {

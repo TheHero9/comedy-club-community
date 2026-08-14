@@ -363,7 +363,9 @@ function DenseGrid({ grid }: { grid: Grid }) {
                   </span>
                 </th>
                 {grid.rows.map((row) => (
-                  <td key={row.index} className="p-0">
+                  // Padding comes from the dense descendant rule - "p-0" alone
+                  // was 24 KB across 2,024 cells, twice over with the flight.
+                  <td key={row.index}>
                     <DenseCell
                       cell={row.cells[seasonIndex] ?? null}
                       season={season}
@@ -392,14 +394,16 @@ function DenseCell({
   season: GridSeason;
   index: number;
 }) {
-  if (!cell) return <span aria-hidden className="block h-6 w-5" />;
+  if (!cell) return <span aria-hidden />;
 
-  const style = bandStyle(cell.band);
   const label = cellLabel(cell);
 
-  // The class list is deliberately minimal: it is repeated once per episode, so
-  // at 1,318 episodes every character costs ~1.3 KB of HTML. Hover and focus
-  // treatment lives on the table as a single descendant rule instead.
+  // 🚨 NO className at all, deliberately. Size, radius, the unrated treatment
+  // and all seven band colours live in one set of descendant rules in
+  // globals.css keyed on `data-band`, because this element renders 1,318 times
+  // and the class string was identical on every one of them - 138 KB of HTML,
+  // charged again in the RSC flight payload. Hover and focus already worked
+  // this way. If you need to restyle a dense cell, edit globals.css.
   //
   // 🚨 No `title` attribute, deliberately. It used to carry the same string as
   // `aria-label`, which cost a second full copy of the episode title on every
@@ -417,7 +421,6 @@ function DenseCell({
       href={`/e/${cell.youtube_id}`}
       aria-label={label}
       {...cellDataAttributes(cell, season, index)}
-      className={cn("block h-6 w-5 rounded-[3px]", style.cell)}
     />
   );
 }

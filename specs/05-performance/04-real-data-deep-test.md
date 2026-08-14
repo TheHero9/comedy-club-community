@@ -61,9 +61,34 @@ out of it.
 - All E2E/vitest skips are environment- or data-conditional with written
   reasons; none dodge a failure.
 
+## The full run on the big channel page: 1826.9 -> 916.2 KB (50%)
+
+Four passes, each removing a repeat rather than removing content. Nothing the
+user sees changed - the grid still renders all 1,318 episodes.
+
+| Pass | What was repeated | Result |
+| ---- | ----------------- | ------ |
+| `data-title` + localized `data-position` | the title, a second time per cell | 1826.9 -> 1506.6 |
+| exact title recovery | (correctness; `data-flags` on 376 cells) | -> 1519.8 |
+| default-valued data attributes | `data-provisional=""` etc. on every cell | -> 1328.9 |
+| the cell class list -> CSS descendant rules | 105 identical characters x 1,318 | **-> 916.2** |
+
+Every byte was charged twice, because the RSC flight payload serializes the
+whole tree again after the HTML.
+
+**The class-list pass is the one that needed proof, not judgement.** It moves
+size, radius, the unrated treatment and all seven band colours out of Tailwind
+utilities and into `globals.css` rules keyed on `data-band`. Rather than
+eyeball it, the before/after was verified by diffing `getComputedStyle` on a
+cell, its `<td>` and an empty hole in BOTH colour schemes - display, width,
+height, radius, background, colour, border, box-sizing and bounding rect all
+identical - plus the 369-test E2E suite including axe at two viewports.
+
 ## Still open (the structural item)
 
-The big channel page remains 2.5x its real 600 KB budget. The two honest levers
-stay what `03-optimization-results.md` said: empty holes must stop being
-elements, or the grid paginates by season. Tonight's cut bought headroom; it did
-not close the item.
+The route is now 1.5x its real 600 KB budget, ceiling ratcheted 1800 -> 1000.
+The largest remaining repeat is `aria-label` at 170 KB, and that one is NOT
+waste: it is genuine per-cell content and, since the `data-title` removal, the
+only copy of the episode title on the page. So the next lever is structural,
+exactly as `03-optimization-results.md` said: empty holes must stop being
+elements, or the grid paginates by season.
