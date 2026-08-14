@@ -88,6 +88,16 @@ export function cellLabel(cell: GridCell): string {
  * `GridCellOut` is deliberately lean (every field is multiplied by 1,318), so
  * the date, duration and thumbnail come from `/api/episodes/{youtube_id}` when
  * the preview actually opens. These attributes cover the instant paint.
+ *
+ * 🚨 No `data-title`, deliberately - same lesson as the removed `title`
+ * attribute (2026-08-11). The full episode title already ships in `aria-label`,
+ * and a second copy cost 135.5 KB of HTML on the 1,318-cell page - then again
+ * in the RSC flight payload, which serializes the whole tree a second time.
+ * The preview recovers the bare title with `titleFromCellLabel`.
+ *
+ * `data-position` is the compact `year:index` pair, not the localized sentence:
+ * the sentence weighed 49 KB across the big grid and the client can format it
+ * with the same copy function at hover time.
  */
 export function cellDataAttributes(
   cell: GridCell,
@@ -96,11 +106,49 @@ export function cellDataAttributes(
 ): Record<string, string> {
   return {
     "data-cell": cell.youtube_id,
-    "data-title": cell.title,
     "data-score": cell.score === null ? "" : String(cell.score),
     "data-band": cell.band ?? "",
     "data-count": String(cell.rating_count),
     "data-provisional": cell.is_provisional ? "1" : "",
-    "data-position": copy.episode.cellPosition(season.year, index),
+    "data-position": `${season.year}:${index}`,
   };
+}
+
+/** Format the compact `data-position` value ("2021:14") for display. */
+export function positionLabel(raw: string): string {
+  const [year, index] = raw.split(":");
+  if (!year || index === undefined) return "";
+  return copy.episode.cellPosition(Number(year), Number(index));
+}
+
+/**
+ * Recover the bare episode title from a cell's `aria-label`.
+ *
+ * `cellLabel` appends a fixed, finite set of machine suffixes after the title,
+ * joined with " - ". Stripping known suffixes from the END is exact even when
+ * the title itself contains " - ", because only trailing parts that byte-match
+ * a marker (or the score / ratings-count patterns) are removed. The one
+ * theoretical miss - a title that literally ends in one of the Bulgarian
+ * marker phrases - would only trim the hover preview's heading, never data.
+ */
+export function titleFromCellLabel(label: string, ratingCount: number): string {
+  const parts = label.split(" - ");
+
+  // Last part is always the score or the unrated copy.
+  const last = parts[parts.length - 1];
+  if (last === copy.band.unrated || /^\d+(\.\d+)?\/10$/.test(last)) {
+    parts.pop();
+  }
+
+  const markers = new Set<string>([
+    copy.band.membersOnly,
+    copy.band.stream,
+    copy.band.provisional,
+    ...(ratingCount > 0 ? [copy.episode.ratings(ratingCount)] : []),
+  ]);
+  while (parts.length > 1 && markers.has(parts[parts.length - 1])) {
+    parts.pop();
+  }
+
+  return parts.join(" - ");
 }

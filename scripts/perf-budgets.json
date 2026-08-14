@@ -66,9 +66,9 @@
       "why": "87 KB decoded / 11.2 KB gzipped, prerendered and served from the Next full-route cache. 150 KB is room for a hero and a few more cards. The home page is the single most-shared URL on the site and must stay the cheapest."
     },
     "web:channels": {
-      "payloadKb": 120,
+      "payloadKb": 240,
       "medianMs": 200,
-      "why": "22.6 KB for 2 channel cards. At 8 channels this is still well under 100 KB. 120 KB catches the case where the listing starts embedding grid or episode data it does not render."
+      "why": "Recalibrated 2026-08-14 at the full 7-channel roster: 202.2 KB decoded / 15.1 KB gzipped. The old 120 KB ceiling extrapolated '22.6 KB for 2 cards' from BEFORE the redesign gave every card a per-year sparkline (24 bars x years, and the big channel alone spans a decade), so the growth is rendered content, not embedded-but-unrendered data. 240 KB = todays roster plus one more decade-deep channel; past that the sparkline needs a cheaper encoding, not a bigger budget."
     },
     "web:episodes": {
       "payloadKb": 200,
@@ -105,10 +105,10 @@
       "maxMs": 550
     },
     "web:channel-page:комеди-клуб-подкаст-comedy-club-podcast": {
-      "why": "Known breach, measured 2026-08-09: 2271.2 KB against a 600 KB budget and 464 ms against 300 ms. Same ratchet rules as the grid waiver above. Re-measured 2026-08-10 at 1355.2 KB / 65.3 ms - a 40% payload cut and a 7x latency cut, delivered by the visual redesign's dense grid mode (colour-only chips, and one delegated event handler instead of 2024 client components) WHILE the channel went from 0 to 1043 rated cells. Re-measured 2026-08-11 at 1724.1 KB / 149.5 ms. 🚨 READ THE DIRECTION OF TRAVEL: the route went UP, to 2076.3 KB, purely because demo seeding raised community coverage - more rated cells means every cell now carries a score, band and count instead of being a null hole. Removing the redundant `title` attribute on every cell (it duplicated `aria-label`, and the RSC flight payload serializes the tree a second time, so one string was costing three copies) took it back to 1724.1. The ceiling STAYS at 1800: it is a ratchet, and the fact that ordinary data growth ate three quarters of the remaining headroom in one seeding run is the finding, not an argument for a bigger number. The 2026-08-10 note predicted ~1500 KB at full coverage and that estimate is now known to be low. The structural fix - empty holes must stop being elements, or the grid paginates by season - is no longer deferrable: there is ~76 KB of headroom left and the route is still 2.9x over its real 600 KB budget.",
-      "observedKb": 1724.1,
+      "why": "Known breach, measured 2026-08-09: 2271.2 KB against a 600 KB budget and 464 ms against 300 ms. Same ratchet rules as the grid waiver above. Re-measured 2026-08-10 at 1355.2 KB / 65.3 ms - a 40% payload cut and a 7x latency cut, delivered by the visual redesign's dense grid mode (colour-only chips, and one delegated event handler instead of 2024 client components) WHILE the channel went from 0 to 1043 rated cells. Re-measured 2026-08-11 at 1724.1 KB / 149.5 ms. 🚨 READ THE DIRECTION OF TRAVEL: the route went UP, to 2076.3 KB, purely because demo seeding raised community coverage - more rated cells means every cell now carries a score, band and count instead of being a null hole. Removing the redundant `title` attribute on every cell (it duplicated `aria-label`, and the RSC flight payload serializes the tree a second time, so one string was costing three copies) took it back to 1724.1. The ceiling STAYS at 1800: it is a ratchet, and the fact that ordinary data growth ate three quarters of the remaining headroom in one seeding run is the finding, not an argument for a bigger number. The 2026-08-10 note predicted ~1500 KB at full coverage and that estimate is now known to be low. Re-measured 2026-08-14 at 1506.6 KB after the demo-data purge briefly pushed the route to 1826.9 KB - OVER the 1800 ceiling, which is the ratchet doing its job. The regression's cause was the same three-copies-of-one-string class as the 2026-08-11 title fix: every cell shipped `data-title` (135.5 KB, duplicating aria-label) and a fully localized `data-position` sentence (49.2 KB), each serialized again in the RSC flight. Both removed - the preview now derives the title from aria-label (`titleFromCellLabel`, round-trip-tested in tests/grid-model.spec.ts) and formats a compact year:index client-side. Ceiling ratcheted 1800 -> 1600. The structural fix - empty holes must stop being elements, or the grid paginates by season - remains due: the route is still 2.5x over its real 600 KB budget.",
+      "observedKb": 1506.6,
       "observedMs": 149.5,
-      "maxKb": 1800,
+      "maxKb": 1600,
       "maxMs": 700
     }
   }

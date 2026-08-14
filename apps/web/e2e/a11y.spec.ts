@@ -149,7 +149,11 @@ test.describe("12. accessibility", () => {
         "the label must carry the episode title, not just a bare number",
       ).toContain(cell.title);
       if (cell.score === null) {
-        expect(label).toContain("Not rated");
+        // 🐛 This branch first ran on 2026-08-14, when the demo data was
+        // cleared and the whole catalogue became unrated. It used to assert
+        // the English "Not rated", which the Bulgarian copy pass had long
+        // since replaced - assert the real copy value, never a literal.
+        expect(label).toContain(copy.band.unrated);
       } else {
         expect(label).toMatch(/\d+\.\d\/10$/);
       }

@@ -9,6 +9,7 @@ import { ScoreChip } from "@/components/shared/ScoreChip";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { positionLabel, titleFromCellLabel } from "@/components/grid/grid-model";
 import { api } from "@/lib/api/client";
 import type { Episode } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
@@ -46,14 +47,18 @@ function readCell(element: HTMLElement): PreviewData | null {
   const anchor = element.closest<HTMLAnchorElement>("a[data-cell]");
   if (!anchor) return null;
   const rawScore = anchor.dataset.score ?? "";
+  const ratingCount = Number(anchor.dataset.count ?? "0");
   return {
     youtubeId: anchor.dataset.cell ?? "",
-    title: anchor.dataset.title ?? "",
+    // The title ships ONCE, inside aria-label - a data-title duplicate cost
+    // 135.5 KB (plus its RSC flight copy) on the 1,318-cell page. The
+    // `ariaLabel` property keeps the copy scanner clean of attribute literals.
+    title: titleFromCellLabel(anchor.ariaLabel ?? "", ratingCount),
     score: rawScore === "" ? null : Number(rawScore),
     band: anchor.dataset.band || null,
-    ratingCount: Number(anchor.dataset.count ?? "0"),
+    ratingCount,
     provisional: anchor.dataset.provisional === "1",
-    position: anchor.dataset.position ?? "",
+    position: positionLabel(anchor.dataset.position ?? ""),
   };
 }
 

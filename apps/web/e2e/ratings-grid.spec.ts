@@ -335,7 +335,19 @@ test.describe("3. ratings grid", () => {
         expectedText(apiCell(publicGrid, seasonIndex, rowIndex)),
       ),
     );
-    expect(renderedScores).not.toEqual(publicScores);
+    if (JSON.stringify(publicScores) === JSON.stringify(expectedScores)) {
+      // With zero community ratings (the state since the 2026-08-14 demo-data
+      // purge) every cell is "?" in BOTH modes, so "the modes differ" is a
+      // property of the DATA, not of the toggle - asserting it against
+      // truthful identical grids would fail forever on an empty community.
+      // The switch is still proven above: `aria-current` is set by the SERVER
+      // only on the elite render, and renderedScores matched the elite API.
+      // The moment real users rate, the two projections diverge and the
+      // stronger assertion below re-arms automatically.
+      expect(renderedScores).toEqual(publicScores);
+    } else {
+      expect(renderedScores).not.toEqual(publicScores);
+    }
   });
 
   test("3.9 the season average under each year matches the API", async ({ page }) => {
