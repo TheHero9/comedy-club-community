@@ -98,12 +98,20 @@ export function cellLabel(cell: GridCell): string {
  * `data-position` is the compact `year:index` pair, not the localized sentence:
  * the sentence weighed 49 KB across the big grid and the client can format it
  * with the same copy function at hover time.
+ *
+ * `data-flags` carries the two booleans the parser cannot otherwise know
+ * (members-only, stream) and is OMITTED entirely when both are false, which is
+ * ~97% of the corpus - so exactness here costs almost nothing.
  */
 export function cellDataAttributes(
   cell: GridCell,
   season: GridSeason,
   index: number,
 ): Record<string, string> {
+  const flags =
+    (cell.members_only ? FLAG_MEMBERS_ONLY : "") +
+    (cell.content_kind === "stream" ? FLAG_STREAM : "");
+
   return {
     "data-cell": cell.youtube_id,
     "data-score": cell.score === null ? "" : String(cell.score),
@@ -111,44 +119,76 @@ export function cellDataAttributes(
     "data-count": String(cell.rating_count),
     "data-provisional": cell.is_provisional ? "1" : "",
     "data-position": `${season.year}:${index}`,
+    ...(flags ? { "data-flags": flags } : {}),
   };
 }
 
-/** Format the compact `data-position` value ("2021:14") for display. */
+export const FLAG_MEMBERS_ONLY = "m";
+export const FLAG_STREAM = "s";
+
+/**
+ * Format the compact `data-position` value ("2021:14") for display.
+ *
+ * Anything malformed degrades to "" rather than rendering "епизод NaN" - the
+ * attribute can be stale (a cached page from an older build) or hand-edited.
+ */
 export function positionLabel(raw: string): string {
-  const [year, index] = raw.split(":");
-  if (!year || index === undefined) return "";
-  return copy.episode.cellPosition(Number(year), Number(index));
+  const [rawYear, rawIndex, ...rest] = raw.split(":");
+  if (rest.length > 0) return "";
+  const year = Number(rawYear);
+  const index = Number(rawIndex);
+  if (!rawYear || !rawIndex || !Number.isFinite(year) || !Number.isFinite(index)) {
+    return "";
+  }
+  return copy.episode.cellPosition(year, index);
+}
+
+export interface CellLabelFlags {
+  ratingCount: number;
+  provisional: boolean;
+  membersOnly: boolean;
+  stream: boolean;
 }
 
 /**
  * Recover the bare episode title from a cell's `aria-label`.
  *
- * `cellLabel` appends a fixed, finite set of machine suffixes after the title,
- * joined with " - ". Stripping known suffixes from the END is exact even when
- * the title itself contains " - ", because only trailing parts that byte-match
- * a marker (or the score / ratings-count patterns) are removed. The one
- * theoretical miss - a title that literally ends in one of the Bulgarian
- * marker phrases - would only trim the hover preview's heading, never data.
+ * 🚨 This is the EXACT inverse of `cellLabel`, not a heuristic, and it has to
+ * stay that way: since 2026-08-14 the aria-label is the only copy of the title
+ * a cell ships. It walks the suffixes in reverse append order and pops each one
+ * AT MOST ONCE, and only when the cell's own flags say that suffix was
+ * appended. Both halves of that matter - a first attempt used an unconditional
+ * marker set in a `while` loop, which mangled two real title shapes:
+ *
+ *   - a plain video titled "На живо - Стрийм" lost its last word, because
+ *     "Стрийм" was stripped from a cell that is not a stream at all;
+ *   - an actual stream titled "Иван Кирков - Стрийм" lost it too, because the
+ *     loop popped the real marker and then the title's own trailing word.
+ *
+ * Callers pass the flags straight off the cell's data attributes.
  */
-export function titleFromCellLabel(label: string, ratingCount: number): string {
+export function titleFromCellLabel(label: string, flags: CellLabelFlags): string {
   const parts = label.split(" - ");
 
-  // Last part is always the score or the unrated copy.
+  const popIf = (present: boolean, expected: string) => {
+    if (present && parts.length > 1 && parts[parts.length - 1] === expected) {
+      parts.pop();
+    }
+  };
+
+  // The score (or the unrated copy) is always last.
   const last = parts[parts.length - 1];
-  if (last === copy.band.unrated || /^\d+(\.\d+)?\/10$/.test(last)) {
+  if (parts.length > 1 && (last === copy.band.unrated || SCORE_SUFFIX.test(last))) {
     parts.pop();
   }
 
-  const markers = new Set<string>([
-    copy.band.membersOnly,
-    copy.band.stream,
-    copy.band.provisional,
-    ...(ratingCount > 0 ? [copy.episode.ratings(ratingCount)] : []),
-  ]);
-  while (parts.length > 1 && markers.has(parts[parts.length - 1])) {
-    parts.pop();
-  }
+  // Reverse of cellLabel's append order.
+  popIf(flags.ratingCount > 0, copy.episode.ratings(flags.ratingCount));
+  popIf(flags.provisional, copy.band.provisional);
+  popIf(flags.stream, copy.band.stream);
+  popIf(flags.membersOnly, copy.band.membersOnly);
 
   return parts.join(" - ");
 }
+
+const SCORE_SUFFIX = /^\d+(\.\d+)?\/10$/;

@@ -338,13 +338,21 @@ test.describe("3. ratings grid", () => {
     if (JSON.stringify(publicScores) === JSON.stringify(expectedScores)) {
       // With zero community ratings (the state since the 2026-08-14 demo-data
       // purge) every cell is "?" in BOTH modes, so "the modes differ" is a
-      // property of the DATA, not of the toggle - asserting it against
-      // truthful identical grids would fail forever on an empty community.
-      // The switch is still proven above: `aria-current` is set by the SERVER
-      // only on the elite render, and renderedScores matched the elite API.
-      // The moment real users rate, the two projections diverge and the
-      // stronger assertion below re-arms automatically.
-      expect(renderedScores).toEqual(publicScores);
+      // property of the DATA, not of the toggle.
+      //
+      // 🚨 Do NOT "keep it green" by re-asserting renderedScores against
+      // publicScores - that is byte-identical to the assertion above and
+      // proves nothing (review finding, 2026-08-14). Assert instead the two
+      // things that still discriminate: the API really served two DIFFERENT
+      // projections, and the identical cells are explained by there being
+      // nothing to average. The server-render evidence is `aria-current`,
+      // asserted above. The stronger check re-arms itself on the first rating.
+      expect(publicGrid.score_kind).toBe("public");
+      expect(eliteGrid.score_kind).toBe("elite");
+      expect(
+        eliteGrid.rated_count,
+        "grids matched but ratings exist - the toggle may not be recomputing",
+      ).toBe(0);
     } else {
       expect(renderedScores).not.toEqual(publicScores);
     }

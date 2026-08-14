@@ -9,8 +9,14 @@ import { ScoreChip } from "@/components/shared/ScoreChip";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { positionLabel, titleFromCellLabel } from "@/components/grid/grid-model";
+import {
+  FLAG_MEMBERS_ONLY,
+  FLAG_STREAM,
+  positionLabel,
+  titleFromCellLabel,
+} from "@/components/grid/grid-model";
 import { api } from "@/lib/api/client";
+import { ARIA_LABEL_ATTR } from "@/lib/dom-attrs";
 import type { Episode } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
 import { formatDate, formatDuration, thumbnailUrl } from "@/lib/format";
@@ -46,18 +52,35 @@ interface PreviewData {
 function readCell(element: HTMLElement): PreviewData | null {
   const anchor = element.closest<HTMLAnchorElement>("a[data-cell]");
   if (!anchor) return null;
+
   const rawScore = anchor.dataset.score ?? "";
-  const ratingCount = Number(anchor.dataset.count ?? "0");
+  const parsedCount = Number(anchor.dataset.count ?? "0");
+  // A NaN here would silently disable the ratings-suffix strip AND make the
+  // sheet claim "no ratings yet" under a heading that says otherwise.
+  const ratingCount = Number.isFinite(parsedCount) ? parsedCount : 0;
+  const flags = anchor.dataset.flags ?? "";
+  const provisional = anchor.dataset.provisional === "1";
+
   return {
     youtubeId: anchor.dataset.cell ?? "",
     // The title ships ONCE, inside aria-label - a data-title duplicate cost
-    // 135.5 KB (plus its RSC flight copy) on the 1,318-cell page. The
-    // `ariaLabel` property keeps the copy scanner clean of attribute literals.
-    title: titleFromCellLabel(anchor.ariaLabel ?? "", ratingCount),
+    // 135.5 KB (plus its RSC flight copy) on the 1,318-cell page.
+    // `ariaLabel` is the property reflection; the attribute read is the
+    // fallback for engines that predate it (Firefox < 119, Safari < 16.4),
+    // where an empty title would otherwise be the only symptom.
+    title: titleFromCellLabel(
+      anchor.ariaLabel ?? anchor.getAttribute(ARIA_LABEL_ATTR) ?? "",
+      {
+        ratingCount,
+        provisional,
+        membersOnly: flags.includes(FLAG_MEMBERS_ONLY),
+        stream: flags.includes(FLAG_STREAM),
+      },
+    ),
     score: rawScore === "" ? null : Number(rawScore),
     band: anchor.dataset.band || null,
     ratingCount,
-    provisional: anchor.dataset.provisional === "1",
+    provisional,
     position: positionLabel(anchor.dataset.position ?? ""),
   };
 }

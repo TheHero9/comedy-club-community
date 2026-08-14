@@ -12,12 +12,26 @@ import { describe, expect, it } from "vitest";
 import {
   cellDataAttributes,
   cellLabel,
+  FLAG_MEMBERS_ONLY,
+  FLAG_STREAM,
   positionLabel,
   titleFromCellLabel,
+  type CellLabelFlags,
   type GridCell,
   type GridSeason,
 } from "@/components/grid/grid-model";
 import { copy } from "@/lib/copy";
+
+const SEASON = { year: 2021, label: "'21", episode_count: 40 } as GridSeason;
+
+function flagsOf(cell: GridCell): CellLabelFlags {
+  return {
+    ratingCount: cell.rating_count,
+    provisional: cell.is_provisional,
+    membersOnly: cell.members_only,
+    stream: cell.content_kind === "stream",
+  };
+}
 
 function cell(overrides: Partial<GridCell>): GridCell {
   return {
@@ -38,6 +52,13 @@ const TITLES = [
   // Titles containing the join sequence must survive the reverse parse.
   "Гост - Иван Кирков - Комеди Клуб Подкаст",
   "UFC 265 Gane vs Lewis - Подкаст за спорт",
+  // 🚨 Titles that END in a marker phrase. The first implementation lost the
+  // last word of all three: an unconditional marker set stripped them from
+  // cells that carry no such flag, and a `while` loop stripped them a second
+  // time from cells that do. Found by review 2026-08-14.
+  "На живо от клуба - Стрийм",
+  "Ексклузивно - Само за членове",
+  "Първи впечатления - Малко оценки",
 ];
 
 describe("titleFromCellLabel", () => {
@@ -60,24 +81,63 @@ describe("titleFromCellLabel", () => {
       ];
       for (const shape of shapes) {
         const c = cell({ title, ...shape });
-        expect(titleFromCellLabel(cellLabel(c), c.rating_count)).toBe(title);
+        expect(titleFromCellLabel(cellLabel(c), flagsOf(c))).toBe(title);
       }
     });
   }
+
+  it("reads its flags off the very attributes the cell ships", () => {
+    // The parser is only exact if what the component writes is what the
+    // preview reads back - assert the loop closes through data-flags.
+    const c = cell({
+      title: "На живо от клуба - Стрийм",
+      members_only: true,
+      content_kind: "stream",
+    });
+    const attrs = cellDataAttributes(c, SEASON, 3);
+    const flags = attrs["data-flags"] ?? "";
+    expect(
+      titleFromCellLabel(cellLabel(c), {
+        ratingCount: Number(attrs["data-count"]),
+        provisional: attrs["data-provisional"] === "1",
+        membersOnly: flags.includes(FLAG_MEMBERS_ONLY),
+        stream: flags.includes(FLAG_STREAM),
+      }),
+    ).toBe("На живо от клуба - Стрийм");
+  });
 });
 
 describe("cellDataAttributes", () => {
-  const season = { year: 2021, label: "'21", episode_count: 40 } as GridSeason;
-
   it("never ships the title - aria-label is its only copy", () => {
-    const attrs = cellDataAttributes(cell({}), season, 14);
+    const attrs = cellDataAttributes(cell({}), SEASON, 14);
     expect(Object.keys(attrs)).not.toContain("data-title");
   });
 
   it("ships the compact position and positionLabel formats it", () => {
-    const attrs = cellDataAttributes(cell({}), season, 14);
+    const attrs = cellDataAttributes(cell({}), SEASON, 14);
     expect(attrs["data-position"]).toBe("2021:14");
     expect(positionLabel("2021:14")).toBe(copy.episode.cellPosition(2021, 14));
-    expect(positionLabel("")).toBe("");
+  });
+
+  it("omits data-flags entirely for an ordinary video", () => {
+    // ~97% of cells. Exactness has to be free for the common case.
+    expect(Object.keys(cellDataAttributes(cell({}), SEASON, 14))).not.toContain(
+      "data-flags",
+    );
+    expect(
+      cellDataAttributes(cell({ members_only: true }), SEASON, 14)["data-flags"],
+    ).toBe(FLAG_MEMBERS_ONLY);
+    expect(
+      cellDataAttributes(cell({ content_kind: "stream" }), SEASON, 14)["data-flags"],
+    ).toBe(FLAG_STREAM);
+  });
+});
+
+describe("positionLabel", () => {
+  it("degrades to empty rather than rendering NaN", () => {
+    // Stale HTML from an older build, or a hand-edited attribute.
+    for (const raw of ["", "2021", "2021:", ":14", "2021:x", "abc:14", "1:2:3"]) {
+      expect(positionLabel(raw), `positionLabel(${JSON.stringify(raw)})`).toBe("");
+    }
   });
 });
