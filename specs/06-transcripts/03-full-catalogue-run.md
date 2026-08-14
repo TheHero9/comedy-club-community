@@ -1,8 +1,8 @@
 # Full-catalogue transcript run (2026-08-13/14, overnight via /loop)
 
-**Result:** ✅ 1,959 of 1,961 episodes have a verdict. 578 transcripts stored
-(**61,448 searchable segments**, Postgres == Meilisearch exactly), 1,381 recorded
-caption-less, 2 pending on a caption-endpoint 429.
+**Result:** ✅ 1,960 of 1,961 episodes have a verdict. 579 transcripts stored
+(**61,452 searchable segments**, Postgres == Meilisearch exactly), 1,381 recorded
+caption-less, one pending on a caption-endpoint 429.
 
 ## Coverage by channel (the date-dependence hypothesis, now measured)
 
@@ -37,12 +37,12 @@ exhaustive layer** - the UI copy must keep saying so.
    while Meilisearch stays stale - looks alarming, is correct. An interim
    `reindex --only transcripts` is safe to run concurrently.
 
-## The 2 stragglers
+## The straggler
 
-`MoMnxWU9zq8` (@ComedyClubNews) and `dfrZOLgSlTM` (@comedyclubpodcast) - both
-public, both still 429/degraded at close. They remain in `pending_queryset`, so any
-future `backfill_transcripts` run (or the next scheduled sweep) collects them.
-Nothing false was recorded.
+`dfrZOLgSlTM` (@comedyclubpodcast) recovered on a later retry and is stored.
+`MoMnxWU9zq8` (@ComedyClubNews, public) was still 429 after four spaced attempts
+and remains the single pending episode. It stays in `pending_queryset`, so any
+future `backfill_transcripts` run collects it. Nothing false was recorded.
 
 ## Verification evidence
 

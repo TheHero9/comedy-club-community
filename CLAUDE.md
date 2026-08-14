@@ -255,13 +255,13 @@ yt-dlp soft-block. Demo data has been fully cleared (`seed_demo --clear`); the D
 holds ONLY real extracted YouTube data. Cyrillic handles work percent-encoded since
 2026-08-13 (`normalize_channel_target` unquotes).
 
-✅ **Transcripts: full catalogue swept 2026-08-13/14.** 578 of 1,961 episodes
-(29.5%) have a transcript - **61,448 searchable segments**; 1,381 episodes checked
-and recorded as caption-less; 2 episodes still pending on a caption-endpoint 429
-(`MoMnxWU9zq8`, `dfrZOLgSlTM` - they stay in the pending queryset and any later
-`backfill_transcripts` run picks them up). Coverage is wildly channel-dependent:
-BFF 99%, Kirkov 88%, Дело 404 86%, CCP 28%, News 6%, Клюки 1%, Sport 0% - never
-present transcript search as exhaustive.
+✅ **Transcripts: full catalogue swept 2026-08-13/14.** 579 of 1,961 episodes
+(29.5%) have a transcript - **61,452 searchable segments**, Postgres == Meilisearch
+exactly; 1,381 episodes checked and recorded as caption-less; **one** episode still
+pending on a caption-endpoint 429 (`MoMnxWU9zq8` - it stays in the pending queryset
+and any later `backfill_transcripts` run picks it up). Coverage is wildly
+channel-dependent: BFF 99%, Kirkov 88%, Дело 404 86%, CCP 28%, News 6%, Клюки 1%,
+Sport 0% - never present transcript search as exhaustive.
 
 ✅ **Availability: CONFIRMED by full yt-dlp re-backfill of all 5 new channels
 (2026-08-14, 0 degraded).** The distribution matched the inferred flags exactly
