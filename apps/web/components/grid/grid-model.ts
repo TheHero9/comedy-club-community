@@ -99,9 +99,19 @@ export function cellLabel(cell: GridCell): string {
  * the sentence weighed 49 KB across the big grid and the client can format it
  * with the same copy function at hover time.
  *
- * `data-flags` carries the two booleans the parser cannot otherwise know
- * (members-only, stream) and is OMITTED entirely when both are false, which is
- * ~97% of the corpus - so exactness here costs almost nothing.
+ * 🚨 EVERY attribute here is omitted when it carries its default. An attribute
+ * multiplied by 1,318 cells is never free: `data-provisional=""` alone was
+ * 24.5 KB of HTML, and the RSC flight payload serializes the whole tree a
+ * second time, so each byte is charged twice. An unrated episode - 71% of the
+ * catalogue - now ships three attributes instead of six.
+ *
+ * The reader in `GridInteraction.readCell` already defaults every one of these
+ * to exactly the value being omitted, so absence and default are the same
+ * thing to it. `data-cell` stays unconditional: it is the delegation selector.
+ *
+ * `data-flags` carries the two booleans the label parser cannot otherwise know
+ * (members-only, stream), and is likewise absent on the ~97% of cells that are
+ * neither - which is what makes the exact title recovery nearly free.
  */
 export function cellDataAttributes(
   cell: GridCell,
@@ -114,11 +124,11 @@ export function cellDataAttributes(
 
   return {
     "data-cell": cell.youtube_id,
-    "data-score": cell.score === null ? "" : String(cell.score),
-    "data-band": cell.band ?? "",
-    "data-count": String(cell.rating_count),
-    "data-provisional": cell.is_provisional ? "1" : "",
     "data-position": `${season.year}:${index}`,
+    ...(cell.score === null ? {} : { "data-score": String(cell.score) }),
+    ...(cell.band ? { "data-band": cell.band } : {}),
+    ...(cell.rating_count > 0 ? { "data-count": String(cell.rating_count) } : {}),
+    ...(cell.is_provisional ? { "data-provisional": "1" } : {}),
     ...(flags ? { "data-flags": flags } : {}),
   };
 }

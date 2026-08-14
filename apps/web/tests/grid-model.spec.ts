@@ -98,12 +98,45 @@ describe("titleFromCellLabel", () => {
     const flags = attrs["data-flags"] ?? "";
     expect(
       titleFromCellLabel(cellLabel(c), {
-        ratingCount: Number(attrs["data-count"]),
+        // Defaults mirror GridInteraction.readCell exactly - these attributes
+        // are omitted when they carry their default value.
+        ratingCount: Number(attrs["data-count"] ?? "0"),
         provisional: attrs["data-provisional"] === "1",
         membersOnly: flags.includes(FLAG_MEMBERS_ONLY),
         stream: flags.includes(FLAG_STREAM),
       }),
     ).toBe("На живо от клуба - Стрийм");
+  });
+});
+
+describe("cellDataAttributes omits defaults", () => {
+  it("ships only the two unconditional attributes for an unrated video", () => {
+    // 71% of the catalogue. Every attribute here is charged 1,318 times in the
+    // HTML and again in the RSC flight payload.
+    expect(Object.keys(cellDataAttributes(cell({}), SEASON, 14)).sort()).toEqual([
+      "data-cell",
+      "data-position",
+    ]);
+  });
+
+  it("ships each optional attribute exactly when it is meaningful", () => {
+    const rated = cellDataAttributes(
+      cell({ score: 7.4, band: "great", rating_count: 12, is_provisional: true }),
+      SEASON,
+      14,
+    );
+    expect(rated["data-score"]).toBe("7.4");
+    expect(rated["data-band"]).toBe("great");
+    expect(rated["data-count"]).toBe("12");
+    expect(rated["data-provisional"]).toBe("1");
+  });
+
+  it("keeps a zero score, which is a real score and not a default", () => {
+    // 🚨 `score: 0` is falsy. Omitting it would render the worst-rated
+    // episodes on the site as unrated.
+    expect(cellDataAttributes(cell({ score: 0, band: "garbage" }), SEASON, 1)["data-score"]).toBe(
+      "0",
+    );
   });
 });
 
