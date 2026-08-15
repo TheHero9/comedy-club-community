@@ -11,17 +11,21 @@ import {
   type Channel,
   type ChannelGrid,
 } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 60;
 
-export const metadata: Metadata = {
-  title: copy.channels.title,
-  description: copy.app.description,
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = await getCopy();
+  return {
+    title: copy.channels.title,
+    description: copy.app.description,
+  };
+}
 
 export default async function ChannelsPage() {
+  const copy = await getCopy();
   const channels = await listChannels();
 
   // One grid per channel, in parallel. The sparkline needs per-episode bands
@@ -80,13 +84,14 @@ export default async function ChannelsPage() {
   );
 }
 
-function ChannelCard({
+async function ChannelCard({
   channel,
   grid,
 }: {
   channel: Channel;
   grid: ChannelGrid | null;
 }) {
+  const copy = await getCopy();
   return (
     <article className="rounded-3xl border border-border bg-card p-[18px]">
       <div className="flex items-start gap-3.5">

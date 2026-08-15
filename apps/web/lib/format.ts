@@ -7,13 +7,24 @@
  * `bg-BG` short months render as "12.03.2025", not the "12 март 2025" the
  * design specifies.
  */
-import { copy } from "@/lib/copy";
-
-/** "2025-03-12" or an ISO datetime -> "12 март 2025". Empty string for null. */
-export function formatDate(value: string | null | undefined): string {
+/**
+ * "2025-03-12" or an ISO datetime -> "12 March 2025" / "12 март 2025".
+ * Empty string for null.
+ *
+ * 🚨 `months` is a REQUIRED parameter, not a module-level import. This function
+ * runs on both sides of the RSC boundary, and a module-level dictionary would
+ * be resolved once per process - so a Bulgarian viewer would get English months
+ * in the server HTML and Bulgarian ones after hydration. That is a hydration
+ * mismatch, which is invisible in the page and surfaces only as a console
+ * error. Every caller already holds `copy`, so this costs them nothing.
+ */
+export function formatDate(
+  value: string | null | undefined,
+  months: readonly string[],
+): string {
   const parts = parseIsoDate(value);
   if (!parts) return "";
-  return `${parts.day} ${copy.common.months[parts.month]} ${parts.year}`;
+  return `${parts.day} ${months[parts.month]} ${parts.year}`;
 }
 
 /** Year only, or null when there is no upload date. */

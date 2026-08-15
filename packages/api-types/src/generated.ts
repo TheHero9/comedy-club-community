@@ -1276,6 +1276,8 @@ export interface components {
             username: string;
             /** Display Name */
             display_name: string;
+            /** Handle */
+            handle?: string | null;
             /** Avatar Url */
             avatar_url: string;
             /** Bio */

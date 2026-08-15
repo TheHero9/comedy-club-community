@@ -272,6 +272,22 @@ test.describe("3. ratings grid", () => {
     const grid = await apiJson<Grid>(page, GRID_API);
 
     await page.goto(CHANNEL_PATH);
+
+    /**
+     * 🚨 The legend is collapsed behind a `<details>` as of 2026-08-15 - it is
+     * eleven swatches between the grid and the episode list, and a reader who
+     * knows the bands saw them on every visit. It is COLLAPSED, not removed, so
+     * this test opens it and then asserts exactly what it always did.
+     *
+     * Asserting the closed state would be the weakening: a legend that has been
+     * emptied out looks identical to one that is merely shut.
+     */
+    const toggle = page
+      .locator("main")
+      .getByText(copy.channel.legendToggle, { exact: true });
+    await expect(toggle.first()).toBeVisible();
+    await toggle.first().click();
+
     const legend = page.locator("main").getByText(copy.band.unrated, { exact: true });
     await expect(legend.first()).toBeVisible();
 

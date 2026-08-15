@@ -18,7 +18,7 @@ import {
 import { api } from "@/lib/api/client";
 import { ARIA_LABEL_ATTR } from "@/lib/dom-attrs";
 import type { Episode } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { formatDate, formatDuration, thumbnailUrl } from "@/lib/format";
 import { bandStyle } from "@/lib/score-bands";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,7 @@ function readCell(element: HTMLElement): PreviewData | null {
 }
 
 export function GridInteraction({ children }: { children: React.ReactNode }) {
+  const copy = useCopy();
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<number | null>(null);
@@ -272,7 +273,7 @@ export function GridInteraction({ children }: { children: React.ReactNode }) {
                   <span aria-hidden className="opacity-50">
                     {copy.common.separator}
                   </span>
-                  <span>{formatDate(detail.upload_date)}</span>
+                  <span>{formatDate(detail.upload_date, copy.common.months)}</span>
                 </>
               ) : null}
               {detail?.duration_sec ? (

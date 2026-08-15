@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, Star } from "lucide-react";
 
-import { EpisodeCard } from "@/components/episode/EpisodeCard";
+import { LinkPending } from "@/components/shared/LinkPending";
 import { SearchTrigger } from "@/components/search/SearchTrigger";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { Thumbnail } from "@/components/shared/Thumbnail";
@@ -14,17 +14,16 @@ import {
   listEpisodes,
   type EpisodeBrief,
 } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { formatScore } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
- * Assigned before use rather than chained off `copy` inline: the copy-key
- * scanner reads `copy.search.examples.map` as a key and cannot resolve it.
+ * 🚨 No `revalidate` any more. The page reads the locale cookie via `getCopy`,
+ * which makes it dynamic by definition. The API round trips are still cached -
+ * `lib/api/podcast.ts` carries `PUBLIC_CACHE` at the fetch layer - so what
+ * moved from cached to per-request is the HTML render, not the data.
  */
-const EXAMPLE_QUERIES = copy.search.examples;
-
-export const revalidate = 60;
 
 /** Rank styling. #1 is gold and larger; the tail fades out deliberately. */
 function rankStyle(rank: number): { size: string; color: string; row: string } {
@@ -50,13 +49,21 @@ function rankStyle(rank: number): { size: string; color: string; row: string } {
 }
 
 export default async function HomePage() {
-  const [channels, newest, topRated] = await Promise.all([
+  const copy = await getCopy();
+  const [channels, catalogue, topRated] = await Promise.all([
     listChannels(),
-    listEpisodes({ limit: 8, sort: "newest" }),
+    // 🚨 `limit: 1`, not 8. The home page no longer lists newest episodes, but
+    // the subhead still quotes the catalogue size, and `meta.total` is the only
+    // place that number exists. Asking for one row instead of eight is the
+    // difference between a count and a payload.
+    listEpisodes({ limit: 1, sort: "newest" }),
     getLeaderboard(LEADERBOARD_KINDS.top, { limit: 5 }),
   ]);
 
-  const totalEpisodes = newest.meta.total;
+  const totalEpisodes = catalogue.meta.total;
+
+  /** The examples list, aliased so the copy-key scanner can resolve it. */
+  const exampleQueries = copy.search.examples;
 
   /**
    * Channel avatars for the episode lists below, joined here rather than
@@ -87,7 +94,7 @@ export default async function HomePage() {
       <SearchTrigger className="mt-4.5 max-w-[560px]" />
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {EXAMPLE_QUERIES.map((example) => (
+        {exampleQueries.map((example) => (
           <LinkButton
             key={example}
             href={`/search?q=${encodeURIComponent(example)}`}
@@ -99,6 +106,7 @@ export default async function HomePage() {
             className="font-normal text-muted-foreground"
           >
             {example}
+            <LinkPending />
           </LinkButton>
         ))}
       </div>
@@ -132,34 +140,11 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {newest.items.length > 0 ? (
-        <section className="mt-9">
-          <h2 className="text-h2">{copy.home.newest}</h2>
-          <div className="mt-3.5 grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-4">
-            {newest.items.slice(0, 4).map((episode, index) => (
-              <EpisodeCard
-                key={episode.youtube_id}
-                episode={episode}
-                sizes="(min-width: 768px) 280px, 50vw"
-                channelAvatarUrl={channelAvatars.get(episode.channel_id) ?? ""}
-                priority={index < 2}
-              />
-            ))}
-            {/* Desktop shows eight; mobile stops at four to keep the fold
-                within reach of the sections below it. */}
-            {newest.items.slice(4, 8).map((episode) => (
-              <EpisodeCard
-                key={episode.youtube_id}
-                episode={episode}
-                sizes="280px"
-                channelAvatarUrl={channelAvatars.get(episode.channel_id) ?? ""}
-                className="hidden md:block"
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
+      {/* 🚨 The "newest episodes" grid used to sit here and is deliberately
+          gone (owner call, 2026-08-15). The home page is the SEARCH page now:
+          a hero, the field, some example queries, the top-rated rail, and the
+          channels. A newest-first grid is what /episodes is for, and putting
+          it here made the search field compete with a wall of thumbnails. */}
       <section className="mt-9">
         <h2 className="text-h2">{copy.home.channels}</h2>
         <div className="mt-3.5 flex flex-col gap-2.5">
@@ -195,7 +180,7 @@ export default async function HomePage() {
   );
 }
 
-function TopRatedRow({
+async function TopRatedRow({
   episode,
   rank,
   channelAvatarUrl,
@@ -204,6 +189,7 @@ function TopRatedRow({
   rank: number;
   channelAvatarUrl: string;
 }) {
+  const copy = await getCopy();
   const style = rankStyle(rank);
 
   return (

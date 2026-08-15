@@ -58,6 +58,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Both halves are pluggable and switch on the same signal.** API: `AUTH_BACKEND=clerk` (prod.py refuses anything else). Web: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` present → Clerk via `components/auth/ViewerAuthProvider.tsx`; absent (local dev, CI, the whole test suite) → the `NEXT_PUBLIC_DEV_USER` identity and the disabled sign-in stub. The 958-test suite runs keyless and must keep passing unchanged.
 - **Components never import Clerk hooks directly** - they read `useViewerAuth()`. That is what lets the tree render without a ClerkProvider in keyless builds.
+- 🚨 **Clerk's DEFAULT session token carries NO identity claims** - only `sub`, `sid`, `iss`, `exp`, `iat`, `nbf`, `azp`, `jti`, `v`. No name, no email, no username, no picture. `provision_user` therefore fell through to its last resort, the Clerk `sub`, and the first real Google sign-in rendered `user_33Kq...` as **both** the display name and the handle. `podcast/auth/clerk_api.py` now reads the real identity from Clerk's Backend API (fails soft - the token is already verified, so a Clerk outage must degrade the name, never block sign-in), and `humanize()` in `auth/backends.py` refuses to let an identity-provider id reach anything user-visible, repairing an already-broken profile on the next request. **Never render `user.get_username()` as a display name** - for a Clerk-provisioned account it IS the `sub`.
 - **Google sign-in uses OUR OAuth client** (Google Cloud project `comedy-club`), configured as custom credentials in Clerk's production Google connection. Dev instances borrow Clerk's shared credentials; production does not - a cloned production instance ships the Google button ENABLED but broken ("missing client_id") until custom credentials are pasted in.
 - **`proxy.ts` is Next 16's renamed `middleware.ts`** and runs Clerk's session handshake, guarded by the same key check. No route is protected there - authorization is always the API's job.
 
@@ -175,12 +176,20 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 - ❌ Never `app/loading.tsx`.
 - 🧪 Whenever you add a Suspense boundary or a loading file, **curl a deliberately bad URL and assert the status is 404**, not just that "the page looks right".
 
-### UI language
+### UI language: bilingual, English by default
 
-- 🇧🇬 **UI copy is BULGARIAN** (design handoff, 2026-08-09, superseding the 2026-08-08 English ruling). The handoff states the prototype's Bulgarian copy is final and must not be translated. A handful of structural labels stay Latin because the design shows them that way: `Public`, `Elite`, `Member`, `Podcast Index`, the seven score-band names, and the footer column headings.
+- 🌐 **The UI chrome ships in ENGLISH and Bulgarian, English is the DEFAULT** (owner ruling, 2026-08-15, superseding the 2026-08-09 Bulgarian handoff). Both dictionaries live in `apps/web/lib/copy.ts` and must stay in lockstep: `Copy` is `typeof en`, so a key added to English fails typecheck until Bulgarian has it too.
+- 🚨 **CHROME ONLY. Content is Bulgarian in both locales and is NEVER translated** - episode titles, descriptions, channel names, community topic labels, moment labels and transcript passages all render as the API returns them. `copy.settings.languageHint` says so on the toggle, and dropping that line would make the switch silently promise a translated catalogue.
+- ✅ **Reading the dictionary:** `const copy = await getCopy()` in a Server Component (`lib/locale.ts`), `const copy = useCopy()` in a Client Component (`components/i18n/LocaleProvider`). **Keep the local variable named `copy`** - `tests/copy.spec.ts` scans for `copy.<key>` references and a rename makes every key look unreferenced.
+- 🚨 **The dictionary contains FUNCTIONS, so it can never cross the RSC boundary as a prop.** `LocaleProvider` receives the `locale` STRING and derives the dictionary client-side. This is also why a shared leaf used in a client tree (`EpisodeCard`, `ScoreChip`) had to become a Client Component rather than take `copy` as a prop.
+- 🚨 **Never build a module-scope table out of `copy`.** A `const NAV = [{label: copy.nav.home}]` at module scope freezes whichever dictionary loaded first and never follows a locale change. Build such tables inside the component. Wire values (sort keys, tab keys, filter values) stay at module scope precisely because they must NOT change with the language.
+- 🚨 **`formatDate(value, months)` takes the month names as a required parameter.** A module-level import resolves once per process, so a Bulgarian viewer would get English months in the server HTML and Bulgarian ones after hydration - an invisible mismatch that only surfaces as a console error.
+- ⚠️ **Reading the locale cookie makes a route dynamic**, so `export const revalidate = 60` is gone from every page. The API round trips are unaffected: `lib/api/podcast.ts` carries `PUBLIC_CACHE = { next: { revalidate: 60 } }` at the fetch layer. Only the HTML render moved from cached to per-request. Watch `medianMs` (not `payloadKb`) in the perf budgets after touching this.
 - ✅ **Never hardcode a user-facing string inside a component.** Everything lives in `apps/web/lib/copy.ts`. `tests/copy.spec.ts` parses every `.tsx` under `app/` and `components/` and fails on any rendered literal with three or more letters, so this is enforced, not aspirational.
 - ⚠️ A Tailwind class in an object property named `text`, `label`, `title` or `heading` is read by that scanner as display copy. Name such a key `textClass`.
-- ❌ Do not install `next-intl` or any i18n library yet. Deferred to `NEXT_TIME.md`.
+- ⚠️ The scanner also reads `copy.search.examples.map` as a copy KEY and cannot resolve it. **Alias an array before iterating it**: `const exampleQueries = copy.search.examples`.
+- ✅ Structural labels identical in both dictionaries: `Public`, `Elite`, `Member`, and the seven score-band names. The `Podcast Index` wordmark is gone entirely.
+- ❌ Still no `next-intl` or any i18n library. Two plain objects and a cookie cover this app's needs; a library would add a build step and a message-extraction workflow for nothing.
 
 ### Design system (see `specs/07-visual-redesign/`)
 
@@ -337,6 +346,8 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
 - 🚨 **`minWordSizeForTypos` is measured in BYTES, not characters.** Cyrillic is 2 bytes/char, so every Bulgarian word crosses the threshold at HALF the word length you would assume. The episodes index sat at `{4, 8}` believing those were characters; they meant **2 and 4 characters**, and the query `пица` returned 100 hits of which **95 were false** (`пича`, `пичаги`, `пичове`). Proven by sweep 2026-08-09: false matches persisted to 8 and stopped dead at 9, the byte length of `пица`. Always write thresholds as `N * BYTES_PER_CYRILLIC_CHAR`.
 - 🚨 **`/search` MUST query BOTH indexes. Two indexes, two questions, one page.** `apps/web/app/search/page.tsx` fires `/api/search` and `/api/search/transcripts` in a single `Promise.all`. Calling only the first is not a smaller feature, it is a broken one: for 8 months the page did exactly that, and **`баница` - an example query printed on the page itself - showed "Нищо не съвпада" while 173 passages said the word out loud**. Community labelling has barely started, so titles alone answer very little.
   - ✅ Episodes matching both collapse onto ONE card (keyed by `youtube_id`); transcript-only episodes render in the `results-spoken` region below.
+  - 🚨 **Label matches are split TITLE-FIRST across two regions** (`results-title`, then `results-elsewhere`), 2026-08-15. People search for a title far more often than for a label, and a title hit ranked below three topic matches reads as "not found". The split reorders the API's ranked list by design, so e2e asserts the union as a SET and pins the partition separately (`7.1b`).
+  - 🚨 **`/search` paginates via `?n=`.** The header quotes `results.total`, so a page rendering fewer than that MUST offer a way to reach the rest - it did not, and "38 episodes" above 21 cards read as a broken search. `n` is clamped to `SEARCH_MAX_RESULTS` (500) and floored, because an unbounded page size read off the query string is a DoS lever; the API caps one request at 50, so larger asks are parallel offset pages.
   - ✅ The transcript half `.catch`es to `null`. A 4xx/5xx thrown inside a Server Component is an unhandled throw and therefore a 500 page - label matches are still a useful answer.
   - 🚨 `copy.search.spokenPartial` renders whenever spoken results do. Coverage is ~30% and runs 99% to 0% by channel, so an absent episode has NOT been ruled out.
   - 🔒 Passage text arrives with `<mark>` tags. Render them as element nodes (`Marked` in `SearchResultCard`), **never** `dangerouslySetInnerHTML` - it is auto-caption text that has crossed two systems.
@@ -807,6 +818,23 @@ test fails**, including `smoke-dev-server-serves-the-home-page`.
 - ⚠️ **Never pipe the run through `tail`.** `npx playwright test | tail -40` reports
   **`tail`'s** exit code, so an interrupted or failing run reads as success. Redirect to
   a file (`> run.log 2>&1`), check `$?`, then grep the file.
+
+### 🚨 A third-party script that only exists in production 404s the WHOLE suite
+
+Cost 63 failures on 2026-08-15. `<Analytics />` from `@vercel/analytics` loads
+`/_vercel/insights/script.js`, which **Vercel's edge injects and nothing else
+serves**. In a local production build that is a hard 404 on every page, the
+console guard in `e2e/fixtures.ts` catches it, and 63 tests fail with
+`Unexpected browser console errors` - none of them about analytics.
+
+- 🔍 **Tell-tale:** the failures span unrelated specs and every message is the
+  console guard. Probe with a 10-line Playwright script that logs `response`
+  events over 400 before bisecting your own diff.
+- ✅ **Fix:** gate the component on the environment that serves it -
+  `{process.env.VERCEL ? <Analytics /> : null}`. `VERCEL` is set in every Vercel
+  build and deployment.
+- ❌ **Do NOT widen the console allow-list.** The 404 is real; the fix is to not
+  request a file that cannot exist.
 
 ### 🚨 Never run `next build` while `next start` is serving that build
 

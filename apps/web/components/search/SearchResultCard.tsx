@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ScoreChip } from "@/components/shared/ScoreChip";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import type { SearchHit, TranscriptMatch } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { formatDate, formatTimestamp, youtubeMomentUrl } from "@/lib/format";
 
 /**
@@ -43,7 +43,7 @@ const PASSAGES_ON_SPOKEN_CARD = 2;
  * Their badge is therefore a real link out to that second of the video, while
  * topic and moment badges stay inert text.
  */
-export function SearchResultCard({
+export async function SearchResultCard({
   hit,
   query,
   passages = [],
@@ -56,6 +56,7 @@ export function SearchResultCard({
   /** True when this card is in the spoken-only region and has no label reason. */
   spokenOnly?: boolean;
 }) {
+  const copy = await getCopy();
   const episode = hit.episode;
   const reasons = [
     ...hit.matched_topics.map((text) => ({ kind: copy.search.reasonTopic, text })),
@@ -87,7 +88,7 @@ export function SearchResultCard({
               size="sm"
             />
             <span className="font-mono text-[11px] text-subtle-foreground tabular">
-              {formatDate(episode.upload_date)}
+              {formatDate(episode.upload_date, copy.common.months)}
             </span>
           </div>
         </div>
@@ -119,9 +120,14 @@ export function SearchResultCard({
                 href={youtubeMomentUrl(episode.youtube_id, passage.start_sec)}
                 target="_blank"
                 rel="noopener noreferrer"
+                // 🚨 The label is the accessible name only - it is NOT
+                // rendered. It used to print before every timestamp, so a card
+                // with four passages said the same two words four times in a
+                // column already headed by them. A bare timestamp reads as a
+                // timestamp; a screen reader still hears what it is.
+                aria-label={`${copy.search.reasonSaidAt} ${formatTimestamp(passage.start_sec)}`}
                 className={`${BADGE_CLASS} gap-[5px] tabular hover:text-foreground`}
               >
-                <span className="tracking-[0.06em]">{copy.search.reasonSaidAt}</span>
                 <span className="font-bold">
                   {formatTimestamp(passage.start_sec)}
                 </span>

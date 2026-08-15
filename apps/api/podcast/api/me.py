@@ -16,6 +16,7 @@ from ninja.errors import HttpError
 from ninja.files import UploadedFile
 
 from podcast.auth import get_auth
+from podcast.auth.backends import humanize
 from podcast.models import (
     Channel,
     ChannelMembership,
@@ -76,10 +77,16 @@ def get_me(request):
         .order_by("channel__name")
     )
 
+    # 🚨 `humanize` on BOTH, because the Django username IS the Clerk `sub` for
+    # anyone provisioned from a default session token. Falling back to
+    # `user.get_username()` unguarded is the bug this replaces.
+    readable = humanize(profile.display_name, user.get_username(), user.email)
+
     return {
         "id": user.id,
-        "username": user.get_username(),
-        "display_name": profile.display_name or user.get_username(),
+        "username": readable,
+        "display_name": readable,
+        "handle": profile.handle or None,
         "avatar_url": profile.avatar_url,
         "bio": profile.bio,
         "role": profile.role,

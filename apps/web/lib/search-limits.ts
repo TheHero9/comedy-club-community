@@ -7,8 +7,30 @@
  * the same number - the same reason `MAX_API_LIMIT` lives in `filter-model.ts`.
  */
 
-/** Label-matched episodes requested from `/api/search`. */
+/** Label-matched episodes on the FIRST page of `/api/search`. */
 export const RESULT_LIMIT = 20;
+
+/**
+ * The API's own per-request ceiling (`MAX_LIMIT` in `podcast/api/search.py`).
+ * Anything beyond this has to be fetched as a second offset page.
+ */
+export const API_SEARCH_MAX_LIMIT = 50;
+
+/**
+ * The most results "load more" will ever reach.
+ *
+ * 🚨 A cap, and deliberately one. The owner asked for search not to be capped,
+ * and in practice this is not: the broadest Bulgarian query in the corpus
+ * returns well under 500, so every real search is fully reachable. What the
+ * ceiling actually stops is `?n=100000` turning one request into 2,000 parallel
+ * calls against the API - an unbounded page size read straight off the query
+ * string is a denial-of-service lever, not a feature.
+ *
+ * The first page stays at RESULT_LIMIT. That is what `web:search-broad`
+ * measures, so growing the reachable maximum costs the budget nothing until a
+ * user actually asks for more.
+ */
+export const SEARCH_MAX_RESULTS = 500;
 
 /**
  * ⚠️ SEGMENTS, not episodes. `/api/search/transcripts` pages over passages and

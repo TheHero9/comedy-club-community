@@ -5,7 +5,7 @@ import { useState } from "react";
 import { SignInSheet } from "@/components/auth/SignInSheet";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 
 /**
  * What /me shows without an identity.
@@ -16,6 +16,7 @@ import { copy } from "@/lib/copy";
  * opens, rather than redirecting somewhere and losing the user's place.
  */
 export function SignedOutNotice() {
+  const copy = useCopy();
   const [open, setOpen] = useState(false);
 
   return (

@@ -33,6 +33,7 @@
 | 12 | Meilisearch | ✅ | Bulgarian typo tolerance verified |
 | 13 | People, moderation, leaderboards | ✅ | |
 | 14 | **Visual redesign** | ✅ | Whole frontend rebuilt from `Designs/design_handoff_podcast_index/`. All 10 routes, dark + light, Bulgarian copy, transposed mobile ratings grid. See [`specs/07-visual-redesign/`](../specs/07-visual-redesign/01-implementation.md). |
+| 15 | **Post-launch UX pass** | ✅ | **2026-08-15.** The owner's first full walkthrough of the live site, turned into 31 tracked items and all 31 built - including EN/BG i18n with **English as the new default**, a curated channel order, a title-first search split with working pagination, and the Clerk identity bug that showed a raw `user_...` id as both name and handle. See [`specs/11-ux-feedback/`](../specs/11-ux-feedback/01-backlog.md). |
 
 Legend: ⬜ not started · 🔵 in progress · 🟡 partial/blocked · ✅ done
 

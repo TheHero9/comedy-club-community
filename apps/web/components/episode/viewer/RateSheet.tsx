@@ -4,8 +4,9 @@ import { useState } from "react";
 
 import { useEpisodeViewer } from "@/components/episode/viewer/EpisodeViewerContext";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/shared/ConfirmButton";
 import { Sheet } from "@/components/ui/sheet";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { formatScore } from "@/lib/format";
 import { bandForScore, bandStyle } from "@/lib/score-bands";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ const SCALE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 const DEFAULT_PICK = 8;
 
 export function RateSheet() {
+  const copy = useCopy();
   const viewer = useEpisodeViewer();
   const open = viewer.sheet === "rate";
   const [picked, setPicked] = useState(viewer.myRating ?? DEFAULT_PICK);
@@ -119,17 +121,23 @@ export function RateSheet() {
         >
           {viewer.saving ? copy.rating.saving : copy.rating.save}
         </Button>
-        {viewer.myRating !== null ? (
-          <Button
-            variant="outline"
-            size="xl"
+      </div>
+
+      {/* 🚨 Removal asks first. A rating is the user's own record and there is
+          no undo - the previous score is gone the moment the DELETE lands, and
+          this button sat directly beside "Save" at the same size. */}
+      {viewer.myRating !== null ? (
+        <div className="mt-2.5 flex justify-center">
+          <ConfirmButton
             disabled={viewer.saving}
-            onClick={() => viewer.clearRating()}
+            question={copy.rating.confirmRemoveTitle}
+            confirmLabel={copy.rating.confirmRemoveCta}
+            onConfirm={() => viewer.clearRating()}
           >
             {copy.rating.remove}
-          </Button>
-        ) : null}
-      </div>
+          </ConfirmButton>
+        </div>
+      ) : null}
 
       <p className="mt-3 text-center text-[12.5px] text-subtle-foreground">
         {viewer.publicScore === null

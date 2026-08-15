@@ -1,5 +1,5 @@
 import type { ChannelGrid } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { bandForScore, bandStyle } from "@/lib/score-bands";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +52,8 @@ function bucketBars(grid: ChannelGrid, seasonIndex: number, episodeCount: number
   return bars;
 }
 
-export function YearSparkline({ grid }: { grid: ChannelGrid }) {
+export async function YearSparkline({ grid }: { grid: ChannelGrid }) {
+  const copy = await getCopy();
   if (grid.seasons.length === 0) return null;
 
   return (

@@ -153,7 +153,21 @@ GUESTS = [
     "Веселин Драганов",
 ]
 
-DEMO_PEOPLE_NAMES = set(GUESTS) | set(CHANNEL_HOSTS.values())
+"""Personas an EARLIER version of this seeder invented and no longer creates.
+
+🚨 `--clear` matches people by name, so a name dropped from `GUESTS` becomes
+undeletable rather than harmless: the rows it already wrote stay behind forever.
+`Гост от публиката` did exactly that - it survived the 2026-08-10
+`seed_demo --clear`, and five days later it was still showing up as a real
+participant filter on /episodes with 12 participations.
+
+Never delete from this set. Retiring a persona means MOVING its name here.
+"""
+LEGACY_DEMO_PEOPLE_NAMES = {
+    "Гост от публиката",
+}
+
+DEMO_PEOPLE_NAMES = set(GUESTS) | set(CHANNEL_HOSTS.values()) | LEGACY_DEMO_PEOPLE_NAMES
 
 
 class Command(BaseCommand):

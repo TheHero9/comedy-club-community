@@ -19,7 +19,7 @@ import {
   formatDuration,
   formatScore,
 } from "@/lib/score-bands";
-import { copy } from "@/lib/copy";
+import { copy, dictionaries } from "@/lib/copy";
 import { cn } from "@/lib/utils";
 
 const GRID_SERVICE_PATH = fileURLToPath(
@@ -154,14 +154,17 @@ describe("5.5 formatDuration", () => {
 });
 
 describe("5.6 formatDate", () => {
+  const EN = dictionaries.en.common.months;
+  const BG = dictionaries.bg.common.months;
+
   it("is safe for null, undefined and an empty string", () => {
-    expect(formatDate(null)).toBe("");
-    expect(formatDate(undefined)).toBe("");
-    expect(formatDate("")).toBe("");
+    expect(formatDate(null, EN)).toBe("");
+    expect(formatDate(undefined, EN)).toBe("");
+    expect(formatDate("", EN)).toBe("");
   });
 
-  it("renders a real ISO date as a non-empty Bulgarian-locale string", () => {
-    const rendered = formatDate("2026-03-14T10:00:00Z");
+  it("renders a real ISO date as a non-empty string", () => {
+    const rendered = formatDate("2026-03-14T10:00:00Z", EN);
     expect(rendered.length).toBeGreaterThan(0);
     expect(rendered).toContain("2026");
     expect(rendered).not.toContain("NaN");
@@ -169,9 +172,27 @@ describe("5.6 formatDate", () => {
   });
 
   it("accepts a date-only string as the API sends upload_date", () => {
-    const rendered = formatDate("2026-03-14");
+    const rendered = formatDate("2026-03-14", EN);
     expect(rendered).toContain("2026");
     expect(rendered).not.toContain("NaN");
+  });
+
+  /**
+   * The whole reason `months` became a parameter: a module-level dictionary
+   * resolves once per process, so a Bulgarian viewer would get English months
+   * in the server HTML and Bulgarian ones after hydration.
+   */
+  it("renders the month in whichever locale it is handed", () => {
+    expect(formatDate("2026-03-14", EN)).toBe("14 March 2026");
+    expect(formatDate("2026-03-14", BG)).toBe("14 март 2026");
+  });
+
+  it("has a full twelve months in both dictionaries", () => {
+    // An off-by-one here renders "undefined" in the middle of every date.
+    for (const months of [EN, BG]) {
+      expect(months).toHaveLength(12);
+      expect(months.every((month) => month.length > 0)).toBe(true);
+    }
   });
 });
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, Q, QuerySet, Subquery
 from django.db.models.functions import Coalesce
 
+from podcast.auth.backends import humanize
 from podcast.models import Channel, Episode, EpisodeParticipant, EpisodeTopic
 from podcast.services.grid import score_band
 
@@ -193,7 +194,13 @@ def comment_out(comment) -> dict:
         "created_at": comment.created_at,
         "edited_at": comment.edited_at,
         "author_id": comment.user_id,
-        "author_name": (profile.display_name if profile else "") or comment.user.get_username(),
+        # 🔒 PUBLIC field. `humanize` is what stops a Clerk `sub` being printed
+        # under every comment for anyone provisioned from a default session
+        # token - a raw identity-provider id, published site-wide.
+        "author_name": humanize(
+            (profile.display_name if profile else ""),
+            comment.user.get_username(),
+        ),
         "author_avatar": profile.avatar_url if profile else "",
     }
 

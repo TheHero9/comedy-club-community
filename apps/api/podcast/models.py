@@ -42,10 +42,25 @@ class Channel(models.Model):
     )
     last_synced_at = models.DateTimeField(null=True, blank=True)
 
+    # --- Deviation 12: curated channel order ---------------------------------
+    # 🚨 Editorial, NOT derived. The owner's order is not episode count and not
+    # alphabetical - Comedy Club Podcast leads because it is the flagship, and
+    # Sport trails because it is barely active. Any computed ordering would keep
+    # drifting away from that intent as the corpus grows, so it is stored.
+    # Lower sorts first. New channels default to 100, i.e. after everything
+    # curated, and are then placed by `manage.py set_channel_order`.
+    display_order = models.PositiveIntegerField(
+        default=100,
+        db_index=True,
+        help_text="Lower sorts first. Set by `manage.py set_channel_order`.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["name"]
+        # 🚨 `name` is the TIEBREAK, not the sort. Every channel list in the app
+        # inherits this, so a list that wants a different order must say so.
+        ordering = ["display_order", "name"]
 
     def __str__(self):
         return self.name
@@ -439,6 +454,25 @@ class UserProfile(models.Model):
     )
 
     display_name = models.CharField(max_length=100, blank=True)
+
+    # --- Deviation 13: the public handle is the user's YOUTUBE handle --------
+    # 🚨 This is NOT a second copy of the display name, and it is NOT the Django
+    # username. It is the `@handle` of the YouTube account the person watches
+    # with, so a channel membership can later be linked to a real subscriber.
+    #
+    # Ours to assign, never free-form user input: a self-chosen handle would be
+    # worthless for that linkage. Blank until we know it, and the UI must render
+    # NOTHING rather than invent one - showing the Django username here is what
+    # produced "name and handle are the same random id" on the live site.
+    handle = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        unique=True,
+        db_index=True,
+        help_text="The user's YouTube handle, e.g. @someone. Assigned by us.",
+    )
+
     avatar_url = models.URLField(blank=True)
     bio = models.TextField(blank=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.MEMBER)

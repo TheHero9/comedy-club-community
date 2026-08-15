@@ -14,7 +14,7 @@ import type { EpisodeList, Me } from "@/lib/api/podcast";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { Button } from "@/components/ui/button";
 import { viewerApi } from "@/lib/auth";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 
 /**
  * The signed-in user's profile.
@@ -31,14 +31,21 @@ import { copy } from "@/lib/copy";
  * it is cacheable or indexable and there is nothing to gain from rendering it
  * on the server.
  */
-const LINKS = [
-  { href: "/me/ratings", label: copy.profile.linkRatings, key: "rating_count" },
-  { href: "/me/history", label: copy.profile.linkHistory, key: "watched_count" },
-  { href: "/me/favorites", label: copy.profile.linkFavorites, key: "favorite_count" },
-  { href: "/me/tags", label: copy.profile.linkTags, key: null },
-] as const;
 
 export default function ProfilePage() {
+  const copy = useCopy();
+  // `key` indexes into the /api/me payload, so it is typed against Me rather
+  // than left as a widened string - otherwise `me[link.key]` is an implicit any.
+  const LINKS: ReadonlyArray<{
+    href: string;
+    label: string;
+    key: "rating_count" | "watched_count" | "favorite_count" | null;
+  }> = [
+    { href: "/me/ratings", label: copy.profile.linkRatings, key: "rating_count" },
+    { href: "/me/history", label: copy.profile.linkHistory, key: "watched_count" },
+    { href: "/me/favorites", label: copy.profile.linkFavorites, key: "favorite_count" },
+    { href: "/me/tags", label: copy.profile.linkTags, key: null },
+  ];
   const { signedIn, canSignIn, signOut } = useViewerAuth();
   const profile = useQuery({
     queryKey: ["me"],
@@ -92,8 +99,19 @@ export default function ProfilePage() {
               </h1>
               {me ? (
                 <div className="mt-1.5 flex items-center gap-2">
+                  {/*
+                    🚨 `handle` is the user's YOUTUBE handle and is NULL until
+                    someone links it. It is NOT the Django username and must
+                    never fall back to it: for anyone signed in with Google that
+                    username IS the Clerk `sub`, so `@{me.username}` printed
+                    `@user_33Kq...` directly under a heading showing the exact
+                    same string. Two identical junk ids is what the owner saw on
+                    their first sign-in.
+
+                    With no handle we say so, rather than inventing one.
+                  */}
                   <span className="font-mono text-[12.5px] text-subtle-foreground">
-                    @{me.username}
+                    {me.handle ? `@${me.handle}` : copy.profile.noHandle}
                   </span>
                   {me.memberships.some((membership) => membership.is_verified) ? (
                     <span className="inline-flex h-[22px] items-center rounded-pill bg-elevated px-2 text-[11px] font-semibold text-gold">

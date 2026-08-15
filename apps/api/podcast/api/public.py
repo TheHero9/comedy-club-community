@@ -78,7 +78,10 @@ def _ordering(sort: str) -> list:
 
 @router.get("/channels", response=list[ChannelOut])
 def list_channels(request):
-    channels = channel_list_queryset().order_by("name")
+    # 🚨 Curated order, not alphabetical. `display_order` is editorial and is set
+    # by `manage.py set_channel_order`; `name` is only the tiebreak for channels
+    # nobody has placed yet. See the Channel model.
+    channels = channel_list_queryset().order_by("display_order", "name")
     return [channel_out(channel) for channel in channels]
 
 

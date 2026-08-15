@@ -15,6 +15,7 @@ import type { Page } from "@playwright/test";
 import type { Schema } from "@ccc/api-types";
 
 import { copy } from "@/lib/copy";
+import { formatTimestamp } from "@/lib/format";
 import { RESULT_LIMIT, TRANSCRIPT_SEGMENT_LIMIT } from "@/lib/search-limits";
 
 import { test, expect, apiJson } from "./fixtures";
@@ -67,16 +68,26 @@ function resultLinks(page: Page) {
 }
 
 /**
- * 🚨 Scoped to the LABEL-match region on purpose.
+ * 🚨 Scoped to the LABEL-match regions on purpose.
  *
- * /search renders two regions from two endpoints: `/api/search` ("which
- * episodes are ABOUT this") and `/api/search/transcripts` ("where was this
- * SAID"). An unscoped `a[href^="/e/"]` counts both, so comparing it against
- * `/api/search` alone would fail the moment a query also matched spoken words -
- * which is most of them. Each region is asserted against its own endpoint.
+ * /search renders results from two endpoints: `/api/search` ("which episodes
+ * are ABOUT this") and `/api/search/transcripts` ("where was this SAID"). An
+ * unscoped `a[href^="/e/"]` counts both, so comparing it against `/api/search`
+ * alone would fail the moment a query also matched spoken words - which is most
+ * of them. Each region is asserted against its own endpoint.
+ *
+ * ⚠️ Since 2026-08-15 the label matches are PARTITIONED across two regions -
+ * `results-title` (the words are in the episode title) and `results-elsewhere`
+ * (matched on a topic, moment, guest or channel). Together they are exactly
+ * what `/api/search` returned, which is why this concatenates them. The
+ * partition itself is pinned by 7.1b; ORDER across the two is deliberately not
+ * asserted here, because the whole point of the split is that it reorders.
  */
 async function renderedResultIds(page: Page): Promise<string[]> {
-  return regionIds(page, "results-labelled");
+  return [
+    ...(await regionIds(page, "results-title")),
+    ...(await regionIds(page, "results-elsewhere")),
+  ];
 }
 
 /** Episodes that matched ONLY in the transcript, in render order. */
@@ -105,12 +116,65 @@ test.describe("search", () => {
     const ids = await renderedResultIds(page);
     expect(ids.length).toBeGreaterThan(0);
     expect(ids.length).toBe(Math.min(api.total, PAGE_LIMIT));
-    expect(ids).toEqual(api.hits.map((hit) => hit.episode.youtube_id));
+    // Set equality, not sequence equality: the page splits the API's ranked
+    // list into title matches and everything else, so render order is a
+    // permutation of API order by design. 7.1b pins that the split is correct.
+    expect([...ids].sort()).toEqual(
+      api.hits.map((hit) => hit.episode.youtube_id).sort(),
+    );
     await expect(
       page.getByText(
         copy.search.resultsFor(copy.search.resultCount(api.total), QUERY_KASPAROV),
       ),
     ).toBeVisible();
+  });
+
+  /**
+   * The title/elsewhere split is the whole reason /search reorders its results,
+   * so it needs its own assertion. Without this, a bug that dropped every hit
+   * into one bucket would still pass 7.1 - the union would be identical.
+   */
+  test("7.1b title matches are separated from everything else", async ({ page }) => {
+    const api = await apiJson<SearchResult>(page, searchApiPath(QUERY_KASPAROV));
+    expect(api.total, `"${QUERY_KASPAROV}" must match at least one episode`).toBeGreaterThan(0);
+
+    await page.goto(searchPagePath(QUERY_KASPAROV));
+
+    const titleRegion = page.getByTestId("results-title");
+    const elsewhereRegion = page.getByTestId("results-elsewhere");
+
+    const titleCount = await titleRegion.count();
+    const elsewhereCount = await elsewhereRegion.count();
+    expect(
+      titleCount + elsewhereCount,
+      "neither result region rendered - the split is not wired up",
+    ).toBeGreaterThan(0);
+
+    const needle = QUERY_KASPAROV.toLocaleLowerCase("bg");
+
+    // Every card under "in the title" must actually have it in its title.
+    if (titleCount > 0) {
+      const titles = await titleRegion.locator("h2").allInnerTexts();
+      expect(titles.length).toBeGreaterThan(0);
+      for (const title of titles) {
+        expect(
+          title.toLocaleLowerCase("bg"),
+          `"${title}" is under the title heading but does not contain the query`,
+        ).toContain(needle);
+      }
+    }
+
+    // ...and nothing under "everywhere else" may have it in its title, or the
+    // reader is being told two different things about the same card.
+    if (elsewhereCount > 0) {
+      const titles = await elsewhereRegion.locator("h2").allInnerTexts();
+      for (const title of titles) {
+        expect(
+          title.toLocaleLowerCase("bg"),
+          `"${title}" is under the non-title heading but contains the query`,
+        ).not.toContain(needle);
+      }
+    }
   });
 
   test("7.2 a dropped letter still finds the episode (typo tolerance)", async ({
@@ -214,7 +278,15 @@ test.describe("search", () => {
       `a[href="https://www.youtube.com/watch?v=${first!.episode.youtube_id}&t=${match.start_sec}"]`,
     );
     await expect(deepLink.first()).toBeVisible();
-    await expect(deepLink.first()).toContainText(copy.search.reasonSaidAt);
+    // 🚨 The badge no longer PRINTS "said at" - it repeated on every passage
+    // row and the owner asked for it gone. It survives as the accessible name,
+    // which is now the only thing telling a screen-reader user what the bare
+    // timestamp means, so it is asserted there instead of in the text.
+    await expect(deepLink.first()).toHaveAttribute(
+      "aria-label",
+      new RegExp(copy.search.reasonSaidAt),
+    );
+    await expect(deepLink.first()).toContainText(formatTimestamp(match.start_sec));
 
     // 🔒 Caption text reaches the page carrying <mark> tags. It is rendered as
     // element nodes, never injected as HTML, so the literal tag must not be

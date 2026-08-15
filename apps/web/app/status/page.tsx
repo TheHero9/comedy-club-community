@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ApiHealthCard } from "@/components/health/ApiHealthCard";
 import { Page } from "@/components/shell/Page";
 import { getHealthResult } from "@/lib/api/health";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 
 /**
  * Health is a live reading, so this route is never prerendered. It also keeps
@@ -11,13 +11,17 @@ import { copy } from "@/lib/copy";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: copy.status.title,
-  description: copy.app.description,
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = await getCopy();
+  return {
+    title: copy.status.title,
+    description: copy.app.description,
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function StatusPage() {
+  const copy = await getCopy();
   const health = await getHealthResult();
 
   return (

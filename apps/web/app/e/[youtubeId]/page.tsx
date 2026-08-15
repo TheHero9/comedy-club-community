@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Crown, Play, Plus, Radio, Star } from "lucide-react";
+import { Crown, LayoutGrid, Play, Plus, Radio, Star } from "lucide-react";
 
 import { CommentCard } from "@/components/episode/CommentCard";
 import { EpisodeDescription } from "@/components/episode/EpisodeDescription";
@@ -15,6 +15,7 @@ import {
   EpisodeSidebar,
 } from "@/components/episode/viewer/EpisodeViewerParts";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { LinkPending } from "@/components/shared/LinkPending";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import { MetaLine } from "@/components/shell/Page";
@@ -28,7 +29,7 @@ import {
   type Episode,
   type EpisodeBrief,
 } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import {
   formatDate,
   formatDuration,
@@ -41,14 +42,17 @@ import { bandStyle } from "@/lib/score-bands";
 import { decodeRouteParam } from "@/lib/route-params";
 import { cn } from "@/lib/utils";
 
-export const revalidate = 60;
-
+/**
+ * 🚨 No `revalidate`: reading the locale cookie makes this dynamic. The episode,
+ * moment and comment fetches stay cached at the fetch layer (`PUBLIC_CACHE`).
+ */
 const SIMILAR_LIMIT = 8;
 const COMMENT_LIMIT = 6;
 
 export async function generateMetadata({
   params,
 }: PageProps<"/e/[youtubeId]">): Promise<Metadata> {
+  const copy = await getCopy();
   const { youtubeId: raw } = await params;
   try {
     const episode = await getEpisode(decodeRouteParam(raw));
@@ -77,6 +81,7 @@ async function loadSimilar(episode: Episode): Promise<{
   reason: string;
   items: Array<{ episode: EpisodeBrief; reason: string }>;
 }> {
+  const copy = await getCopy();
   const topic = episode.topics[0];
   const guest = episode.participants.find(
     (person) => person.role !== copy.episode.roleHost,
@@ -92,7 +97,7 @@ async function loadSimilar(episode: Episode): Promise<{
         reason: copy.episode.similarTagTopic(topic.name),
       }));
     if (items.length > 0) {
-      return { reason: copy.episode.similarByTopic, items };
+      return { reason: copy.episode.similarWhySharedTopics(1), items };
     }
   }
 
@@ -106,7 +111,7 @@ async function loadSimilar(episode: Episode): Promise<{
         reason: copy.episode.similarTagGuest(guest.name),
       }));
     if (items.length > 0) {
-      return { reason: copy.episode.similarByTopic, items };
+      return { reason: copy.episode.similarWhySharedPeople(1), items };
     }
   }
 
@@ -114,19 +119,29 @@ async function loadSimilar(episode: Episode): Promise<{
     channel: episode.channel_slug,
     limit: SIMILAR_LIMIT + 1,
   });
+  /**
+   * 🚨 The per-card reason is the CHANNEL, not the upload date.
+   *
+   * It used to print a date, which explains nothing about similarity - the
+   * owner's words were "I have no clue how the similar episodes are formed".
+   * A rail that will not say what it matched on is indistinguishable from a
+   * random list, and this is the weakest of the three signals, so it is the one
+   * that most needs to admit what it is.
+   */
   return {
-    reason: copy.episode.similarSameChannel,
+    reason: copy.episode.similarWhySameChannel,
     items: list.items
       .filter((item) => item.youtube_id !== episode.youtube_id)
       .slice(0, SIMILAR_LIMIT)
       .map((item) => ({
         episode: item,
-        reason: formatDate(item.upload_date),
+        reason: item.channel_name,
       })),
   };
 }
 
 export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]">) {
+  const copy = await getCopy();
   const { youtubeId: raw } = await params;
   const youtubeId = decodeRouteParam(raw);
 
@@ -167,11 +182,14 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-episode-title">{episode.title}</h1>
+              {/* 🚨 The bare year used to lead this line, next to the full
+                  date that already ends in the same four digits - so it read
+                  "2026 . 11 August 2026 . 44:20". The year element is gone;
+                  `yearOf` is still used below for the grid deep link. */}
               <MetaLine
                 className="mt-2 text-[12px] md:text-[13px]"
                 items={[
-                  year === null ? "" : String(year),
-                  formatDate(episode.upload_date),
+                  formatDate(episode.upload_date, copy.common.months),
                   duration,
                 ]}
               />
@@ -238,6 +256,9 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
                   className="font-medium"
                 >
                   {topic.name}
+                  {/* /search is force-dynamic, so this chip is a real round
+                      trip. Without a marker it looked broken for ~300ms. */}
+                  <LinkPending />
                 </LinkButton>
               ))}
               {episode.topics.length === 0 ? (
@@ -408,7 +429,10 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
             </Section>
 
             {similar.items.length > 0 ? (
-              <Section title={copy.episode.similar} meta={similar.reason}>
+              <Section
+                title={copy.episode.similar}
+                meta={`${copy.episode.similarWhyPrefix} ${similar.reason}`}
+              >
                 <div className="noscroll mt-3 flex gap-3 overflow-x-auto pb-1">
                   {similar.items.map((item) => (
                     <EpisodeRailCard
@@ -420,6 +444,24 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
                 </div>
               </Section>
             ) : null}
+
+            {/* 🚨 The ratings grid is the best page on the site and was
+                reachable only from /channels. From an episode you are already
+                looking at, the grid is the answer to "how does this compare",
+                so the link belongs here. `year` deep-links to the row this
+                episode sits in. */}
+            <Link
+              href={`/channels/${encodeURIComponent(episode.channel_slug)}${
+                year === null ? "" : `#year-${year}`
+              }`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "lg", block: true }),
+                "mt-5.5 max-w-[400px]",
+              )}
+            >
+              <LayoutGrid className="size-4" aria-hidden strokeWidth={2.2} />
+              {copy.episode.allRatings}
+            </Link>
 
             <div className="h-5 md:hidden" />
           </div>

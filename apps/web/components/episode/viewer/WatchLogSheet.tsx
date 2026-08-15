@@ -7,7 +7,7 @@ import { useEpisodeViewer } from "@/components/episode/viewer/EpisodeViewerConte
 import { notify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { formatDate, relativeDay, toIsoDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -21,12 +21,6 @@ import { cn } from "@/lib/utils";
  * 🚨 Future days refuse the tap and say so. Silently ignoring the press reads
  * as a broken button; greying them out with no explanation reads as a bug.
  */
-const QUICK_OFFSETS = [
-  { label: copy.watchLog.quickToday, days: 0 },
-  { label: copy.watchLog.quickYesterday, days: 1 },
-  { label: copy.watchLog.quickThisWeek, days: 4 },
-  { label: copy.watchLog.quickLastMonth, days: 30 },
-] as const;
 
 function shiftDays(from: Date, days: number): Date {
   const next = new Date(from);
@@ -35,6 +29,13 @@ function shiftDays(from: Date, days: number): Date {
 }
 
 export function WatchLogSheet() {
+  const copy = useCopy();
+  const QUICK_OFFSETS = [
+    { label: copy.watchLog.quickToday, days: 0 },
+    { label: copy.watchLog.quickYesterday, days: 1 },
+    { label: copy.watchLog.quickThisWeek, days: 4 },
+    { label: copy.watchLog.quickLastMonth, days: 30 },
+  ] as const;
   const viewer = useEpisodeViewer();
   const open = viewer.sheet === "log";
 
@@ -86,21 +87,29 @@ export function WatchLogSheet() {
         {days.map((entry) => {
           const isLogged = logged.has(entry.iso);
           const isFuture = entry.iso > todayIso;
+          const isPending = viewer.pendingDay === entry.iso;
           return (
             <button
               key={entry.iso}
               type="button"
-              aria-label={formatDate(entry.iso)}
+              aria-label={formatDate(entry.iso, copy.common.months)}
               aria-pressed={isLogged}
               onClick={() => {
                 if (isFuture) {
                   notify.warning(copy.watchLog.futureToast);
                   return;
                 }
-                viewer.addWatch(entry.iso);
+                // 🚨 A toggle, not an add. Tapping a logged day removes it.
+                viewer.toggleWatchDate(entry.iso);
               }}
               className={cn(
                 "h-[38px] rounded-[9px] border font-mono text-[12.5px] tabular",
+                // The write is a round trip, so the cell has to say it heard
+                // the tap. Without it the calendar felt dead for ~200ms and
+                // invited a second tap, which used to be a no-op and now would
+                // undo the first.
+                "transition-opacity duration-120",
+                isPending && "opacity-50",
                 isLogged
                   ? "border-transparent bg-band-awesome font-bold text-ink"
                   : isFuture
@@ -114,6 +123,9 @@ export function WatchLogSheet() {
         })}
       </div>
       <p className="mt-2 text-[11.5px] text-subtle-foreground">{monthLabel}</p>
+      <p className="mt-1 text-[11.5px] text-faint-foreground">
+        {copy.watchLog.toggleOffHint}
+      </p>
 
       {viewer.watchEvents.length > 0 ? (
         <div className="mt-4.5 border-t border-border pt-4">
@@ -132,7 +144,7 @@ export function WatchLogSheet() {
                   strokeWidth={2.4}
                 />
                 <span className="flex-1 text-[13.5px]">
-                  {formatDate(event.watched_on)}
+                  {formatDate(event.watched_on, copy.common.months)}
                 </span>
                 <span className="font-mono text-[11px] text-subtle-foreground">
                   {relativeDay(event.watched_on, today)}
@@ -141,7 +153,7 @@ export function WatchLogSheet() {
                   variant="quiet"
                   size="icon"
                   className="size-[26px]"
-                  aria-label={copy.episode.removeWatch(formatDate(event.watched_on))}
+                  aria-label={copy.episode.removeWatch(formatDate(event.watched_on, copy.common.months))}
                   onClick={() => viewer.removeWatch(event.id)}
                 >
                   <X className="size-3" aria-hidden strokeWidth={2.6} />

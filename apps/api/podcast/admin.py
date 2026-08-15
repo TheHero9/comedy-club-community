@@ -43,10 +43,22 @@ admin.site.index_title = "Moderation & content"
 
 @admin.register(Channel)
 class ChannelAdmin(admin.ModelAdmin):
-    list_display = ("name", "handle", "episode_count", "is_active", "last_synced_at")
+    # `display_order` is editable straight from the list so the curated order can
+    # be nudged without a deploy. `manage.py set_channel_order` rewrites it.
+    list_display = (
+        "display_order",
+        "name",
+        "handle",
+        "episode_count",
+        "is_active",
+        "last_synced_at",
+    )
+    list_editable = ("display_order",)
+    list_display_links = ("name",)
     list_filter = ("is_active",)
     search_fields = ("name", "handle", "youtube_channel_id")
     readonly_fields = ("slug", "created_at", "last_synced_at")
+    ordering = ("display_order", "name")
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_episodes=Count("episodes"))
@@ -252,9 +264,17 @@ class EpisodeParticipantAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("__str__", "user", "role", "clerk_user_id")
+    # `handle` is the user's YouTube handle and is assigned HERE - it is the one
+    # field on this model no identity provider can supply.
+    list_display = ("__str__", "user", "handle", "role", "clerk_user_id")
     list_filter = ("role",)
-    search_fields = ("display_name", "user__username", "user__email", "clerk_user_id")
+    search_fields = (
+        "display_name",
+        "handle",
+        "user__username",
+        "user__email",
+        "clerk_user_id",
+    )
     list_select_related = ("user",)
     raw_id_fields = ("user",)
     readonly_fields = ("created_at",)

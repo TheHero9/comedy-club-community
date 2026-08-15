@@ -1,10 +1,12 @@
+"use client";
+
 import Link from "next/link";
 
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { ScoreChip } from "@/components/shared/ScoreChip";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import type { EpisodeBrief } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
 import { formatDate, formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -52,8 +54,11 @@ export function EpisodeCard({
   priority = false,
   className,
 }: EpisodeCardProps) {
+  // A Client Component because the dictionary carries functions, which cannot
+  // cross the RSC boundary as props. It still renders to HTML on the server.
+  const copy = useCopy();
   const duration = formatDuration(episode.duration_sec);
-  const date = formatDate(episode.upload_date);
+  const date = formatDate(episode.upload_date, copy.common.months);
   const ratings =
     episode.public_score === null
       ? copy.episode.noRatingsShort
@@ -119,8 +124,9 @@ export function EpisodeRow({
   episode: EpisodeBrief;
   className?: string;
 }) {
+  const copy = useCopy();
   const duration = formatDuration(episode.duration_sec);
-  const date = formatDate(episode.upload_date);
+  const date = formatDate(episode.upload_date, copy.common.months);
   const ratings =
     episode.public_score === null
       ? copy.episode.noRatingsShort

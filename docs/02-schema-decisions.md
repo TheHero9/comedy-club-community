@@ -229,9 +229,75 @@ Postgres is a non-issue. **Meilisearch is the real cost** - budget host RAM agai
 
 ---
 
+## Deviation 12: `Channel.display_order`
+
+`PositiveIntegerField(default=100, db_index=True)`, and `Channel.Meta.ordering`
+moves from `["name"]` to `["display_order", "name"]`.
+
+**Why stored and not derived** (owner ruling, 2026-08-15). The requested order is:
+
+| # | Channel | Episodes |
+| - | ------- | -------- |
+| 1 | `@comedyclubpodcast` | 1,318 |
+| 2 | `@ivankirkov1` | 75 |
+| 3 | `@BFFPepiQ` | 80 |
+| 4 | `@delo404podcast` | 57 |
+| 5 | `@ComedyClubNews` | 245 |
+| 6 | `@КомедиКлубКлюкиПодкаст` | 139 |
+| 7 | `@comedyclubsport7786` | 47 |
+
+That is **not** episode count (which would give 1, 5, 6, 3, 2, 4, 7), not
+alphabetical, and not subscriber count. It is editorial - the flagship leads and
+the barely-active channel trails - so there is nothing to compute it from.
+
+Values are set by `manage.py set_channel_order`, which steps by 10 so a channel
+can be slotted between two without a renumber. A new channel keeps the default
+100 and therefore sorts after everything curated, which is the correct place for
+a channel nobody has placed yet. `/api/channels` orders explicitly rather than
+relying on `Meta.ordering`, so the intent is visible at the query.
+
+---
+
+## Deviation 13: `UserProfile.handle`
+
+`CharField(max_length=100, blank=True, null=True, unique=True, db_index=True)`.
+
+**This is the user's YOUTUBE handle**, not a second display name and not the
+Django username. It exists so a `ChannelMembership` can eventually be tied to a
+real subscriber account. It is assigned by us (admin), never free-form user
+input - a self-chosen handle would be worthless for that linkage.
+
+**The bug that motivated it.** Clerk's default session token carries only
+`sub`, `sid`, `iss`, `exp`, `iat`, `nbf`, `azp`, `jti`, `v` - no name, no email,
+no username, no picture. `provision_user` therefore received empty strings for
+all of them and fell through to its last resort, the Clerk `sub`. The first real
+Google sign-in on production rendered:
+
+```
+    Иван Петров          <- expected
+    user_33Kq...         <- actual, as the display name
+    @user_33Kq...        <- and again, as the handle
+```
+
+Three fixes, all needed:
+
+1. `podcast/auth/clerk_api.py` reads the real identity from Clerk's Backend API
+   when the token has none. Fails soft - the token was already verified, so a
+   Clerk outage must degrade the name, never block sign-in.
+2. `humanize()` in `podcast/auth/backends.py` refuses to let an
+   identity-provider id become anything user-visible, and REPAIRS a profile
+   already storing one on the next authenticated request.
+3. `handle` is `NULL` until known, and the UI prints "no YouTube handle linked
+   yet" rather than falling back to the username.
+
+`author_name` on public comments goes through `humanize()` too - without it, a
+raw Clerk id would have been published site-wide under every comment.
+
+---
+
 ## Deferred
 
 | Idea | Why not now |
 | ---- | ----------- |
 | R2 thumbnail mirroring | Thumbnails are a free Google CDN URL derived from the video id. Mirroring adds cost and staleness for zero gain. |
-| i18n / `next-intl` | UI is English for now. See `NEXT_TIME.md`. |
+| ~~i18n / `next-intl`~~ | ✅ **Done 2026-08-15**, without `next-intl`. Two dictionaries in `lib/copy.ts`, a cookie, and `getCopy()` / `useCopy()`. See `specs/11-ux-feedback/01-backlog.md`. |

@@ -13,12 +13,15 @@ import {
   listEpisodes,
   type ChannelGrid,
 } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { formatCompactNumber } from "@/lib/format";
 import { decodeRouteParam } from "@/lib/route-params";
 import { cn } from "@/lib/utils";
 
-export const revalidate = 60;
+/**
+ * 🚨 No `revalidate`: reading the locale cookie makes this dynamic. The grid
+ * and channel fetches stay cached at the fetch layer (`PUBLIC_CACHE`).
+ */
 
 type ScoreKind = "public" | "elite";
 
@@ -29,6 +32,7 @@ function scoreKind(value: string | string[] | undefined): ScoreKind {
 export async function generateMetadata({
   params,
 }: PageProps<"/channels/[slug]">): Promise<Metadata> {
+  const copy = await getCopy();
   const { slug: rawSlug } = await params;
   const slug = decodeRouteParam(rawSlug);
   try {
@@ -80,6 +84,7 @@ export default async function ChannelPage({
   params,
   searchParams,
 }: PageProps<"/channels/[slug]">) {
+  const copy = await getCopy();
   const { slug: rawSlug } = await params;
   const slug = decodeRouteParam(rawSlug);
   const query = await searchParams;
@@ -125,11 +130,12 @@ export default async function ChannelPage({
                   ),
             ]}
           />
-          {channel.description ? (
-            <p className="mt-2.5 max-w-[620px] text-[14.5px] leading-relaxed text-muted-foreground">
-              {channel.description}
-            </p>
-          ) : null}
+          {/* 🚨 The channel description used to render here and is gone
+              (owner call, 2026-08-15). It is YouTube boilerplate - business
+              enquiry addresses and social links - and it pushed the ratings
+              grid, which is the reason to be on this page, below the fold.
+              It is still fetched, because `generateMetadata` uses it as the
+              page description where it is genuinely useful. */}
         </div>
       </header>
 

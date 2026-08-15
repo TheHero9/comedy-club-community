@@ -248,7 +248,10 @@ test.describe("15. search edge cases", () => {
     await page.goto(`/search?q=${encodeURIComponent(query)}`);
 
     await expect(
-      page.getByTestId("results-labelled").locator('a[href^="/e/"]'),
+      page
+        .getByTestId("results-title")
+        .locator('a[href^="/e/"]')
+        .or(page.getByTestId("results-elsewhere").locator('a[href^="/e/"]')),
     ).toHaveCount(labels.hits.length);
 
     // The spoken region holds exactly the transcript episodes the label search

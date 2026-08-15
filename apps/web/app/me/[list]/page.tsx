@@ -15,7 +15,7 @@ import type { EpisodeList } from "@/lib/api/podcast";
 import type { Schema } from "@ccc/api-types";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { viewerApi } from "@/lib/auth";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 
 type PersonalTag = Schema<"PersonalTagOut">;
 
@@ -31,40 +31,52 @@ type PersonalTag = Schema<"PersonalTagOut">;
  * violet border, violet text and a lock. That violet appears nowhere else in
  * the product.
  */
-const LISTS = {
-  ratings: {
-    path: "/api/me/ratings",
-    title: copy.profile.linkRatings,
-    emptyTitle: copy.profile.ratingsEmptyTitle,
-    emptyBody: copy.profile.ratingsEmptyBody,
-    emptyCta: copy.profile.ratingsEmptyCta,
-  },
-  history: {
-    path: "/api/me/watched",
-    title: copy.profile.linkHistory,
-    emptyTitle: copy.watchLog.historyEmptyTitle,
-    emptyBody: copy.watchLog.historyEmptyBody,
-    emptyCta: copy.watchLog.historyEmptyCta,
-  },
-  favorites: {
-    path: "/api/me/favorites",
-    title: copy.profile.linkFavorites,
-    emptyTitle: copy.profile.linkFavorites,
-    emptyBody: copy.profile.ratingsEmptyBody,
-    emptyCta: copy.profile.ratingsEmptyCta,
-  },
-  tags: {
-    path: "/api/me/tags",
-    title: copy.profile.linkTags,
-    emptyTitle: copy.profile.tagsEmptyTitle,
-    emptyBody: copy.profile.tagsEmptyBody,
-    emptyCta: copy.profile.ratingsEmptyCta,
-  },
-} as const;
 
-type ListKey = keyof typeof LISTS;
+/**
+ * The four routes this page serves. Declared as a type rather than derived from
+ * the config table, because the table now lives inside the component (it reads
+ * translated titles) and a `keyof typeof` cannot reach into a function body.
+ */
+type ListKey = "ratings" | "history" | "favorites" | "tags";
 
 export default function ProfileListPage({ params }: PageProps<"/me/[list]">) {
+  const copy = useCopy();
+  const LISTS: Record<ListKey, {
+    path: string;
+    title: string;
+    emptyTitle: string;
+    emptyBody: string;
+    emptyCta: string;
+  }> = {
+    ratings: {
+      path: "/api/me/ratings",
+      title: copy.profile.linkRatings,
+      emptyTitle: copy.profile.ratingsEmptyTitle,
+      emptyBody: copy.profile.ratingsEmptyBody,
+      emptyCta: copy.profile.ratingsEmptyCta,
+    },
+    history: {
+      path: "/api/me/watched",
+      title: copy.profile.linkHistory,
+      emptyTitle: copy.watchLog.historyEmptyTitle,
+      emptyBody: copy.watchLog.historyEmptyBody,
+      emptyCta: copy.watchLog.historyEmptyCta,
+    },
+    favorites: {
+      path: "/api/me/favorites",
+      title: copy.profile.linkFavorites,
+      emptyTitle: copy.profile.linkFavorites,
+      emptyBody: copy.profile.ratingsEmptyBody,
+      emptyCta: copy.profile.ratingsEmptyCta,
+    },
+    tags: {
+      path: "/api/me/tags",
+      title: copy.profile.linkTags,
+      emptyTitle: copy.profile.tagsEmptyTitle,
+      emptyBody: copy.profile.tagsEmptyBody,
+      emptyCta: copy.profile.ratingsEmptyCta,
+    },
+  };
   const { signedIn } = useViewerAuth();
   const { list } = use(params);
   if (!(list in LISTS)) notFound();

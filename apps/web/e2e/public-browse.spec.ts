@@ -14,6 +14,7 @@
 import type { Page } from "@playwright/test";
 
 import type { Schema } from "@ccc/api-types";
+import { LEADERBOARD_KINDS } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
 
 import { apiJson, expect, test } from "./fixtures";
@@ -94,11 +95,45 @@ test("1.1 home page renders with real data", async ({ page }) => {
   await expect(hero).toContainText(copy.home.heroLine2);
   await expect(hero).toContainText(copy.home.heroLine3);
 
-  // At least one episode card. The home page composes three episode sections,
-  // so an empty result here means the API contract broke, not that the DB is
-  // empty - `newestEpisode` would have failed first in that case.
-  await newestEpisode(page);
-  expect(await page.locator('main a[href^="/e/"]').count()).toBeGreaterThan(0);
+  /**
+   * 🚨 The home page is the SEARCH page (owner call, 2026-08-15). The
+   * newest-episodes grid was removed, so this no longer asserts episode cards -
+   * it asserts what the page is actually for now: a way to search, and every
+   * channel listed below it.
+   *
+   * Deliberately NOT relaxed to "some link exists". Each of the two things the
+   * page still promises is pinned separately, and the channel count is read
+   * from the API so an empty render cannot pass.
+   */
+  // Scoped to `main`: the sticky header carries a second trigger with the same
+  // accessible name, and this test is about the PAGE, not the chrome.
+  await expect(
+    page.locator("main").getByRole("button", { name: copy.search.trigger }),
+  ).toBeVisible();
+
+  const channels = await apiJson<Channel[]>(page, "/api/channels");
+  expect(channels.length, "the dev database has no channels").toBeGreaterThan(0);
+  for (const channel of channels) {
+    await expect(
+      page.locator(`main a[href="/channels/${encodeURIComponent(channel.slug)}"]`),
+    ).toHaveCount(1);
+  }
+
+  /**
+   * The top-rated rail is the one episode section left, and it renders only
+   * when the leaderboard has entries. Asserting it unconditionally would fail
+   * on a database with no ratings - which is exactly the state this one is in
+   * after `seed_demo --clear`.
+   */
+  // `LEADERBOARD_KINDS.top` is the wire slug ("top_rated"), read from the same
+  // constant the page uses so this cannot drift into a silent 404.
+  const board = await apiJson<{ items: unknown[] }>(
+    page,
+    `/api/leaderboards/${LEADERBOARD_KINDS.top}?limit=5`,
+  );
+  if (board.items.length > 0) {
+    expect(await page.locator('main a[href^="/e/"]').count()).toBeGreaterThan(0);
+  }
 });
 
 test("1.2 channels page lists every channel the API returns", async ({ page }) => {

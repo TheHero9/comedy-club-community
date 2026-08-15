@@ -20,7 +20,7 @@ import type {
 } from "@/lib/api/podcast";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { viewerApi } from "@/lib/auth";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { toIsoDay } from "@/lib/format";
 
 /**
@@ -63,7 +63,17 @@ interface EpisodeViewerValue extends EpisodeViewerSeed {
   clearRating: () => Promise<void>;
   addWatch: (isoDay: string) => Promise<void>;
   removeWatch: (eventId: number) => Promise<void>;
+  /**
+   * Add the day, or remove it when it is already logged.
+   *
+   * 🚨 A real toggle. Tapping a logged day used to warn "already logged", which
+   * left the calendar as the one control on the page you could not undo from -
+   * a mis-tapped date could only be cleared from the list further down.
+   */
+  toggleWatchDate: (isoDay: string) => Promise<void>;
   toggleWatched: () => Promise<void>;
+  /** The ISO day currently being written, so the tapped cell can show it. */
+  pendingDay: string | null;
   toggleFavorite: () => Promise<void>;
 }
 
@@ -84,12 +94,14 @@ export function EpisodeViewerProvider({
   seed: EpisodeViewerSeed;
   children: React.ReactNode;
 }) {
+  const copy = useCopy();
   const router = useRouter();
   const { signedIn } = useViewerAuth();
   const [myRating, setMyRating] = useState<number | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [watchEvents, setWatchEvents] = useState<WatchSummary["events"]>([]);
   const [saving, setSaving] = useState(false);
+  const [pendingDay, setPendingDay] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetKind>(null);
 
   /**
@@ -192,7 +204,7 @@ export function EpisodeViewerProvider({
         setSaving(false);
       }
     },
-    [applyRatingResult, path, requireIdentity, router],
+    [applyRatingResult, copy, path, requireIdentity, router],
   );
 
   const clearRating = useCallback(async () => {
@@ -210,7 +222,7 @@ export function EpisodeViewerProvider({
     } finally {
       setSaving(false);
     }
-  }, [applyRatingResult, path, requireIdentity, router]);
+  }, [applyRatingResult, copy, path, requireIdentity, router]);
 
   const addWatch = useCallback(
     async (isoDay: string) => {
@@ -235,7 +247,7 @@ export function EpisodeViewerProvider({
         notify.error(isApiError(error) ? error.userMessage : copy.errors.generic);
       }
     },
-    [path, requireIdentity, watchEvents],
+    [copy, path, requireIdentity, watchEvents],
   );
 
   const removeWatch = useCallback(
@@ -248,7 +260,39 @@ export function EpisodeViewerProvider({
         notify.error(isApiError(error) ? error.userMessage : copy.errors.generic);
       }
     },
-    [requireIdentity],
+    [copy, requireIdentity],
+  );
+
+  const toggleWatchDate = useCallback(
+    async (isoDay: string) => {
+      if (!requireIdentity()) return;
+      const existing = watchEvents.find((event) => event.watched_on === isoDay);
+
+      // ⚠️ The busy marker is set for BOTH directions and cleared in `finally`.
+      // An early return that skipped the reset would leave a cell stuck looking
+      // busy for the life of the sheet.
+      setPendingDay(isoDay);
+      try {
+        if (existing) {
+          await viewerApi.delete(`/api/watch/${existing.id}`);
+          setWatchEvents((events) =>
+            events.filter((event) => event.id !== existing.id),
+          );
+          notify.success(copy.watchLog.removedToast(isoDay));
+          return;
+        }
+        const summary = await viewerApi.post<WatchSummary>(`${path}/watch`, {
+          watched_on: isoDay,
+        });
+        setWatchEvents(summary.events);
+        notify.success(copy.watchLog.savedToast(isoDay));
+      } catch (error) {
+        notify.error(isApiError(error) ? error.userMessage : copy.errors.generic);
+      } finally {
+        setPendingDay(null);
+      }
+    },
+    [copy, path, requireIdentity, watchEvents],
   );
 
   const toggleWatched = useCallback(async () => {
@@ -277,7 +321,7 @@ export function EpisodeViewerProvider({
       setIsFavorite(!next);
       notify.error(isApiError(error) ? error.userMessage : copy.errors.generic);
     }
-  }, [isFavorite, path, requireIdentity]);
+  }, [copy, isFavorite, path, requireIdentity]);
 
   const value = useMemo<EpisodeViewerValue>(
     () => ({
@@ -304,7 +348,9 @@ export function EpisodeViewerProvider({
       clearRating,
       addWatch,
       removeWatch,
+      toggleWatchDate,
       toggleWatched,
+      pendingDay,
       toggleFavorite,
     }),
     [
@@ -316,6 +362,7 @@ export function EpisodeViewerProvider({
       myRating,
       openSheet,
       publicScore,
+      pendingDay,
       ratingCount,
       removeWatch,
       requireIdentity,
@@ -325,6 +372,7 @@ export function EpisodeViewerProvider({
       sheet,
       signedIn,
       toggleFavorite,
+      toggleWatchDate,
       toggleWatched,
       watchEvents,
     ],

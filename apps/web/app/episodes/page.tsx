@@ -3,10 +3,11 @@ import type { Metadata } from "next";
 
 import {
   isAtLimitCeiling,
-  KIND_OPTIONS,
+  DEFAULT_SORT,
+  kindOptions,
   PAGE_SIZE,
   readFilters,
-  SORT_OPTIONS,
+  sortOptions,
   toApiQuery,
   toSearchParams,
   type FilterGroupDef,
@@ -14,22 +15,30 @@ import {
 import { FilterBar } from "@/components/browse/FilterBar";
 import { EpisodeCard } from "@/components/episode/EpisodeCard";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { LinkPending } from "@/components/shared/LinkPending";
 import { Page } from "@/components/shell/Page";
 import { buttonVariants } from "@/components/ui/button";
 import { listChannels, listEpisodes, listPeople } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 
-export const revalidate = 60;
-
-export const metadata: Metadata = {
-  title: copy.browse.title,
-  description: copy.app.description,
-};
+/**
+ * 🚨 No `revalidate`: reading the locale cookie makes this dynamic. The API
+ * round trips stay cached at the fetch layer (`PUBLIC_CACHE`), so what moved is
+ * the HTML render, not the data.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = await getCopy();
+  return {
+    title: copy.browse.title,
+    description: copy.app.description,
+  };
+}
 
 export default async function EpisodesPage({
   searchParams,
 }: PageProps<"/episodes">) {
+  const copy = await getCopy();
   const query = await searchParams;
   const filters = readFilters(query);
 
@@ -45,15 +54,20 @@ export default async function EpisodesPage({
   // total is on the apply button instead.
   const countedGroups = await Promise.all([
     Promise.all(
-      KIND_OPTIONS.map(async (option) => ({
+      kindOptions(copy).map(async (option) => ({
         ...option,
         count: (await listEpisodes({ kind: option.value, limit: 1 })).meta.total,
       })),
     ),
     Promise.all(
+      // 🚨 `icon` carries the channel avatar so the chip can render the picture
+      // instead of the name. `label` stays the full name because it is still
+      // the chip's accessible name and its tooltip - dropping it would leave a
+      // filter whose only identity is an image that may 404.
       channels.map(async (channel) => ({
         value: channel.slug,
         label: channel.name,
+        iconUrl: channel.avatar_url,
         count: channel.episode_count,
       })),
     ),
@@ -71,7 +85,7 @@ export default async function EpisodesPage({
       group: "sort",
       title: copy.browse.groupSort,
       chipPrefix: "",
-      options: SORT_OPTIONS,
+      options: sortOptions(copy),
       required: true,
     },
     {
@@ -94,18 +108,29 @@ export default async function EpisodesPage({
     },
   ].filter((group) => group.options.length > 0) as FilterGroupDef[];
 
+  /**
+   * Channel avatars, joined from the channel list this page already fetched for
+   * its filter bar. Zero extra requests and zero extra bytes on the wire - see
+   * the note on `EpisodeCard`'s `channelAvatarUrl` prop.
+   *
+   * Worth it HERE because /episodes is a mixed list: unlike a channel page,
+   * every card can come from a different channel, and the badge is the fastest
+   * way to tell them apart.
+   */
+  const channelAvatars = new Map(channels.map((c) => [c.id, c.avatar_url]));
+
   const shown = episodes.items.length;
   const total = episodes.meta.total;
 
   const activeLabels = groups
     .flatMap((group) => {
       const value = filters[group.group];
-      if (!value || (group.required && value === SORT_OPTIONS[0].value)) return [];
+      if (!value || (group.required && value === DEFAULT_SORT)) return [];
       return group.options
         .filter((option) => option.value === value)
         .map((option) => option.label);
     })
-    .join(" и ");
+    .join(copy.browse.andJoiner);
 
   return (
     <Page>
@@ -144,6 +169,7 @@ export default async function EpisodesPage({
                 episode={episode}
                 showRatingCount
                 sizes="(min-width: 768px) 280px, 50vw"
+                channelAvatarUrl={channelAvatars.get(episode.channel_id) ?? ""}
                 priority={index < 2}
               />
             ))}
@@ -165,6 +191,7 @@ export default async function EpisodesPage({
               )}
             >
               {copy.browse.loadMore}
+              <LinkPending />
             </Link>
           ) : null}
         </>

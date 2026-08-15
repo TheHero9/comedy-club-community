@@ -295,13 +295,19 @@ test.describe("9. theme + fonts", () => {
     const route = await firstEpisodeRoute(page);
     await page.goto(route);
 
-    // Both of these are Unbounded by design: the episode H1 and the wordmark.
-    // One is Cyrillic and one is Latin, so if the Cyrillic subset were missing
-    // the browser would fall back per glyph and the families would diverge.
+    // Both of these are Unbounded by design: the episode H1 and the footer
+    // wordmark. One is Cyrillic and one is Latin, so if the Cyrillic subset
+    // were missing the browser would fall back per glyph and the families
+    // would diverge.
+    //
+    // ⚠️ The anchor moved from the HEADER wordmark to the FOOTER one on
+    // 2026-08-15: the header now shows the red tile alone, with no text. The
+    // footer copy is identical in both locales, so this does not depend on
+    // which language the page rendered in.
     const families = await page.evaluate(() => {
       const title = document.querySelector("h1") as Element;
       const wordmark = document.querySelector(
-        'header a[href="/"] span:last-child',
+        '[data-testid="footer-wordmark"]',
       ) as Element;
       return {
         titleText: title.textContent ?? "",

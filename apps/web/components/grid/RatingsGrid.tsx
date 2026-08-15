@@ -1,4 +1,4 @@
-import { Crown, Radio, TriangleAlert } from "lucide-react";
+import { ChevronDown, Crown, Radio, TriangleAlert } from "lucide-react";
 
 import { GridInteraction } from "@/components/grid/GridInteraction";
 import {
@@ -11,7 +11,7 @@ import {
   type GridCell,
   type GridSeason,
 } from "@/components/grid/grid-model";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { formatScore } from "@/lib/format";
 import { bandStyle } from "@/lib/score-bands";
 import { cn } from "@/lib/utils";
@@ -43,7 +43,8 @@ interface RatingsGridProps {
   grid: Grid;
 }
 
-export function RatingsGrid({ grid }: RatingsGridProps) {
+export async function RatingsGrid({ grid }: RatingsGridProps) {
+  const copy = await getCopy();
   if (grid.seasons.length === 0) {
     return <p className="text-small text-subtle-foreground">{copy.channel.empty}</p>;
   }
@@ -69,7 +70,8 @@ export function RatingsGrid({ grid }: RatingsGridProps) {
    Roomy: mobile, transposed. Episodes are rows, years are columns.
    ------------------------------------------------------------------------- */
 
-function MobileGrid({ grid }: { grid: Grid }) {
+async function MobileGrid({ grid }: { grid: Grid }) {
+  const copy = await getCopy();
   // `table-fixed` is what guarantees the promise that the page never scrolls
   // sideways: columns always divide the available width evenly, whatever the
   // year count, instead of being pushed out by a min-width.
@@ -151,7 +153,8 @@ function MobileGrid({ grid }: { grid: Grid }) {
    Roomy: desktop. Years are rows, position in the year is the column.
    ------------------------------------------------------------------------- */
 
-function DesktopGrid({ grid }: { grid: Grid }) {
+async function DesktopGrid({ grid }: { grid: Grid }) {
+  const copy = await getCopy();
   return (
     <div className="mt-4 hidden rounded-3xl border border-border bg-card-2 py-4 md:block">
       {/* 🚨 The only overflow-x container on the page. `relative` is
@@ -313,7 +316,8 @@ function RoomyCell({
    Dense: one orientation at every width, colour only.
    ------------------------------------------------------------------------- */
 
-function DenseGrid({ grid }: { grid: Grid }) {
+async function DenseGrid({ grid }: { grid: Grid }) {
+  const copy = await getCopy();
   return (
     <div className="mt-4 rounded-3xl border border-border bg-card-2 py-4">
       <div className="relative overflow-x-auto px-4">
@@ -427,9 +431,31 @@ function DenseCell({
 
 /* ------------------------------------------------------------------------- */
 
-function GridLegend({ grid }: { grid: Grid }) {
+/**
+ * The band key, collapsed behind a disclosure.
+ *
+ * 🚨 Collapsed, NOT deleted (owner call, 2026-08-15). It is the only place the
+ * grid explains what its colours mean, and a heatmap with no key is decoration
+ * - but a reader who already knows the bands sees eleven swatches between the
+ * grid and the episode list every single visit.
+ *
+ * `<details>` rather than React state: it works before hydration, it keeps the
+ * whole thing a Server Component, and the browser owns the open/closed
+ * semantics and the keyboard behaviour for free.
+ */
+async function GridLegend({ grid }: { grid: Grid }) {
+  const copy = await getCopy();
   return (
-    <div className="mt-3.5 flex flex-wrap items-center gap-x-3.5 gap-y-2 text-[12px] text-muted-foreground">
+    <details className="mt-3.5 group">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-semibold text-subtle-foreground outline-none hover:text-foreground">
+        <ChevronDown
+          className="size-3.5 transition-transform duration-120 group-open:rotate-180"
+          aria-hidden
+          strokeWidth={2.4}
+        />
+        {copy.channel.legendToggle}
+      </summary>
+    <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-2 text-[12px] text-muted-foreground">
       {grid.bands.map((band) => (
         <span key={band.key} className="flex items-center gap-1.5">
           <span
@@ -459,5 +485,6 @@ function GridLegend({ grid }: { grid: Grid }) {
         {copy.band.stream}
       </span>
     </div>
+    </details>
   );
 }

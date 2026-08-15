@@ -1,14 +1,15 @@
 import { SearchTrigger } from "@/components/search/SearchTrigger";
 import { Page } from "@/components/shell/Page";
 import { LinkButton } from "@/components/ui/button";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 
 /**
  * Rendered whenever a route misses or a page calls `notFound()`. Next serves it
  * with a real 404 status, which matters: this is an indexable content site and
  * soft 404s get crawled as if they were real pages.
  */
-export default function NotFound() {
+export default async function NotFound() {
+  const copy = await getCopy();
   return (
     <Page>
       <div className="mx-auto max-w-[480px] py-10 text-center">

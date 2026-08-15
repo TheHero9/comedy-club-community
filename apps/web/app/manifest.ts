@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 
 /**
  * The web app manifest is what makes "install" behave like an app instead of
@@ -10,7 +10,8 @@ import { copy } from "@/lib/copy";
  *
  * Next serves this as /manifest.webmanifest and links it from every page.
  */
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const copy = await getCopy();
   return {
     name: copy.app.name,
     short_name: copy.app.shortName,

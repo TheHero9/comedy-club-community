@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SlidersHorizontal, X } from "lucide-react";
+
+import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 
 import {
   isDefault,
@@ -14,7 +16,7 @@ import {
 } from "@/components/browse/filter-model";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,14 +38,32 @@ interface FilterBarProps {
 }
 
 export function FilterBar({ filters, groups, total }: FilterBarProps) {
+  const copy = useCopy();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  /**
+   * 🚨 Every filter change is a SERVER round trip, and until this the button
+   * gave no sign it had been pressed: the owner read the gap as the app being
+   * broken, not as it being busy. `useTransition` is what makes that gap
+   * visible - `isPending` stays true from the click until the new server
+   * render commits, and it costs no extra request.
+   *
+   * Optimistically flipping the chip instead would be a lie whenever the
+   * navigation fails, and these chips are the only readout of what is filtered.
+   */
+  const [isPending, startTransition] = useTransition();
+  /** The option mid-flight, so only the pressed chip shows the busy state. */
+  const [pendingValue, setPendingValue] = useState<string | null>(null);
 
   function apply(next: Partial<ActiveFilters>) {
-    // Any filter change resets pagination: keeping a limit of 36 across a
-    // change would silently deep-load a different result set.
-    router.push(`/episodes${toSearchParams({ ...filters, ...next, limit: PAGE_SIZE })}`, {
-      scroll: false,
+    setPendingValue(Object.values(next)[0] as string);
+    startTransition(() => {
+      // Any filter change resets pagination: keeping a limit of 36 across a
+      // change would silently deep-load a different result set.
+      router.push(
+        `/episodes${toSearchParams({ ...filters, ...next, limit: PAGE_SIZE })}`,
+        { scroll: false },
+      );
     });
   }
 
@@ -54,7 +74,14 @@ export function FilterBar({ filters, groups, total }: FilterBarProps) {
       if (group.required && value === group.options[0]?.value) return [];
       const option = group.options.find((item) => item.value === value);
       if (!option) return [];
-      return [{ group: group.group, prefix: group.chipPrefix, label: option.label }];
+      return [
+        {
+          group: group.group,
+          prefix: group.chipPrefix,
+          label: option.label,
+          iconUrl: option.iconUrl,
+        },
+      ];
     })
     .filter(Boolean);
 
@@ -87,10 +114,18 @@ export function FilterBar({ filters, groups, total }: FilterBarProps) {
             aria-label={copy.browse.removeFilter(chip.label)}
             className="shrink-0 px-3 text-[13px] font-normal"
           >
-            {chip.prefix ? (
-              <span className="text-subtle-foreground">{chip.prefix}</span>
-            ) : null}
-            {chip.label}
+            {chip.iconUrl === undefined ? (
+              <>
+                {chip.prefix ? (
+                  <span className="text-subtle-foreground">{chip.prefix}</span>
+                ) : null}
+                {chip.label}
+              </>
+            ) : (
+              // Icon only. `aria-label` above already names the filter, so the
+              // avatar is decorative here and must not be announced twice.
+              <ChannelAvatar name={chip.label} avatarUrl={chip.iconUrl} size="2xs" />
+            )}
             <X className="size-3 text-subtle-foreground" aria-hidden strokeWidth={2.8} />
           </Button>
         ))}
@@ -128,7 +163,23 @@ export function FilterBar({ filters, groups, total }: FilterBarProps) {
                     variant={selected ? "primary" : "outline"}
                     size="md"
                     aria-pressed={selected}
-                    className="font-normal"
+                    aria-label={
+                      option.iconUrl === undefined
+                        ? undefined
+                        : copy.browse.channelFilterLabel(option.label)
+                    }
+                    // A chip mid-navigation dims rather than disabling: a
+                    // disabled control cannot be re-pressed if the push is
+                    // slow, and it drops keyboard focus while you wait.
+                    data-pending={
+                      isPending && pendingValue === option.value ? "" : undefined
+                    }
+                    className={cn(
+                      "font-normal",
+                      isPending &&
+                        pendingValue === option.value &&
+                        "opacity-60 transition-opacity duration-120",
+                    )}
                     onClick={() =>
                       apply({
                         [group.group]:
@@ -136,7 +187,20 @@ export function FilterBar({ filters, groups, total }: FilterBarProps) {
                       } as Partial<ActiveFilters>)
                     }
                   >
-                    {option.label}
+                    {/* 🚨 Channels are recognised by their picture, not their
+                        name - and their names are long enough that a row of
+                        them overflowed the bar on a 390px screen. The avatar
+                        replaces the name; the name stays as the accessible
+                        name above. */}
+                    {option.iconUrl === undefined ? (
+                      option.label
+                    ) : (
+                      <ChannelAvatar
+                        name={option.label}
+                        avatarUrl={option.iconUrl}
+                        size="xs"
+                      />
+                    )}
                     {option.count !== undefined ? (
                       <span
                         className={cn(

@@ -11,38 +11,51 @@ import {
   type Leaderboard,
   type LeaderboardKey,
 } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { formatScore } from "@/lib/format";
 import { bandStyle } from "@/lib/score-bands";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 60;
 
-export const metadata: Metadata = {
-  title: copy.leaderboard.title,
-  description: copy.app.description,
-};
-
-const TABS: ReadonlyArray<{ key: LeaderboardKey; label: string }> = [
-  { key: "top", label: copy.leaderboard.kindTop },
-  { key: "elite", label: copy.leaderboard.kindElite },
-  { key: "mostRated", label: copy.leaderboard.kindMostRated },
-];
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = await getCopy();
+  return {
+    title: copy.leaderboard.title,
+    description: copy.app.description,
+  };
+}
 
 /** Block heights are 62/84/50 for 2nd/1st/3rd, and the order is 2, 1, 3. */
 const PODIUM_ORDER = [1, 0, 2] as const;
 const PODIUM_HEIGHT = ["h-[62px]", "h-[84px]", "h-[50px]"] as const;
 
+/**
+ * The tab KEYS, separate from their labels.
+ *
+ * `readKind` validates a query-string value, which is a wire protocol and must
+ * never depend on the display language. The labels are built inside the
+ * component, where the dictionary is available.
+ */
+const TAB_KEYS: ReadonlyArray<LeaderboardKey> = ["top", "elite", "mostRated"];
+
 function readKind(value: string | string[] | undefined): LeaderboardKey {
   const raw = Array.isArray(value) ? value[0] : value;
-  return TABS.some((tab) => tab.key === raw) ? (raw as LeaderboardKey) : "top";
+  return TAB_KEYS.some((key) => key === raw) ? (raw as LeaderboardKey) : "top";
 }
 
 export default async function LeaderboardPage({
   searchParams,
 }: PageProps<"/leaderboard">) {
+  const copy = await getCopy();
   const params = await searchParams;
   const kind = readKind(params.kind);
+
+  const TABS: ReadonlyArray<{ key: LeaderboardKey; label: string }> = [
+    { key: "top", label: copy.leaderboard.kindTop },
+    { key: "elite", label: copy.leaderboard.kindElite },
+    { key: "mostRated", label: copy.leaderboard.kindMostRated },
+  ];
   const board = await getLeaderboard(LEADERBOARD_KINDS[kind], { limit: 10 });
 
   const podium = PODIUM_ORDER.map((index) => board.items[index]).filter(Boolean);

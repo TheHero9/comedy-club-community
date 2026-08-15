@@ -233,6 +233,10 @@ class MeOut(Schema):
     id: int
     username: str
     display_name: str
+    # 🚨 The YouTube handle, and NULL until we know it. It is deliberately not
+    # defaulted to the username: rendering the Django username here is what put
+    # the same `user_33Kq...` string on the profile page twice.
+    handle: str | None = None
     avatar_url: str
     bio: str
     role: str

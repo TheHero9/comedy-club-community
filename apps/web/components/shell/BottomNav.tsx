@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { House, List, Search, User } from "lucide-react";
 
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,15 +14,18 @@ import { cn } from "@/lib/utils";
  * it. Two fixed bars at the bottom of a 844px screen eat 132px and put the
  * primary action of the page above a nav the user did not ask for.
  */
-const ITEMS = [
-  { href: "/", label: copy.nav.home, icon: House, exact: true },
-  { href: "/episodes", label: copy.nav.episodes, icon: List, exact: false },
-  { href: "/search", label: copy.nav.search, icon: Search, exact: false },
-  { href: "/me", label: copy.nav.profile, icon: User, exact: false },
-] as const;
-
 export function BottomNav() {
+  const copy = useCopy();
   const pathname = usePathname();
+
+  // Built per render, not at module scope: a module-level table would freeze
+  // whichever dictionary loaded first and never follow a locale change.
+  const items = [
+    { href: "/", label: copy.nav.home, icon: House, exact: true },
+    { href: "/episodes", label: copy.nav.episodes, icon: List, exact: false },
+    { href: "/search", label: copy.nav.search, icon: Search, exact: false },
+    { href: "/me", label: copy.nav.profile, icon: User, exact: false },
+  ];
 
   // The episode route owns the bottom of the screen.
   if (pathname.startsWith("/e/")) return null;
@@ -32,7 +35,7 @@ export function BottomNav() {
       aria-label={copy.nav.primaryNav}
       className="fixed inset-x-0 bottom-0 z-30 flex h-[66px] border-t border-border bg-card-2 md:hidden"
     >
-      {ITEMS.map((item) => {
+      {items.map((item) => {
         const active = item.exact
           ? pathname === item.href
           : pathname.startsWith(item.href);

@@ -1,7 +1,9 @@
+"use client";
+
 import { TriangleAlert } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { formatScore } from "@/lib/format";
 import { bandStyle } from "@/lib/score-bands";
 import { cn } from "@/lib/utils";
@@ -48,6 +50,11 @@ export function ScoreChip({
   size,
   className,
 }: ScoreChipProps) {
+  // 🚨 A Client Component only because the unrated tooltip is translated, and
+  // the dictionary carries functions that cannot cross the RSC boundary as
+  // props. It is a leaf, so it still renders to HTML on the server; the cost is
+  // a few hundred bytes of bundle, not a hydrated grid.
+  const copy = useCopy();
   const style = bandStyle(score === null || score === undefined ? null : band);
   const isRated = score !== null && score !== undefined;
 

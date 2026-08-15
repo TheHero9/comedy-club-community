@@ -4,34 +4,105 @@ import type { Metadata } from "next";
 import { SearchResultCard } from "@/components/search/SearchResultCard";
 import { SearchTrigger } from "@/components/search/SearchTrigger";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { LinkPending } from "@/components/shared/LinkPending";
 import { Page } from "@/components/shell/Page";
 import { buttonVariants, LinkButton } from "@/components/ui/button";
 import type { SearchHit, TranscriptMatch } from "@/lib/api/podcast";
 import { listTopics, search, searchTranscripts } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import {
+  API_SEARCH_MAX_LIMIT,
   RESULT_LIMIT,
+  SEARCH_MAX_RESULTS,
   SPOKEN_EPISODE_LIMIT,
   TRANSCRIPT_SEGMENT_LIMIT,
 } from "@/lib/search-limits";
 import { stripControlCharacters } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = {
-  title: copy.nav.search,
-  description: copy.search.subtitle,
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const copy = await getCopy();
+  return {
+    title: copy.nav.search,
+    description: copy.search.subtitle,
+  };
+}
 
 /** Search results must never be cached: a stale answer is worse than a slow one. */
 export const dynamic = "force-dynamic";
 
-/**
- * Assigned before use rather than chained off `copy` inline: the copy-key
- * scanner reads `copy.search.examples.map` as a key and cannot resolve it.
- */
-const EXAMPLE_QUERIES = copy.search.examples;
-
 const POPULAR_TOPIC_LIMIT = 8;
+
+/**
+ * How many results this render should reach, read off `?n=`.
+ *
+ * 🚨 Clamped and floored. `Number("2.5")` is finite and positive, and a float
+ * against an `int` query parameter is a 422 from the API - the same trap that
+ * made the eleventh "load more" on /episodes serve a 500.
+ */
+function readWanted(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Math.floor(Number(raw));
+  if (!Number.isFinite(parsed) || parsed <= RESULT_LIMIT) return RESULT_LIMIT;
+  return Math.min(parsed, SEARCH_MAX_RESULTS);
+}
+
+/**
+ * Fetch up to `wanted` label matches, in parallel offset pages.
+ *
+ * The API caps one request at 50 (`MAX_LIMIT` in `podcast/api/search.py`), so
+ * anything past that is a second page rather than a bigger ask. Pages are
+ * fetched together because they are independent: sequential awaits would make
+ * "load more" cost one round trip per 50 results.
+ */
+async function searchUpTo(query: string, wanted: number) {
+  const pages = Math.ceil(wanted / API_SEARCH_MAX_LIMIT);
+  const chunks = await Promise.all(
+    Array.from({ length: pages }, (_unused, index) =>
+      search({
+        q: query,
+        limit: Math.min(API_SEARCH_MAX_LIMIT, wanted - index * API_SEARCH_MAX_LIMIT),
+        offset: index * API_SEARCH_MAX_LIMIT,
+      }),
+    ),
+  );
+
+  return {
+    // `total` is the same on every page; the first is as good as any.
+    total: chunks[0].total,
+    hits: chunks.flatMap((chunk) => chunk.hits),
+  };
+}
+
+/**
+ * Split label matches into "the words are in the TITLE" and everything else.
+ *
+ * 🚨 Title first, because that is how people search. A title hit ranked below
+ * three topic matches reads as "not found" even when the episode is right
+ * there, and the owner hit exactly that.
+ *
+ * Token overlap, not a substring test: a multi-word Bulgarian query almost
+ * never appears verbatim in a title, so `includes(query)` would put nearly
+ * everything in the second bucket and the split would do nothing. Tokens of one
+ * or two characters are dropped - they are prepositions and would match any
+ * title at all.
+ */
+const MIN_TOKEN_LENGTH = 3;
+
+function titleMatches(title: string, query: string): boolean {
+  const haystack = title.toLocaleLowerCase("bg");
+  const tokens = query
+    .toLocaleLowerCase("bg")
+    .split(/\s+/)
+    .filter((token) => token.length >= MIN_TOKEN_LENGTH);
+
+  if (tokens.length === 0) {
+    // A query made entirely of short words: fall back to the whole string, so
+    // the section is never empty for a reason the reader cannot see.
+    return haystack.includes(query.toLocaleLowerCase("bg"));
+  }
+  return tokens.some((token) => haystack.includes(token));
+}
 
 
 /**
@@ -48,11 +119,18 @@ function readQuery(value: string | string[] | undefined): string {
 }
 
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {
+  const copy = await getCopy();
   const params = await searchParams;
   const query = readQuery(params.q);
+  const wanted = readWanted(params.n);
 
   if (query.length === 0) {
     const topics = await listTopics({ limit: POPULAR_TOPIC_LIMIT });
+    /**
+     * Aliased before use rather than chained inline: `tests/copy.spec.ts` reads
+     * `copy.search.examples.map` as a copy KEY and cannot resolve it.
+     */
+    const exampleQueries = copy.search.examples;
 
     return (
       <Page>
@@ -64,7 +142,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
         </p>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          {EXAMPLE_QUERIES.map((example) => (
+          {exampleQueries.map((example) => (
             <LinkButton
               key={example}
               href={`/search?q=${encodeURIComponent(example)}`}
@@ -80,6 +158,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
               className="font-normal"
             >
               {example}
+              <LinkPending />
             </LinkButton>
           ))}
         </div>
@@ -101,6 +180,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
                   <span className="font-mono text-[11px] text-subtle-foreground tabular">
                     {topic.episode_count}
                   </span>
+                  <LinkPending />
                 </LinkButton>
               ))}
             </div>
@@ -125,7 +205,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
    * `available: false`; this catch covers the rest.
    */
   const [results, spoken] = await Promise.all([
-    search({ q: query, limit: RESULT_LIMIT }),
+    searchUpTo(query, wanted),
     searchTranscripts({ q: query, limit: TRANSCRIPT_SEGMENT_LIMIT }).catch(() => null),
   ]);
 
@@ -145,6 +225,18 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
 
   const labelled = results.hits;
   const labelledIds = new Set(labelled.map((hit) => hit.episode.youtube_id));
+
+  /**
+   * Two buckets out of one result set, in rank order within each. The API's
+   * relevance ordering is preserved - this only decides which heading a hit
+   * sits under, never how hits are sorted.
+   */
+  const inTitle = labelled.filter((hit) => titleMatches(hit.episode.title, query));
+  const elsewhere = labelled.filter((hit) => !titleMatches(hit.episode.title, query));
+
+  /** More label matches exist than this render asked for. */
+  const canLoadMore = labelled.length < results.total;
+  const nextWanted = Math.min(wanted + RESULT_LIMIT, SEARCH_MAX_RESULTS);
 
   /**
    * 🎯 The episodes this feature exists for: nothing in the title, description
@@ -207,15 +299,14 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
         />
       ) : (
         <>
+          {/* 🚨 The "found in N ms" readout used to live here and is gone
+              (owner call, 2026-08-15). It answered a question nobody asked, and
+              on a page whose headline number is the RESULT count, a second
+              number in the same row competed with it. */}
           <div className="mt-5 flex flex-wrap items-baseline gap-2.5">
             <h1 className="text-h2">
               {copy.search.resultsFor(copy.search.resultCount(results.total), query)}
             </h1>
-            {results.processing_ms != null ? (
-              <span className="ml-auto font-mono text-[11px] text-faint-foreground tabular">
-                {copy.search.tookMs(results.processing_ms)}
-              </span>
-            ) : null}
           </div>
 
           {inNoTitle ? (
@@ -244,17 +335,72 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             two different endpoints. The e2e suite asserts each against the API
             that produced it; one merged list would only be checkable loosely.
           */}
-          {labelled.length > 0 ? (
-            <div data-testid="results-labelled" className="mt-4 flex flex-col gap-3">
-              {labelled.map((hit) => (
-                <SearchResultCard
-                  key={hit.episode.youtube_id}
-                  hit={hit}
-                  query={query}
-                  passages={passagesByEpisode.get(hit.episode.youtube_id)}
-                />
-              ))}
-            </div>
+          {inTitle.length > 0 ? (
+            <>
+              {/* The heading only appears when BOTH sections have something to
+                  show. One labelled section with a heading above it and nothing
+                  to contrast against is just a label on the whole page. */}
+              {elsewhere.length > 0 ? (
+                <div className="mt-6">
+                  <h2 className="text-h3">{copy.search.inTitleHeading}</h2>
+                  <p className="mt-1.5 text-small text-subtle-foreground">
+                    {copy.search.inTitleSubtitle}
+                  </p>
+                </div>
+              ) : null}
+              <div data-testid="results-title" className="mt-4 flex flex-col gap-3">
+                {inTitle.map((hit) => (
+                  <SearchResultCard
+                    key={hit.episode.youtube_id}
+                    hit={hit}
+                    query={query}
+                    passages={passagesByEpisode.get(hit.episode.youtube_id)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {elsewhere.length > 0 ? (
+            <>
+              {inTitle.length > 0 ? (
+                <div className="mt-7 border-t border-border pt-5">
+                  <h2 className="text-h3">{copy.search.elsewhereHeading}</h2>
+                  <p className="mt-1.5 text-small text-subtle-foreground">
+                    {copy.search.elsewhereSubtitle}
+                  </p>
+                </div>
+              ) : null}
+              <div data-testid="results-elsewhere" className="mt-4 flex flex-col gap-3">
+                {elsewhere.map((hit) => (
+                  <SearchResultCard
+                    key={hit.episode.youtube_id}
+                    hit={hit}
+                    query={query}
+                    passages={passagesByEpisode.get(hit.episode.youtube_id)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {/*
+            🚨 The header quotes `results.total`, so a page that renders fewer
+            than that MUST offer a way to reach the rest. It did not: the owner
+            saw "38 episodes" above 21 cards and read it as a bug in search.
+          */}
+          {canLoadMore ? (
+            <LinkButton
+              href={`/search?q=${encodeURIComponent(query)}&n=${nextWanted}`}
+              prefetch={false}
+              variant="outline"
+              size="lg"
+              block
+              className="mt-5"
+            >
+              {copy.browse.loadMore}
+              <LinkPending />
+            </LinkButton>
           ) : null}
 
           {spokenOnly.length > 0 ? (

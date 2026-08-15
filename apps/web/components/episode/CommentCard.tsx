@@ -6,7 +6,7 @@ import { Lock } from "lucide-react";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Button } from "@/components/ui/button";
 import type { Comment } from "@/lib/api/podcast";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { relativeDay } from "@/lib/format";
 
 /**
@@ -21,6 +21,7 @@ import { relativeDay } from "@/lib/format";
  * of the server-rendered HTML.
  */
 export function CommentCard({ comment }: { comment: Comment }) {
+  const copy = useCopy();
   const [revealed, setRevealed] = useState(false);
   const hidden = comment.is_spoiler && !revealed;
 

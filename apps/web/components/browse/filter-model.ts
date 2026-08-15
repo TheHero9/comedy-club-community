@@ -1,4 +1,4 @@
-import { copy } from "@/lib/copy";
+import { copy, type Copy } from "@/lib/copy";
 import { stripControlCharacters } from "@/lib/sanitize";
 
 /**
@@ -21,6 +21,16 @@ export type FilterGroup = "sort" | "kind" | "channel" | "person";
 export interface FilterOption {
   value: string;
   label: string;
+  /**
+   * An avatar to render INSTEAD of the label, for options people recognise by
+   * picture. Channels only, today.
+   *
+   * 🚨 The label is still required and is still the accessible name. Channel
+   * avatar URLs are opaque content hashes on Google's CDN and do 404 between
+   * syncs, so a chip whose only identity is the image would become a blank
+   * unlabelled button the moment one goes stale.
+   */
+  iconUrl?: string;
   count?: number;
 }
 
@@ -55,17 +65,33 @@ export const PAGE_SIZE = 9;
  */
 export const MAX_API_LIMIT = 100;
 
-export const SORT_OPTIONS: FilterOption[] = [
-  { value: "newest", label: copy.browse.sortNewest },
-  { value: "oldest", label: copy.browse.sortOldest },
-  { value: "top", label: copy.browse.sortTop },
-  { value: "most_rated", label: copy.browse.sortMostRated },
-];
+/**
+ * 🚨 Functions of the dictionary, not constants.
+ *
+ * The `value` half is a wire protocol - it goes straight into the query string
+ * and must never change with the locale. The `label` half is display text and
+ * must. Freezing both into a module-level table is what would silently pin the
+ * filter bar to English for a Bulgarian viewer.
+ */
+export function sortOptions(dictionary: Copy): FilterOption[] {
+  return [
+    { value: "newest", label: dictionary.browse.sortNewest },
+    { value: "oldest", label: dictionary.browse.sortOldest },
+    { value: "top", label: dictionary.browse.sortTop },
+    { value: "most_rated", label: dictionary.browse.sortMostRated },
+  ];
+}
 
-export const KIND_OPTIONS: FilterOption[] = [
-  { value: "video", label: copy.browse.kindVideo },
-  { value: "stream", label: copy.browse.kindStream },
-];
+export function kindOptions(dictionary: Copy): FilterOption[] {
+  return [
+    { value: "video", label: dictionary.browse.kindVideo },
+    { value: "stream", label: dictionary.browse.kindStream },
+  ];
+}
+
+/** English-labelled tables, for tests and any non-rendering caller. */
+export const SORT_OPTIONS: FilterOption[] = sortOptions(copy);
+export const KIND_OPTIONS: FilterOption[] = kindOptions(copy);
 
 export interface ActiveFilters {
   sort: string;

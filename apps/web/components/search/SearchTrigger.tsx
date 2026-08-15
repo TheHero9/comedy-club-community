@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 
 import { SearchOverlay } from "@/components/shell/SearchOverlay";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,6 +27,7 @@ export function SearchTrigger({
   initialQuery?: string;
   className?: string;
 }) {
+  const copy = useCopy();
   const [open, setOpen] = useState(false);
   const label = initialQuery.length > 0 ? initialQuery : copy.search.trigger;
 

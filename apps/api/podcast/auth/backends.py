@@ -7,17 +7,50 @@ never care which one is active.
 from __future__ import annotations
 
 import logging
+import re
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from ninja.security import HttpBearer
 
+from podcast.auth import clerk_api
 from podcast.models import UserProfile
 
 logger = logging.getLogger("podcast")
 
 User = get_user_model()
+
+# Clerk ids look like `user_33KqZ...`; the dev backend mints `dev_<name>`.
+_EXTERNAL_ID_RE = re.compile(r"^(user|org|dev)_[A-Za-z0-9]+$")
+
+
+def looks_like_external_id(value: str) -> bool:
+    """Is this an identity-provider id rather than something a human picked?
+
+    🚨 Load-bearing. Such a value is a fine Django username (internal, unique,
+    stable) and a terrible display name. Greeting someone as `user_33Kq...` is
+    exactly what shipped, so anything user-visible is checked against this.
+    """
+    return bool(_EXTERNAL_ID_RE.match((value or "").strip()))
+
+
+def humanize(*candidates: str) -> str:
+    """First candidate that a person would recognise as their own name.
+
+    An email is reduced to its local part - `ivan.petrov@gmail.com` reads as
+    "ivan.petrov", which is wrong-ish but recognisable, where the raw address
+    would leak it into the page title of a public profile.
+    """
+    for candidate in candidates:
+        value = (candidate or "").strip()
+        if not value or looks_like_external_id(value):
+            continue
+        if "@" in value and "." in value.split("@")[-1]:
+            value = value.split("@")[0]
+        if value:
+            return value[:100]
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +75,11 @@ def provision_user(
     # ⚠️ Identity-provider values are unbounded; the columns are not. An 120-char
     # display name from Clerk must become a truncated profile, not a DataError 500
     # on the very first authenticated request.
-    display_name = (display_name or "")[:100]
+    #
+    # 🚨 `humanize` also refuses to let the external id become a display name.
+    # Without it the fallback chain below ends at `external_id`, and that is what
+    # put `user_33Kq...` on the profile page as both the name and the handle.
+    display_name = humanize(display_name, username, email)
     avatar_url = (avatar_url or "")[:200]
 
     profile = UserProfile.objects.select_related("user").filter(
@@ -52,7 +89,14 @@ def provision_user(
     if profile:
         # Refresh mutable fields the identity provider owns.
         changed = []
-        if display_name and profile.display_name != display_name:
+        # The second clause REPAIRS a row provisioned before this guard existed:
+        # such a profile has the raw Clerk id sitting in display_name, and it
+        # would otherwise stay there forever because the first clause only ever
+        # overwrites a value that differs, not one that is wrong.
+        if display_name and (
+            profile.display_name != display_name
+            or looks_like_external_id(profile.display_name)
+        ):
             profile.display_name = display_name
             changed.append("display_name")
         if avatar_url and profile.avatar_url != avatar_url:
@@ -75,8 +119,15 @@ def provision_user(
             UserProfile.objects.create(
                 user=user,
                 clerk_user_id=external_id,
-                display_name=display_name or candidate,
+                # `candidate` is the Django username, which IS the external id
+                # when nothing better was supplied - so it is only acceptable
+                # here once humanize has cleared it.
+                display_name=display_name or humanize(candidate),
                 avatar_url=avatar_url,
+                # 🚨 handle stays NULL. It is the YouTube handle, which no
+                # identity provider can tell us; inventing one from the email
+                # would defeat the only reason the column exists.
+                handle=None,
             )
     except IntegrityError:
         # Two first-requests raced (a fresh SPA session fires parallel API calls
@@ -103,7 +154,7 @@ def ensure_profile(user: User) -> UserProfile:
         return profile
     return UserProfile.objects.create(
         user=user,
-        display_name=user.get_username(),
+        display_name=humanize(user.get_username(), user.email),
         role=UserProfile.Role.ADMIN if user.is_superuser else UserProfile.Role.MEMBER,
     )
 
@@ -197,15 +248,48 @@ class ClerkAuth(HttpBearer):
         if not subject:
             return None
 
+        identity = self._identity_from_claims(claims)
+
+        # 🚨 Clerk's DEFAULT session token carries NONE of these claims, so this
+        # branch is the normal path, not the exception. See clerk_api.py.
+        if not identity["display_name"]:
+            fetched = clerk_api.fetch_user(subject)
+            if fetched:
+                # Claims still win where they exist - they were signed.
+                identity = {key: identity[key] or fetched[key] for key in identity}
+
         user = provision_user(
             external_id=subject,
-            email=claims.get("email", "") or "",
-            username=claims.get("username", "") or "",
-            display_name=claims.get("name", "") or claims.get("username", "") or "",
-            avatar_url=claims.get("picture", "") or "",
+            email=identity["email"],
+            username=identity["username"],
+            display_name=identity["display_name"],
+            avatar_url=identity["avatar_url"],
         )
         ensure_profile(user)
         return user
+
+    @staticmethod
+    def _identity_from_claims(claims: dict) -> dict[str, str]:
+        """Read identity out of a session token, across Clerk's claim spellings.
+
+        Clerk has shipped several: the v1 OIDC-ish names (`name`, `picture`),
+        the v2 short names (`fna`, `img`), and whatever a custom JWT template
+        emits. Reading all of them means a dashboard that IS configured saves
+        the Backend API round trip.
+        """
+        first = claims.get("first_name") or ""
+        last = claims.get("last_name") or ""
+        joined = " ".join(part for part in (first.strip(), last.strip()) if part)
+
+        return {
+            "display_name": (
+                claims.get("name") or claims.get("fna") or joined
+                or claims.get("username") or ""
+            ),
+            "avatar_url": claims.get("picture") or claims.get("img") or "",
+            "username": claims.get("username") or "",
+            "email": claims.get("email") or "",
+        }
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import { useEpisodeViewer } from "@/components/episode/viewer/EpisodeViewerConte
 import { RateSheet } from "@/components/episode/viewer/RateSheet";
 import { WatchLogSheet } from "@/components/episode/viewer/WatchLogSheet";
 import { Button, ExternalLinkButton } from "@/components/ui/button";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { formatDate, formatDelta, formatScore, relativeDay } from "@/lib/format";
 import { bandStyle } from "@/lib/score-bands";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ export function EpisodeSheets() {
 
 /** The star + score + rate button, shared by the mobile strip and the header. */
 function RateButton({ size = "md" }: { size?: "sm" | "md" }) {
+  const copy = useCopy();
   const viewer = useEpisodeViewer();
   const rated = viewer.myRating !== null;
 
@@ -59,6 +60,7 @@ function RateButton({ size = "md" }: { size?: "sm" | "md" }) {
  * Desktop only: the score block in the top-right of the header, beside the H1.
  */
 export function EpisodeHeaderScore() {
+  const copy = useCopy();
   const viewer = useEpisodeViewer();
 
   return (
@@ -90,6 +92,7 @@ export function EpisodeHeaderScore() {
  * when one exists, because on mobile there is no sidebar to put it in.
  */
 export function EpisodeScoreStrip() {
+  const copy = useCopy();
   const viewer = useEpisodeViewer();
   const hasElite = viewer.eliteScore !== null;
 
@@ -140,6 +143,7 @@ export function EpisodeScoreStrip() {
 
 /** Desktop only: the sticky 320px sidebar. */
 export function EpisodeSidebar() {
+  const copy = useCopy();
   const viewer = useEpisodeViewer();
   const watched = viewer.watchCount > 0;
   const today = new Date();
@@ -219,7 +223,7 @@ export function EpisodeSidebar() {
                   strokeWidth={2.4}
                 />
                 <span className="flex-1 text-[13px]">
-                  {formatDate(event.watched_on)}
+                  {formatDate(event.watched_on, copy.common.months)}
                 </span>
                 <span className="font-mono text-[11px] text-subtle-foreground">
                   {relativeDay(event.watched_on, today)}
@@ -228,7 +232,7 @@ export function EpisodeSidebar() {
                   variant="quiet"
                   size="icon"
                   className="size-[22px]"
-                  aria-label={copy.episode.removeWatch(formatDate(event.watched_on))}
+                  aria-label={copy.episode.removeWatch(formatDate(event.watched_on, copy.common.months))}
                   onClick={() => viewer.removeWatch(event.id)}
                 >
                   <X className="size-3" aria-hidden strokeWidth={2.6} />
@@ -296,21 +300,30 @@ export function EpisodeSidebar() {
  * `BottomNav` returns null on `/e/`, so the two can never both be on screen.
  */
 export function EpisodeActionBar() {
+  const copy = useCopy();
   const viewer = useEpisodeViewer();
   const watched = viewer.watchCount > 0;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t border-border bg-card-2 px-3 pt-2.5 pb-3.5 md:hidden">
+      {/* 🚨 `min-w-0` + `truncate` are load-bearing, not polish. A flex child
+          defaults to `min-width: auto`, so its text refuses to shrink below its
+          own content - the long Bulgarian label pushed the whole row wider than
+          the viewport and shoved the last icon off the right edge of a 390px
+          screen. The label is also short now ("Watched" / "Гледано"); both
+          fixes are needed, because one long word would do it again. */}
       <Button
         variant={watched ? "elevated" : "primary"}
         size="lg"
-        className="flex-1 text-[14.5px] font-bold"
+        className="min-w-0 flex-1 text-[14.5px] font-bold"
         onClick={viewer.toggleWatched}
       >
-        <Check className="size-[17px]" aria-hidden strokeWidth={2.4} />
-        {watched
-          ? copy.episode.watchedCount(viewer.watchCount)
-          : copy.episode.markWatched}
+        <Check className="size-[17px] shrink-0" aria-hidden strokeWidth={2.4} />
+        <span className="truncate">
+          {watched
+            ? copy.episode.watchedCount(viewer.watchCount)
+            : copy.episode.markWatched}
+        </span>
       </Button>
 
       <Button
@@ -340,14 +353,13 @@ export function EpisodeActionBar() {
         />
       </Button>
 
-      <ExternalLinkButton
-        href={viewer.watchUrl}
-        variant="soft"
-        size="icon-lg"
-        aria-label={copy.episode.watchOnYouTube}
-      >
-        <ExternalLink className="size-[18px]" aria-hidden strokeWidth={2.2} />
-      </ExternalLinkButton>
+      {/* 🚨 The "open on YouTube" icon used to sit here and is gone (owner
+          call, 2026-08-15): the episode thumbnail directly above carries a
+          62px play button that does exactly the same thing, so this was a
+          second copy of the page's most obvious action - and it was the button
+          being pushed off-screen. The trade-off is real and accepted: once you
+          scroll past the thumbnail on mobile, the watch action is no longer
+          within reach of the bar. */}
     </div>
   );
 }

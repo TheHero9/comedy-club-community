@@ -3,7 +3,7 @@
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 
 /**
  * 🚨 Signed-out users still see EVERY rating affordance. The button is never
@@ -25,6 +25,7 @@ export function SignInSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const copy = useCopy();
   const { canSignIn, signIn } = useViewerAuth();
 
   return (

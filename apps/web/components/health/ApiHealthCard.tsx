@@ -4,7 +4,7 @@ import {
   isFullyHealthy,
   type HealthResult,
 } from "@/lib/api/health";
-import { copy } from "@/lib/copy";
+import { getCopy } from "@/lib/locale";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,12 +16,12 @@ import { cn } from "@/lib/utils";
  * two, and the degraded one has to read as "the rest still works" rather than
  * as an outage.
  */
-const DEPENDENCY_LABEL = {
-  database: copy.status.database,
-  redis: copy.status.redis,
-} as const;
-
-export function ApiHealthCard({ result }: { result: HealthResult }) {
+export async function ApiHealthCard({ result }: { result: HealthResult }) {
+  const copy = await getCopy();
+  const DEPENDENCY_LABEL: Record<string, string> = {
+    database: copy.status.database,
+    redis: copy.status.redis,
+  };
   const healthy = result.ok && isFullyHealthy(result.data);
   const degraded = result.ok && !healthy;
 

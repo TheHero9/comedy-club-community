@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, Settings } from "lucide-react";
 
+import { useCopy } from "@/components/i18n/LocaleProvider";
 import { Logo } from "@/components/shell/Logo";
 import { SearchOverlay } from "@/components/shell/SearchOverlay";
-import { ThemeToggle } from "@/components/shell/ThemeToggle";
+import { SettingsSheet } from "@/components/shell/SettingsSheet";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Button } from "@/components/ui/button";
-import { copy } from "@/lib/copy";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,19 +20,21 @@ import { cn } from "@/lib/utils";
  * sitting under a header at scroll position 0 reads as a rendering artefact
  * rather than depth.
  */
-const TOP_NAV = [
-  { href: "/channels", label: copy.nav.channels },
-  { href: "/episodes", label: copy.nav.episodes },
-  { href: "/leaderboard", label: copy.nav.leaderboard },
-] as const;
-
-/** Placeholder identity until Clerk keys land. Signed out shows initials only. */
-const VIEWER_NAME = copy.nav.profile;
-
 export function AppHeader() {
+  const copy = useCopy();
   const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  // 🚨 Built inside the component, not at module scope. A module-level table
+  // would capture whichever dictionary happened to be loaded first and would
+  // never re-render on a locale change.
+  const topNav = [
+    { href: "/channels", label: copy.nav.channels },
+    { href: "/episodes", label: copy.nav.episodes },
+    { href: "/leaderboard", label: copy.nav.leaderboard },
+  ];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -54,7 +56,7 @@ export function AppHeader() {
         <Logo size="md" className="hidden md:flex" />
 
         <nav className="hidden shrink-0 gap-0.5 md:flex" aria-label={copy.nav.sectionNav}>
-          {TOP_NAV.map((item) => {
+          {topNav.map((item) => {
             const active = pathname.startsWith(item.href);
             return (
               <Link
@@ -85,7 +87,18 @@ export function AppHeader() {
         </button>
 
         <div className="ml-auto flex items-center gap-2">
-          <ThemeToggle />
+          {/* Theme moved in here with language: a bare sun/moon icon was the
+              only "setting" on the site and nobody found it. */}
+          <Button
+            variant="elevated"
+            size="icon"
+            shape="rounded"
+            aria-label={copy.nav.openSettings}
+            onClick={() => setSettingsOpen(true)}
+            className="text-muted-foreground"
+          >
+            <Settings className="size-[17px]" aria-hidden strokeWidth={2.2} />
+          </Button>
 
           <Button
             variant="elevated"
@@ -103,12 +116,13 @@ export function AppHeader() {
             aria-label={copy.nav.profile}
             className="rounded-pill outline-none"
           >
-            <PersonAvatar name={VIEWER_NAME} size="sm" neutral />
+            <PersonAvatar name={copy.nav.profile} size="sm" neutral />
           </Link>
         </div>
       </header>
 
       <SearchOverlay open={searchOpen} onOpenChange={setSearchOpen} />
+      <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
 }

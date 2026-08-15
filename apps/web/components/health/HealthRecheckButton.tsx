@@ -7,13 +7,14 @@ import { LoaderCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ui/toast";
 import { getHealth, HEALTH_QUERY_KEY, isFullyHealthy } from "@/lib/api/health";
-import { copy } from "@/lib/copy";
+import { useCopy } from "@/components/i18n/LocaleProvider";
 
 /**
  * Client Component. Proves the typed client works from the browser too, and is
  * the first consumer of the TanStack Query provider and the toaster.
  */
 export function HealthRecheckButton() {
+  const copy = useCopy();
   const router = useRouter();
 
   const { refetch, isFetching } = useQuery({
