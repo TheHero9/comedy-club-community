@@ -18,13 +18,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Audience:** ~1,000+ users. Small data, low traffic. Bulgarian-language content and UI.
 - **Core value:** searchability. YouTube search across these channels is bad. Community labels + timestamps + canonical topics fix that.
-- **Status:** 🔴 **Pre-scaffolding** (Phase 0 not started)
+- **Status:** 🚀 **LIVE IN PRODUCTION at https://comedycommunity.club** since 2026-08-15. See § Production below.
 
 ### 🚫 Explicit Non-Goals for v1
 
 - ❌ **No paid transcription.** We never run ASR. ✅ **We DO store YouTube's own Bulgarian auto-captions** (free, `bg-orig` via yt-dlp) as searchable `TranscriptSegment` rows - see § Transcripts. Community topic labels and moments remain the primary structure; transcripts are the long-tail fallback for "who said X".
 - ❌ **No mobile app yet.** The API is built API-first so React Native/Expo can be added later without a backend rewrite.
 - ❌ **No microservices, no Kubernetes, no NoSQL.** This is a small app. Cache reads and denormalize aggregates before reaching for anything fancier.
+
+---
+
+## 🚀 Production (LIVE since 2026-08-15)
+
+> 📖 Full topology, service IDs and the **six deployment gotchas** live in
+> [`specs/10-deployment/01-production-setup.md`](specs/10-deployment/01-production-setup.md).
+> Read that file before touching any production infrastructure.
+
+| Piece | Where | Address |
+| ----- | ----- | ------- |
+| Next.js web | Vercel (`comedy-club-community`) | https://comedycommunity.club (+ `www`) |
+| Django API | Railway `api` | https://api.comedycommunity.club |
+| Celery worker + beat | Railway, same image, custom start commands | - |
+| Postgres 18 / Redis / Meilisearch **v1.11** | Railway, volumes, **private network only** | `*.railway.internal` |
+| Auth | Clerk **production** instance | issuer `https://clerk.comedycommunity.club` |
+| DNS | Porkbun (`comedycommunity.club`) | A→Vercel, `api`→Railway CNAME+TXT, 5 Clerk CNAMEs |
+
+### Rules that keep production healthy
+
+- ✅ **`git push` to `main` deploys everything.** Railway (GitHub App) redeploys api/worker/beat on changes under `apps/api/**`; Vercel rebuilds the web on any push. There is no other deploy path to remember.
+- 🚨 **The Vercel build prerenders against the LIVE API** (`NEXT_PUBLIC_API_URL=https://api.comedycommunity.club`). If the API is down, the web build fails - that is the build telling you the truth, not a flake.
+- 🚨 **Meilisearch is pinned to v1.11 in BOTH docker-compose and Railway, and must move in lockstep.** Prod briefly ran v1.42 and typo tolerance silently vanished (exact matches kept working, so nothing obvious broke). A version bump means: change both, wipe the prod volume, reindex, re-run the Bulgarian typo sweep.
+- ✅ **A reindex closes on COUNTS, never on the command exiting** - same lesson as backfills. Compare prod totals against local for the same queries (`пица`, `еврвизия`); the Postgres fallback masks an empty index, and "backend switched to meilisearch" only proves the index EXISTS.
+- ✅ **One-off prod commands** (reindex, repair_metadata): temporarily set the worker's start command to `sh -c "python manage.py <cmd> && celery -A config worker -l info --concurrency=2"`, redeploy, verify by reading the logs, revert. Keep the chain to exactly two parts - a three-part `&&` chain silently failed to run at all.
+- 🔒 **Secrets live in the Railway/Vercel dashboards only.** Never in the repo, never in chat. The repo is public. `DJANGO_SECRET_KEY` and `MEILI_MASTER_KEY` were generated at deploy time; Clerk keys come from the Clerk dashboard (`sk_live` set by hand in both dashboards).
+- 🔒 **Postgres stays private.** Restores go through a temporarily-enabled TCP proxy that is disabled again immediately after (`pg_restore --clean --if-exists --no-owner --no-privileges`, db name `railway`).
+- ⚠️ **The Railway MCP agent reports success for config it silently fails to apply** (volumes, custom-domain ports). Only believe a read-back of the service config, never the agent's summary.
+
+### Auth in production (Wave 8, completed 2026-08-15)
+
+- **Both halves are pluggable and switch on the same signal.** API: `AUTH_BACKEND=clerk` (prod.py refuses anything else). Web: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` present → Clerk via `components/auth/ViewerAuthProvider.tsx`; absent (local dev, CI, the whole test suite) → the `NEXT_PUBLIC_DEV_USER` identity and the disabled sign-in stub. The 958-test suite runs keyless and must keep passing unchanged.
+- **Components never import Clerk hooks directly** - they read `useViewerAuth()`. That is what lets the tree render without a ClerkProvider in keyless builds.
+- **Google sign-in uses OUR OAuth client** (Google Cloud project `comedy-club`), configured as custom credentials in Clerk's production Google connection. Dev instances borrow Clerk's shared credentials; production does not - a cloned production instance ships the Google button ENABLED but broken ("missing client_id") until custom credentials are pasted in.
+- **`proxy.ts` is Next 16's renamed `middleware.ts`** and runs Clerk's session handshake, guarded by the same key check. No route is protected there - authorization is always the API's job.
 
 ---
 

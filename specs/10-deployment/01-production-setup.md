@@ -1,7 +1,8 @@
 # 🚀 Production Deployment - comedycommunity.club
 
 **Deployed:** 2026-08-15 (infra created 2026-08-13)
-**Status:** LIVE. Final smoke test: 13/13 passed.
+**Status:** LIVE. Final smoke test: 13/13 passed. Wave 8 (Clerk auth) completed the same
+day: email + Google sign-in verified working end to end by the owner on the live site.
 
 ## Topology
 
@@ -51,6 +52,25 @@ The web build prerenders against the live API, so **the API must be up for `verc
    adding `&& echo MARKER` in the middle made the whole chain silently skip to Celery in 2s with zero
    reindex output. Keep chained start commands to the exact shape that has been proven, and verify by
    log output, not exit status.
+
+## Auth completion (same day, after launch)
+
+The sign-in button was still the Wave 8 stub at launch. Completed in `408754f`:
+
+- `@clerk/nextjs` v7 (Core 3: `appearance.theme`, not `baseTheme`), `bgBG` localization,
+  dark theme. `proxy.ts` (Next 16's renamed middleware) runs the session handshake with a
+  keyless pass-through so CI never needs Clerk.
+- `ViewerAuthProvider` bridges Clerk state into an app-owned context; keyless builds get a
+  Dev bridge instead of a ClerkProvider, keeping the 958-test suite byte-identical.
+  Proven: full Playwright suite (368) green against a keyless production build.
+- **Google OAuth**: a production Clerk instance cloned from dev ships the Google button
+  enabled but broken ("Error 400: missing required parameter: client_id") - production
+  instances do not inherit Clerk's shared dev credentials. Fixed with a dedicated Google
+  Cloud project (`comedy-club`) OAuth web client, redirect URI from Clerk's
+  "use custom credentials" panel, consent screen published, credentials pasted into Clerk.
+- Perf note: `web:search-broad` was already over budget before this change (transcript
+  coverage grew 3 -> 579 episodes since the budget was measured); waived at 200 KB as a
+  ratchet in `scripts/perf-budgets.json`.
 
 ## Operational notes
 
