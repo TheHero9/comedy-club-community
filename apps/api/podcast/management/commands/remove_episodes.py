@@ -104,7 +104,13 @@ class Command(BaseCommand):
         if missing:
             self.stdout.write(f"WARNING: {len(missing)} not in the database: {missing}")
         if not episodes:
-            raise CommandError("Nothing to delete")
+            # Success, not an error: every requested id is already absent, which
+            # IS the desired state. This matters because the command is armed as
+            # a Railway `preDeployCommand`, which re-runs on EVERY deployment -
+            # raising here would fail the second deploy and take the service down
+            # for having already done its job.
+            self.stdout.write("nothing to delete - all requested ids are already gone")
+            return
 
         pks = [episode.pk for episode in episodes]
         cascade = self._cascade_counts(pks)

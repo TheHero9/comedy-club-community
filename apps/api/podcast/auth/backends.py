@@ -38,18 +38,26 @@ def looks_like_external_id(value: str) -> bool:
 def humanize(*candidates: str) -> str:
     """First candidate that a person would recognise as their own name.
 
-    An email is reduced to its local part - `ivan.petrov@gmail.com` reads as
-    "ivan.petrov", which is wrong-ish but recognisable, where the raw address
-    would leak it into the page title of a public profile.
+    🚨 An EMAIL IS NEVER A CANDIDATE, and an email-shaped string is rejected
+    outright rather than reduced to its local part.
+
+    It used to fall back to the local part, on the theory that "ivan.petrov" is
+    at least recognisable. In practice the owner signed in with Google, Clerk
+    returned no name, and the profile greeted them with what they read as their
+    own email address. Worse, the same value is `author_name` on every public
+    comment - so a fallback nobody chose would have published the local part of
+    real people's addresses site-wide.
+
+    Returning "" is the honest answer: we do not know this person's name. The UI
+    renders a neutral placeholder and invites them to set one.
     """
     for candidate in candidates:
         value = (candidate or "").strip()
         if not value or looks_like_external_id(value):
             continue
-        if "@" in value and "." in value.split("@")[-1]:
-            value = value.split("@")[0]
-        if value:
-            return value[:100]
+        if "@" in value:
+            continue
+        return value[:100]
     return ""
 
 

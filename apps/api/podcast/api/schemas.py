@@ -251,6 +251,9 @@ class ProfileIn(Schema):
     # URLField 200) - over-length input would otherwise be a psycopg DataError
     # 500. bio is a TextField, so its cap is a sanity bound, not a column limit.
     display_name: str | None = Field(None, max_length=100)
+    # The public nickname. `""` means "clear it"; omitting it leaves it alone,
+    # which is why the sentinel has to be the empty string and not None.
+    handle: str | None = Field(None, max_length=30)
     bio: str | None = Field(None, max_length=5000)
     avatar_url: str | None = Field(None, max_length=200)
 

@@ -7,7 +7,7 @@ or a query parameter - that would let anyone act as anyone.
 
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Max
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -28,6 +28,7 @@ from podcast.models import (
     WatchEvent,
 )
 from podcast.services import scoring
+from podcast.services.handles import HandleError, clean_handle
 
 from .schemas import (
     EpisodeListOut,
@@ -80,7 +81,7 @@ def get_me(request):
     # 🚨 `humanize` on BOTH, because the Django username IS the Clerk `sub` for
     # anyone provisioned from a default session token. Falling back to
     # `user.get_username()` unguarded is the bug this replaces.
-    readable = humanize(profile.display_name, user.get_username(), user.email)
+    readable = humanize(profile.display_name, user.get_username())
 
     return {
         "id": user.id,
@@ -107,8 +108,32 @@ def update_me(request, payload: ProfileIn):
         value = getattr(payload, field)
         if value is not None:
             setattr(profile, field, value)
+
+    if payload.handle is not None:
+        try:
+            handle = clean_handle(payload.handle)
+        except HandleError as exc:
+            # 422 with the reason, so the form can show WHY rather than "invalid".
+            raise HttpError(422, str(exc)) from exc
+
+        # 🚨 Checked here AND caught below. The check is what produces a useful
+        # message; the catch is what stops a race between two users claiming the
+        # same handle from becoming a 500. Neither alone is enough.
+        if handle is not None:
+            taken = (
+                UserProfile.objects.filter(handle=handle)
+                .exclude(pk=profile.pk)
+                .exists()
+            )
+            if taken:
+                raise HttpError(409, "That handle is already taken.")
+        profile.handle = handle
+
     # 🔒 `role` is deliberately not settable here. Escalation happens in the admin.
-    profile.save()
+    try:
+        profile.save()
+    except IntegrityError as exc:
+        raise HttpError(409, "That handle is already taken.") from exc
     return get_me(request)
 
 
