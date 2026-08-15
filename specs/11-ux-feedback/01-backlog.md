@@ -130,3 +130,70 @@ const copy = useCopy();
 so the scanner keeps working with no change to the test. `lib/copy.ts` still
 exports a plain `copy` (the English dictionary) for the test and for non-React
 modules such as `lib/api/client.ts`.
+
+
+---
+
+## Production rollout, 2026-08-15
+
+All 31 items are live. The rollout itself surfaced two infrastructure facts that
+were wrong in the documentation.
+
+### 🚨 Railway never auto-deployed
+
+`CLAUDE.md` claimed "`git push` to `main` deploys everything". It does not.
+Vercel rebuilt the web on the push; Railway created **no deployment at all** for
+either of the two commits that touched `apps/api/**`. Not queued, not failed -
+never created. The Railway GitHub App is not installed on the repo.
+
+The result was the worst possible shape for about twenty minutes: the web
+deployed and the API did not, so the site served a new frontend against an old
+schema. `/api/me` had no `handle`, the channel order was still alphabetical, and
+nothing anywhere reported a problem.
+
+**Always verify the API independently of the web after a push.** A green Vercel
+deploy is not evidence about Railway.
+
+### 🚨 `redeploy` silently ignored a config change
+
+The documented recipe for a one-off production command was to set the worker's
+start command to `sh -c "python manage.py <cmd> && celery ..."` and redeploy.
+That was done, the config read back correctly, the deployment reported SUCCESS,
+and Celery came up healthy - but `set_channel_order` never ran.
+
+`redeploy` re-runs the most recent deployment *reusing its build and its
+config*, so the newly-set start command was never used. The only evidence was a
+**gap**: nothing at all in the logs between "Starting Container" and Celery's
+banner. Had the check been "did the deployment succeed" rather than "did the
+data change", this would have been recorded as done while nothing had happened -
+exactly the failure mode already recorded for `repair_metadata` on 2026-08-10.
+
+**What worked:** `preDeployCommand`, one command per deployment, triggered as a
+genuinely NEW deployment. Its output lands in the deploy log
+(`Updated 7 channel(s).`), and a non-zero exit fails the deploy loudly.
+
+### The junk participant was never in production
+
+Item #15 asked for `Гост от публиката` to be deleted from local **and**
+production. It was deleted locally (12 participations). Production turned out to
+have **zero `Person` rows** - the persona was demo residue that only ever existed
+on the dev box. Nothing was deleted in production, and nothing needed to be.
+
+⚠️ This was nearly a self-inflicted outage: the `delete_person` preDeployCommand
+was already armed when the check came back empty, and `delete_person` raises
+`CommandError` on a missing target - which as a preDeployCommand fails the
+deployment. The config was cleared before that deploy reached its pre-deploy
+phase. **Confirm the row exists before arming a destructive one-off.**
+
+### Final verified production state
+
+| Check | Result |
+| ----- | ------ |
+| `api`, `celery-worker`, `celery-beat` | all on `1a19938` |
+| Migration `0005` | applied (`... OK` in the deploy log) |
+| `/api/health` | `database.ok` + `redis.ok` |
+| Channel order | the curated 7, verified against the live API |
+| `MeOut.handle` | present in the live OpenAPI schema |
+| Web default locale | `<html lang="en">`, "Every episode." |
+| `/e/BADID` | still a hard 404 |
+| Search split + pagination | both regions render, "load more" present, timing readout gone |

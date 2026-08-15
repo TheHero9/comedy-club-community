@@ -55,5 +55,7 @@ desktop.ini
 
 # ---- Tooling scratch ----
 tools/youtube-metadata/out/
+# Generated review pages, topic-batch digests and other one-off exports.
+tmp/
 
 .vercel
