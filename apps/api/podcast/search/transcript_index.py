@@ -431,9 +431,18 @@ def search(
         params["attributesToHighlight"] = HIGHLIGHT_ATTRIBUTES
         params["highlightPreTag"] = "<mark>"
         params["highlightPostTag"] = "</mark>"
-        # The passage is ~170 words; the UI shows a snippet around the match.
+        # The stored passage is ~170 words; the UI shows a snippet around the
+        # match.
+        #
+        # ⚡ 20 words, not 30. This is the single largest contributor to the
+        # /search page's weight: a snippet is rendered on up to ~26 cards, and
+        # RSC ships the rendered output twice (HTML plus the flight tree). At 30
+        # words a broad Bulgarian query measured 173 KB against a 120 KB budget.
+        # 20 words still carries ~10 words either side of the hit, which is
+        # enough to read what was being talked about - and the timestamp next to
+        # it is the real answer to "where was this said".
         params["attributesToCrop"] = HIGHLIGHT_ATTRIBUTES
-        params["cropLength"] = 30
+        params["cropLength"] = 20
 
     try:
         raw = _index().search(query, params)

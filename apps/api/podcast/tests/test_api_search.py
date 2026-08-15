@@ -233,5 +233,88 @@ def test_suggest_needs_at_least_two_characters(client, episode):
     assert client.get(f"{BASE}/search/suggest?q=a").json() == []
 
 
-def test_suggest_returns_matching_titles(client, episode):
+def test_suggest_returns_matching_titles(client, episode, no_meilisearch):
+    """The Postgres fallback path, which is what runs with the index down."""
     assert "Историята на Каспаров" in client.get(f"{BASE}/search/suggest?q=Каспаров").json()
+
+
+def test_suggest_rejects_a_query_that_tokenizes_to_nothing(client, episode):
+    """🚨 `???` is a placeholder search to Meilisearch - it would answer with the
+    whole catalogue's titles. Same rule the two search endpoints apply."""
+    assert client.get(f"{BASE}/search/suggest?q=???").json() == []
+
+
+def _meili_hits(*episode_ids):
+    return {"available": True, "hits": [{"id": eid} for eid in episode_ids]}
+
+
+def test_suggest_reads_titles_from_postgres_not_the_index(client, episode):
+    """🚨 Meilisearch supplies the ORDER; Postgres supplies the text.
+
+    The index is eventually consistent, so a renamed episode keeps answering
+    with its old title until the next reindex. A suggestion is a string the user
+    is about to search for, and a stale one sends them to a zero-result page.
+    """
+    with patch("podcast.api.search._meilisearch_available", return_value=True), patch(
+        "podcast.search.index.search",
+        return_value={
+            "available": True,
+            # The stale title the index would have handed back on its own.
+            "hits": [{"id": episode.id, "title": "Старо заглавие"}],
+        },
+    ):
+        body = client.get(f"{BASE}/search/suggest?q=Каспаров").json()
+
+    assert body == [episode.title]
+    assert "Старо заглавие" not in body
+
+
+def test_suggest_preserves_meilisearch_relevance_order(client, episode, stream_episode):
+    """Postgres is read with `id__in`, whose row order is arbitrary. The ranking
+    has to survive that re-read or the best completion stops being first.
+
+    🚨 The ranking asked for is deliberately the REVERSE of the order Postgres
+    hands back for the same ids. Asserting an order Postgres would have produced
+    anyway proves nothing - an earlier version of this test did exactly that and
+    still passed against code that dropped the ranking entirely.
+    """
+    ids = [episode.id, stream_episode.id]
+    natural = list(Episode.objects.filter(id__in=ids).values_list("id", flat=True))
+    ranked = list(reversed(natural))
+    assert ranked != natural, "fixture ids collided - the test cannot discriminate"
+
+    by_id = {episode.id: episode.title, stream_episode.id: stream_episode.title}
+
+    with patch("podcast.api.search._meilisearch_available", return_value=True), patch(
+        "podcast.search.index.search", return_value=_meili_hits(*ranked)
+    ):
+        body = client.get(f"{BASE}/search/suggest?q=подкаст").json()
+
+    assert body == [by_id[episode_id] for episode_id in ranked]
+    assert body != [by_id[episode_id] for episode_id in natural]
+
+
+def test_suggest_drops_an_indexed_but_deleted_episode(client, episode):
+    """A stale document is not a 500 and not a suggestion - it is dropped."""
+    missing = episode.id + 10_000
+    with patch("podcast.api.search._meilisearch_available", return_value=True), patch(
+        "podcast.search.index.search",
+        return_value=_meili_hits(missing, episode.id),
+    ):
+        assert client.get(f"{BASE}/search/suggest?q=Каспаров").json() == [episode.title]
+
+
+def test_suggest_falls_back_to_postgres_when_the_index_is_empty(client, episode):
+    """An empty or stale index answers every keystroke with nothing, which reads
+    as "no such episode". Confirm against Postgres before believing it."""
+    with patch("podcast.api.search._meilisearch_available", return_value=True), patch(
+        "podcast.search.index.search", return_value=_meili_hits()
+    ):
+        assert client.get(f"{BASE}/search/suggest?q=Каспаров").json() == [episode.title]
+
+
+def test_suggest_falls_back_to_postgres_when_meilisearch_raises(client, episode):
+    with patch("podcast.api.search._meilisearch_available", return_value=True), patch(
+        "podcast.search.index.search", side_effect=RuntimeError("boom")
+    ):
+        assert client.get(f"{BASE}/search/suggest?q=Каспаров").json() == [episode.title]

@@ -15,13 +15,16 @@ import type { Page } from "@playwright/test";
 import type { Schema } from "@ccc/api-types";
 
 import { copy } from "@/lib/copy";
+import { RESULT_LIMIT, TRANSCRIPT_SEGMENT_LIMIT } from "@/lib/search-limits";
 
 import { test, expect, apiJson } from "./fixtures";
 
 type SearchResult = Schema<"SearchOut">;
+type TranscriptResult = Schema<"TranscriptSearchOut">;
 
-/** The search page requests 24 hits per query. */
-const PAGE_LIMIT = 24;
+/** Imported, never restated: a copy of a page size drifts the moment one moves. */
+const PAGE_LIMIT = RESULT_LIMIT;
+const TRANSCRIPT_LIMIT = TRANSCRIPT_SEGMENT_LIMIT;
 
 /** Bulgarian queries with known matches in the ingested data. */
 const QUERY_KASPAROV = "Каспаров";
@@ -30,12 +33,30 @@ const QUERY_EUROVISION = "евровизия";
 const QUERY_EUROVISION_TYPO = "еврвизия";
 const QUERY_NO_MATCH = "zzznothingzzz";
 
+/**
+ * A word that is SPOKEN in the catalogue but labels nothing.
+ *
+ * 🚨 It is also one of the example queries printed on the search page itself,
+ * and before transcripts were wired in it rendered "nothing matched" - the page
+ * advertised a query it could not answer while 173 passages said the word out
+ * loud. The test does not hardcode that count; it asserts against both live
+ * endpoints.
+ */
+const QUERY_SPOKEN_ONLY = "баница";
+
 /** URL of the search page for a query, percent-encoded by URLSearchParams. */
 function searchPagePath(query: string): string {
   return `/search?${new URLSearchParams({ q: query })}`;
 }
 
 /** Same query straight to Django, so the UI can be diffed against the source. */
+function transcriptApiPath(query: string): string {
+  return `/api/search/transcripts?${new URLSearchParams({
+    q: query,
+    limit: String(TRANSCRIPT_LIMIT),
+  })}`;
+}
+
 function searchApiPath(query: string): string {
   return `/api/search?${new URLSearchParams({ q: query, limit: String(PAGE_LIMIT) })}`;
 }
@@ -45,10 +66,30 @@ function resultLinks(page: Page) {
   return page.locator('a[href^="/e/"]');
 }
 
+/**
+ * 🚨 Scoped to the LABEL-match region on purpose.
+ *
+ * /search renders two regions from two endpoints: `/api/search` ("which
+ * episodes are ABOUT this") and `/api/search/transcripts` ("where was this
+ * SAID"). An unscoped `a[href^="/e/"]` counts both, so comparing it against
+ * `/api/search` alone would fail the moment a query also matched spoken words -
+ * which is most of them. Each region is asserted against its own endpoint.
+ */
 async function renderedResultIds(page: Page): Promise<string[]> {
-  const hrefs = await resultLinks(page).evaluateAll((links) =>
-    links.map((link) => link.getAttribute("href") ?? ""),
-  );
+  return regionIds(page, "results-labelled");
+}
+
+/** Episodes that matched ONLY in the transcript, in render order. */
+async function spokenResultIds(page: Page): Promise<string[]> {
+  return regionIds(page, "results-spoken");
+}
+
+async function regionIds(page: Page, testId: string): Promise<string[]> {
+  const region = page.getByTestId(testId);
+  if ((await region.count()) === 0) return [];
+  const hrefs = await region
+    .locator('a[href^="/e/"]')
+    .evaluateAll((links) => links.map((link) => link.getAttribute("href") ?? ""));
   return hrefs.map((href) => href.replace("/e/", ""));
 }
 
@@ -115,6 +156,72 @@ test.describe("search", () => {
     expect(correctIds.length).toBe(correctApi.total);
     expect(typoIds.length).toBe(correctIds.length);
     expect([...typoIds].sort()).toEqual([...correctIds].sort());
+  });
+
+  test("7.3b a word that is only SPOKEN still finds its episodes", async ({ page }) => {
+    const [labels, spoken] = await Promise.all([
+      apiJson<SearchResult>(page, searchApiPath(QUERY_SPOKEN_ONLY)),
+      apiJson<TranscriptResult>(page, transcriptApiPath(QUERY_SPOKEN_ONLY)),
+    ]);
+
+    // Fail loudly if the fixture stops being a transcript-only word, rather
+    // than letting the assertions below pass over an empty page.
+    expect(
+      spoken.hits.length,
+      `"${QUERY_SPOKEN_ONLY}" must be spoken somewhere in the catalogue`,
+    ).toBeGreaterThan(0);
+
+    await page.goto(searchPagePath(QUERY_SPOKEN_ONLY));
+
+    // 🚨 The regression this whole feature exists for: the page must NOT claim
+    // nothing matched while the word is audibly said in the catalogue.
+    await expect(page.getByText(copy.search.zeroTitle)).toHaveCount(0);
+
+    const labelIds = await renderedResultIds(page);
+    const spokenIds = await spokenResultIds(page);
+    expect(labelIds).toEqual(labels.hits.map((hit) => hit.episode.youtube_id));
+    expect(spokenIds.length).toBeGreaterThan(0);
+
+    // The spoken region holds only episodes the label search did NOT return -
+    // an episode appearing in both regions would be one result shown twice.
+    const apiSpokenOnly = spoken.hits
+      .map((hit) => hit.episode.youtube_id)
+      .filter((id) => !labelIds.includes(id));
+    expect(spokenIds).toEqual(apiSpokenOnly.slice(0, spokenIds.length));
+    for (const id of spokenIds) expect(labelIds).not.toContain(id);
+
+    // 🚨 Coverage is ~30% of the catalogue and runs from 99% on one channel to
+    // 0% on another, so the caveat is not optional decoration.
+    await expect(page.getByText(copy.search.spokenPartial)).toBeVisible();
+  });
+
+  test("7.3c a spoken match carries a timestamp that deep-links into the video", async ({
+    page,
+  }) => {
+    const spoken = await apiJson<TranscriptResult>(
+      page,
+      transcriptApiPath(QUERY_SPOKEN_ONLY),
+    );
+    const first = spoken.hits[0];
+    expect(first, "fixture must return at least one spoken match").toBeTruthy();
+    const match = first!.matches[0]!;
+
+    await page.goto(searchPagePath(QUERY_SPOKEN_ONLY));
+
+    // The timestamp IS the link - a passage without one is just a quote, and
+    // "where was this said" is the entire question this half of search answers.
+    const deepLink = page.locator(
+      `a[href="https://www.youtube.com/watch?v=${first!.episode.youtube_id}&t=${match.start_sec}"]`,
+    );
+    await expect(deepLink.first()).toBeVisible();
+    await expect(deepLink.first()).toContainText(copy.search.reasonSaidAt);
+
+    // 🔒 Caption text reaches the page carrying <mark> tags. It is rendered as
+    // element nodes, never injected as HTML, so the literal tag must not be
+    // visible as text anywhere on the page.
+    const bodyText = await page.locator("body").innerText();
+    expect(bodyText).not.toContain("<mark>");
+    expect(bodyText).not.toContain("</mark>");
   });
 
   test("7.4 a query with no matches renders the empty state", async ({ page }) => {

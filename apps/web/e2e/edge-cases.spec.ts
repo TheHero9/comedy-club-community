@@ -20,11 +20,17 @@
 import type { Schema } from "@ccc/api-types";
 import { MAX_API_LIMIT } from "@/components/browse/filter-model";
 import { copy } from "@/lib/copy";
+import {
+  RESULT_LIMIT,
+  SPOKEN_EPISODE_LIMIT,
+  TRANSCRIPT_SEGMENT_LIMIT,
+} from "@/lib/search-limits";
 
 import { apiJson, expect, expectSingleVisibleH1, test } from "./fixtures";
 
 type EpisodeList = Schema<"EpisodeListOut">;
 type SearchResult = Schema<"SearchOut">;
+type TranscriptSearchResult = Schema<"TranscriptSearchOut">;
 
 // ---------------------------------------------------------------------------
 // 13. Profile routes
@@ -223,15 +229,44 @@ test.describe("15. search edge cases", () => {
 
   test("15.3 the UI result count matches the API", async ({ page }) => {
     const query = "подкаст";
-    const api = await apiJson<SearchResult>(
-      page,
-      `/api/search?q=${encodeURIComponent(query)}&limit=20`,
-    );
-    expect(api.hits.length).toBeGreaterThan(0);
+    // 🚨 /search renders TWO regions from TWO endpoints - "which episodes are
+    // ABOUT this" and "where was this SAID". Each is counted against the
+    // endpoint that produced it; an unscoped count over both could be satisfied
+    // by the wrong region and would break whenever transcript coverage moved.
+    const [labels, spoken] = await Promise.all([
+      apiJson<SearchResult>(
+        page,
+        `/api/search?q=${encodeURIComponent(query)}&limit=${RESULT_LIMIT}`,
+      ),
+      apiJson<TranscriptSearchResult>(
+        page,
+        `/api/search/transcripts?q=${encodeURIComponent(query)}&limit=${TRANSCRIPT_SEGMENT_LIMIT}`,
+      ),
+    ]);
+    expect(labels.hits.length).toBeGreaterThan(0);
 
     await page.goto(`/search?q=${encodeURIComponent(query)}`);
 
-    await expect(page.locator('main a[href^="/e/"]')).toHaveCount(api.hits.length);
+    await expect(
+      page.getByTestId("results-labelled").locator('a[href^="/e/"]'),
+    ).toHaveCount(labels.hits.length);
+
+    // The spoken region holds exactly the transcript episodes the label search
+    // did NOT already return, capped at the page's own limit.
+    const labelIds = new Set(labels.hits.map((hit) => hit.episode.youtube_id));
+    const expectedSpoken = spoken.hits
+      .map((hit) => hit.episode.youtube_id)
+      .filter((id) => !labelIds.has(id));
+    const spokenRegion = page.getByTestId("results-spoken").locator('a[href^="/e/"]');
+    await expect(spokenRegion).toHaveCount(Math.min(expectedSpoken.length, SPOKEN_EPISODE_LIMIT));
+
+    // And no episode is shown twice across the two regions.
+    const shownTwice = (
+      await spokenRegion.evaluateAll((links) =>
+        links.map((link) => (link.getAttribute("href") ?? "").replace("/e/", "")),
+      )
+    ).filter((id) => labelIds.has(id));
+    expect(shownTwice).toEqual([]);
   });
 
   const HOSTILE_QUERIES: { name: string; q: string }[] = [

@@ -372,14 +372,76 @@ def search_transcripts(
 
 @router.get("/search/suggest", response=list[str])
 def suggest(request, q: str = Query(""), limit: int = Query(8, ge=1, le=20)):
-    """Lightweight title/topic completions for a search box."""
+    """Title completions for the search box, ranked by relevance.
+
+    ⚡ Served by Meilisearch, which matters more here than anywhere else on the
+    site: this endpoint fires on nearly every keystroke.
+
+    🇧🇬 The Postgres path is `ILIKE '%q%'` - a sequential scan of every episode
+    per keystroke, ordered by upload date rather than relevance, and with no
+    typo tolerance at all. On a site whose entire premise is typo-tolerant
+    Bulgarian search, the ONE surface where the user is still mid-word was the
+    one surface that demanded a perfect prefix. `девствна` suggested nothing.
+
+    Postgres remains the fallback so the box keeps working with Meilisearch
+    down - degraded suggestions beat none, and Enter always searches regardless.
+    """
     query = (q or "").strip()
-    if len(query) < 2:
+    # Same rule as the two search endpoints: a query that tokenizes to nothing
+    # is a placeholder search to Meilisearch, which would answer with the whole
+    # catalogue's titles.
+    if len(query) < 2 or not has_searchable_text(query):
         return []
 
-    titles = list(
+    if _meilisearch_available():
+        try:
+            titles = _meilisearch_suggest(query, limit)
+        except Exception:
+            logger.exception("Meilisearch suggest failed, falling back to Postgres")
+        else:
+            # ⚠️ An empty or stale index answers every keystroke with nothing,
+            # which is indistinguishable from "no such episode". Confirm against
+            # Postgres before believing it - same reasoning as `/search`, and it
+            # costs a query only when there was nothing to show anyway.
+            if titles:
+                return titles
+
+    return list(
         Episode.objects.filter(title__icontains=query)
         .order_by("-upload_date")
         .values_list("title", flat=True)[:limit]
     )
-    return titles
+
+
+def _meilisearch_suggest(query: str, limit: int) -> list[str]:
+    """Rank in Meilisearch, read the text from Postgres.
+
+    🚨 Meilisearch supplies the ORDER and nothing else. The title is re-read
+    from Postgres because Postgres is the source of truth and the index is
+    eventually consistent: a document whose episode was renamed or deleted keeps
+    answering with its old text until the next reindex, and a suggestion is a
+    string the user is about to search for. Offering a title that no longer
+    exists sends them straight to a zero-result page.
+
+    This is the same rule `_meilisearch_search` follows for the same reason -
+    it retrieves ids and re-reads every rendered field from `episode_list_queryset`.
+    """
+    from podcast.search.index import search as meili_search
+
+    # ⚡ Only the id is retrieved. A document is 31 fields including a
+    # description of up to 5,000 chars, and this endpoint renders one line.
+    result = meili_search(query, limit=limit, attributes=("id",))
+    if not result.get("available", True):
+        return []
+
+    hit_ids = [int(hit["id"]) for hit in result.get("hits", [])]
+    if not hit_ids:
+        return []
+
+    titles = dict(
+        Episode.objects.filter(id__in=hit_ids).values_list("id", "title")
+    )
+    # Meilisearch's order is the relevance ranking, so it is preserved here.
+    # Ids missing from Postgres are dropped rather than 500ing: an indexed but
+    # since-deleted episode is a stale document, not an error.
+    return [titles[episode_id] for episode_id in hit_ids if episode_id in titles]

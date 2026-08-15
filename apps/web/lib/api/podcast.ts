@@ -22,6 +22,9 @@ export type Comment = Schema<"CommentOut">;
 export type CommentList = Schema<"CommentListOut">;
 export type SearchResult = Schema<"SearchOut">;
 export type SearchHit = Schema<"SearchHitOut">;
+export type TranscriptSearchResult = Schema<"TranscriptSearchOut">;
+export type TranscriptHit = Schema<"TranscriptHitOut">;
+export type TranscriptMatch = Schema<"TranscriptMatchOut">;
 export type Leaderboard = Schema<"LeaderboardOut">;
 export type Me = Schema<"MeOut">;
 export type ViewerState = Schema<"ViewerStateOut">;
@@ -109,6 +112,26 @@ export function getLeaderboard(kind: string, params: QueryParams = {}) {
 /** Search is never cached - a stale search result is worse than a slow one. */
 export function search(params: QueryParams) {
   return api.get<SearchResult>("/api/search", { query: params, cache: "no-store" });
+}
+
+/**
+ * Where a phrase was SPOKEN, with timestamps.
+ *
+ * 🚨 This is the OTHER half of search and it must always be issued alongside
+ * `search()`, never instead of it. `/api/search` answers "which episodes are
+ * ABOUT this" from titles, descriptions and community labels; this answers
+ * "where was this SAID". Running only the first is why `баница` - an example
+ * query printed on the search page itself - reported zero results while 173
+ * passages across 33 episodes said the word out loud.
+ *
+ * ⚠️ Coverage is ~30% of the catalogue and heavily channel-dependent, so an
+ * episode absent from these results has NOT been ruled out. The UI must say so.
+ */
+export function searchTranscripts(params: QueryParams) {
+  return api.get<TranscriptSearchResult>("/api/search/transcripts", {
+    query: params,
+    cache: "no-store",
+  });
 }
 
 export function suggest(query: string) {

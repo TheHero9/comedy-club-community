@@ -282,7 +282,19 @@ export interface paths {
         };
         /**
          * Suggest
-         * @description Lightweight title/topic completions for a search box.
+         * @description Title completions for the search box, ranked by relevance.
+         *
+         *     ⚡ Served by Meilisearch, which matters more here than anywhere else on the
+         *     site: this endpoint fires on nearly every keystroke.
+         *
+         *     🇧🇬 The Postgres path is `ILIKE '%q%'` - a sequential scan of every episode
+         *     per keystroke, ordered by upload date rather than relevance, and with no
+         *     typo tolerance at all. On a site whose entire premise is typo-tolerant
+         *     Bulgarian search, the ONE surface where the user is still mid-word was the
+         *     one surface that demanded a perfect prefix. `девствна` suggested nothing.
+         *
+         *     Postgres remains the fallback so the box keeps working with Meilisearch
+         *     down - degraded suggestions beat none, and Enter always searches regardless.
          */
         get: operations["podcast_api_search_suggest"];
         put?: never;

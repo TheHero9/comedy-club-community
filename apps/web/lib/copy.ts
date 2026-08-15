@@ -84,9 +84,10 @@ export const copy = {
   },
 
   search: {
-    trigger: "Търси момент, тема или гост",
+    trigger: "Търси момент, тема или реплика",
     title: "Търси нещо, което се е случило",
-    subtitle: "Не само заглавия. Търсенето минава през теми, моменти и гости.",
+    subtitle:
+      "Не само заглавия. Търсенето минава през теми, моменти, гости и това, което наистина е казано в епизода.",
     popularTopics: "ПОПУЛЯРНИ ТЕМИ",
     suggestions: "ПРЕДЛОЖЕНИЯ",
     inputLabel: "Търсене в епизодите",
@@ -112,6 +113,31 @@ export const copy = {
       "квантова физика",
     ],
     backendNote: (backend: string) => `via ${backend}`,
+
+    // --- Spoken-word (transcript) results ------------------------------------
+    /** Row badge on a passage. The timestamp is a deep link into the video. */
+    reasonSaidAt: "КАЗАНО В",
+    /** Heading above episodes that matched ONLY because the words were spoken. */
+    spokenHeading: "Казано в епизода",
+    spokenSubtitle:
+      "Тези епизоди не споменават думата в заглавие или тема - но тя се чува в записа.",
+    spokenInCount: (segments: number, episodes: number) =>
+      `${segments === 1 ? "1 реплика" : `${segments} реплики`} в ${
+        episodes === 1 ? "1 епизод" : `${episodes} епизода`
+      }`,
+    /** More matches inside one episode than the card shows. */
+    spokenMore: (n: number) => `+ още ${n}`,
+    /**
+     * 🚨 Never dropped. Only ~30% of the catalogue has captions and coverage is
+     * wildly channel-dependent (BFF 99%, Клюки 1%, Спорт 0%), so a missing
+     * episode has NOT been ruled out. Presenting this search as exhaustive
+     * would be the single most misleading thing the site could claim.
+     */
+    spokenPartial:
+      "Търсенето в записа покрива около една трета от епизодите, така че липсващ епизод не е изключен.",
+    /** Meilisearch is down; saying nothing would read as "never said". */
+    spokenUnavailable:
+      "Търсенето в записа не е достъпно в момента. Показани са само съвпадения по заглавие, тема и момент.",
   },
 
   channels: {

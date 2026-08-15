@@ -6,8 +6,14 @@ import { SearchTrigger } from "@/components/search/SearchTrigger";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Page } from "@/components/shell/Page";
 import { buttonVariants, LinkButton } from "@/components/ui/button";
-import { listTopics, search } from "@/lib/api/podcast";
+import type { SearchHit, TranscriptMatch } from "@/lib/api/podcast";
+import { listTopics, search, searchTranscripts } from "@/lib/api/podcast";
 import { copy } from "@/lib/copy";
+import {
+  RESULT_LIMIT,
+  SPOKEN_EPISODE_LIMIT,
+  TRANSCRIPT_SEGMENT_LIMIT,
+} from "@/lib/search-limits";
 import { stripControlCharacters } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 
@@ -25,8 +31,8 @@ export const dynamic = "force-dynamic";
  */
 const EXAMPLE_QUERIES = copy.search.examples;
 
-const RESULT_LIMIT = 20;
 const POPULAR_TOPIC_LIMIT = 8;
+
 
 /**
  * 🚨 Control characters are stripped before the query goes anywhere.
@@ -104,14 +110,73 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
     );
   }
 
-  const results = await search({ q: query, limit: RESULT_LIMIT });
+  /**
+   * ⚡ Both halves of search, on one wait.
+   *
+   * These are independent questions answered by two indexes ("which episodes are
+   * ABOUT this" and "where was this SAID"), so awaiting them in sequence would
+   * have doubled the page's server time for no reason. Meilisearch answers each
+   * in ~1-13ms; the round trip dominates, and there is now only one of those.
+   *
+   * 🚨 The transcript half is allowed to fail without taking the page with it.
+   * Label matches are still a useful answer, and a 4xx/5xx thrown inside a
+   * Server Component is an unhandled throw and therefore a 500 page - not a
+   * degraded search. Meilisearch being down already comes back as
+   * `available: false`; this catch covers the rest.
+   */
+  const [results, spoken] = await Promise.all([
+    search({ q: query, limit: RESULT_LIMIT }),
+    searchTranscripts({ q: query, limit: TRANSCRIPT_SEGMENT_LIMIT }).catch(() => null),
+  ]);
+
+  /**
+   * Passages keyed by episode, so a label match and a spoken match for the same
+   * episode land on ONE card instead of two competing ones.
+   *
+   * ℹ️ Passed whole. The card slices to what it renders, and because it is a
+   * Server Component its props never cross the wire - only its OUTPUT does, so
+   * slicing here changes the response by zero bytes (verified: byte-identical).
+   * What the page costs is the passages it actually RENDERS; that is tuned with
+   * MAX_PASSAGES and SPOKEN_EPISODE_LIMIT, not here.
+   */
+  const passagesByEpisode = new Map<string, TranscriptMatch[]>(
+    (spoken?.hits ?? []).map((hit) => [hit.episode.youtube_id, hit.matches]),
+  );
+
+  const labelled = results.hits;
+  const labelledIds = new Set(labelled.map((hit) => hit.episode.youtube_id));
+
+  /**
+   * 🎯 The episodes this feature exists for: nothing in the title, description
+   * or community labels matches, but the words are spoken in the recording.
+   * `баница` - an example query printed on this very page - matched zero
+   * episodes before this section existed, while 173 passages said it out loud.
+   *
+   * They are shaped into a SearchHit with no label reasons because that is
+   * exactly what they are: a match with no label behind it.
+   */
+  const spokenOnly: SearchHit[] = (spoken?.hits ?? [])
+    .filter((hit) => !labelledIds.has(hit.episode.youtube_id))
+    .slice(0, SPOKEN_EPISODE_LIMIT)
+    .map((hit) => ({
+      episode: hit.episode,
+      matched_topics: [],
+      matched_moments: [],
+    }));
+
+  const spokenSegmentCount = (spoken?.hits ?? []).reduce(
+    (sum, hit) => sum + hit.matches.length,
+    0,
+  );
+  const transcriptsDown = spoken != null && !spoken.available;
+  const nothingAtAll = results.total === 0 && spokenOnly.length === 0;
 
   // 🚨 Only claimed when it is actually true. "The word appears in no title" is
   // the strongest line on the page, and printing it above a result whose title
   // contains the word would discredit every other claim the site makes.
   const inNoTitle =
-    results.hits.length > 0 &&
-    results.hits.every(
+    labelled.length > 0 &&
+    labelled.every(
       (hit) =>
         !hit.episode.title
           .toLocaleLowerCase("bg")
@@ -122,7 +187,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
     <Page>
       <SearchTrigger size="md" initialQuery={query} />
 
-      {results.total === 0 ? (
+      {nothingAtAll ? (
         <EmptyState
           className="mt-5"
           variant="card"
@@ -159,15 +224,72 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             </p>
           ) : null}
 
-          <div className="mt-4 flex flex-col gap-3">
-            {results.hits.map((hit) => (
-              <SearchResultCard
-                key={hit.episode.youtube_id}
-                hit={hit}
-                query={query}
-              />
-            ))}
-          </div>
+          {spokenSegmentCount > 0 ? (
+            <p className="mt-1 text-small text-subtle-foreground">
+              {copy.search.spokenInCount(
+                spoken?.total_segments ?? spokenSegmentCount,
+                (spoken?.hits ?? []).length,
+              )}
+            </p>
+          ) : null}
+
+          {transcriptsDown ? (
+            <p className="mt-2 text-small text-subtle-foreground">
+              {copy.search.spokenUnavailable}
+            </p>
+          ) : null}
+
+          {/*
+            The two regions are addressable separately because they answer to
+            two different endpoints. The e2e suite asserts each against the API
+            that produced it; one merged list would only be checkable loosely.
+          */}
+          {labelled.length > 0 ? (
+            <div data-testid="results-labelled" className="mt-4 flex flex-col gap-3">
+              {labelled.map((hit) => (
+                <SearchResultCard
+                  key={hit.episode.youtube_id}
+                  hit={hit}
+                  query={query}
+                  passages={passagesByEpisode.get(hit.episode.youtube_id)}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {spokenOnly.length > 0 ? (
+            <>
+              <div className="mt-7 border-t border-border pt-5">
+                <h2 className="text-h3">{copy.search.spokenHeading}</h2>
+                <p className="mt-1.5 text-small text-subtle-foreground">
+                  {copy.search.spokenSubtitle}
+                </p>
+              </div>
+              <div data-testid="results-spoken" className="mt-4 flex flex-col gap-3">
+                {spokenOnly.map((hit) => (
+                  <SearchResultCard
+                    key={hit.episode.youtube_id}
+                    hit={hit}
+                    query={query}
+                    passages={passagesByEpisode.get(hit.episode.youtube_id)}
+                    spokenOnly
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {/*
+            🚨 Printed whenever spoken results are on screen, never conditionally
+            softened. Captions exist for ~30% of the catalogue and coverage runs
+            from 99% on one channel to 0% on another, so "not in the results" is
+            not evidence of "never said".
+          */}
+          {spokenSegmentCount > 0 ? (
+            <p className="mt-5 text-small text-faint-foreground">
+              {copy.search.spokenPartial}
+            </p>
+          ) : null}
         </>
       )}
     </Page>

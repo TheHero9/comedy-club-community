@@ -78,7 +78,12 @@
     "web:search": {
       "payloadKb": 120,
       "medianMs": 300,
-      "why": "32.7 KB for a narrow query. Sized like a listing page rather than like the sample, because a broad Bulgarian query fills the page. 300 ms covers the API search round trip on top of the render."
+      "why": "58.4 KB for the narrow sample query, which fills only part of the page. Kept at 120 KB so a narrow query cannot quietly bloat; the FULL page is budgeted separately as web:search-broad, because this key was never measuring a full one. 300 ms covers two parallel API round trips on top of the render."
+    },
+    "web:search-broad": {
+      "payloadKb": 180,
+      "medianMs": 300,
+      "why": "158.5 KB measured for a broad Bulgarian query, which fills the page: 20 label-matched cards plus 6 transcript-only cards. A card costs ~5 KB of HTML plus the RSC flight tree that duplicates it, so card COUNT dominates this route - passage text is secondary and is already trimmed (20-word crop, one passage on a label card). Raising this means rendering more cards, which is the point at which /search needs pagination rather than a bigger budget. 180 KB is the measured worst case plus headroom, and 26 cards is the page maximum, so it cannot drift far above this on its own."
     },
     "web:status": {
       "payloadKb": 120,

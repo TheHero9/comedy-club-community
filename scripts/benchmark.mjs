@@ -70,6 +70,17 @@ export const BUDGETS_PATH = path.join(REPO_ROOT, "scripts", "perf-budgets.json")
  */
 export const SEARCH_QUERY = "Каспаров";
 
+/**
+ * A deliberately BROAD query, benchmarked alongside the narrow one.
+ *
+ * 🚨 `Каспаров` matches one episode, so it measures an almost empty results
+ * page. Sampling only that hid a real regression: wiring transcript results in
+ * took a full page from ~101 KB to ~158 KB while this benchmark still reported
+ * a comfortable 58 KB, because the sample query never filled the page. A budget
+ * is only worth what its worst sampled case is worth.
+ */
+export const SEARCH_QUERY_BROAD = "ергена";
+
 const DEFAULTS = {
   apiUrl: process.env.BENCH_API_URL ?? "http://localhost:8000",
   webUrl: process.env.BENCH_WEB_URL ?? "http://localhost:3200",
@@ -264,6 +275,13 @@ export function buildRoutes({ apiUrl, webUrl, channels, episodeId }) {
       tier: "web",
       label: `/search?q=${SEARCH_QUERY}`,
       url: buildUrl(webUrl, ["search"], { q: SEARCH_QUERY }),
+    },
+    {
+      id: "web:search-broad",
+      budgetKey: "web:search-broad",
+      tier: "web",
+      label: `/search?q=${SEARCH_QUERY_BROAD}`,
+      url: buildUrl(webUrl, ["search"], { q: SEARCH_QUERY_BROAD }),
     },
     { id: "web:status", budgetKey: "web:status", tier: "web", label: "/status", url: buildUrl(webUrl, ["status"]) },
   );
