@@ -215,6 +215,10 @@ const en = {
     elsewhereHeading: "Everywhere else",
     elsewhereSubtitle:
       "Matched on a topic, a moment, a guest or the channel rather than the title.",
+    /** Sets expectations before anyone types. Coverage is real but partial. */
+    scopeNote:
+      "Search runs over titles, topics, moments and guests - and over the spoken words in most episodes, though not all of them.",
+    popularTopicsToggle: "Popular topics",
 
     // --- Spoken-word (transcript) results ------------------------------------
     /** Row badge on a passage. The timestamp is a deep link into the video. */
@@ -258,6 +262,8 @@ const en = {
 
   channel: {
     gridTitle: "Ratings grid",
+    expand: "Fit to screen",
+    collapseGrid: "Back to normal size",
     hintMobile: "Rows are episodes, columns are years.",
     hintDesktop: "Rows are years, columns are the position within the year.",
     publicScore: "Public",
@@ -377,6 +383,11 @@ const en = {
     topicsEmptyCta: "Suggest a topic",
     allRatings: "See every rating",
     allRatingsHint: "Opens the channel's full ratings grid.",
+    /** The moments section explains itself; an empty list otherwise says nothing. */
+    momentsHowTo:
+      "A moment is a timestamp plus a few words, added by the community. Tapping one opens the video at that second.",
+    yourScore2: "Yours",
+    communityScore: "Community",
   },
 
   rating: {
@@ -487,7 +498,16 @@ const en = {
     tagsEmptyCta: "How it works",
     privateTag: "Private label",
     /** Shown instead of a handle while the YouTube handle is unknown. */
-    noHandle: "No YouTube handle linked yet",
+    noHandle: "Add a handle",
+    unnamed: "Unnamed",
+    editProfile: "Edit profile",
+    nameLabel: "Display name",
+    handleLabel: "Handle",
+    handleHint: "Letters, digits and . _ - Between 3 and 30 characters.",
+    save: "Save",
+    cancel: "Cancel",
+    savedToast: "Profile saved",
+    handleTakenToast: "That handle is already taken",
   },
 
   leaderboard: {
@@ -698,6 +718,9 @@ const bg: Copy = {
     elsewhereHeading: "Навсякъде другаде",
     elsewhereSubtitle:
       "Съвпадение по тема, момент, гост или канал, а не по заглавие.",
+    scopeNote:
+      "Търсенето минава през заглавия, теми, моменти и гости - и през казаното в повечето епизоди, макар и не във всички.",
+    popularTopicsToggle: "Популярни теми",
 
     reasonSaidAt: "КАЗАНО В",
     spokenHeading: "Казано в епизода",
@@ -730,6 +753,8 @@ const bg: Copy = {
 
   channel: {
     gridTitle: "Решетка на оценките",
+    expand: "Побери на екрана",
+    collapseGrid: "Обратно към нормален размер",
     hintMobile: "Редовете са епизоди, колоните са години.",
     hintDesktop: "Редовете са години, колоните са позицията в годината.",
     publicScore: "Public",
@@ -840,6 +865,10 @@ const bg: Copy = {
     topicsEmptyCta: "Предложи тема",
     allRatings: "Виж всички оценки",
     allRatingsHint: "Отваря пълната решетка на оценките за канала.",
+    momentsHowTo:
+      "Моментът е час плюс няколко думи, добавени от общността. Натискането отваря видеото на тази секунда.",
+    yourScore2: "Твоята",
+    communityScore: "Общността",
   },
 
   rating: {
@@ -948,7 +977,16 @@ const bg: Copy = {
     tagsEmptyBody: "Твои собствени етикети за епизоди. Никой друг не ги вижда.",
     tagsEmptyCta: "Как работи",
     privateTag: "Личен етикет",
-    noHandle: "Още няма свързан YouTube handle",
+    noHandle: "Добави handle",
+    unnamed: "Без име",
+    editProfile: "Редактирай профила",
+    nameLabel: "Име за показване",
+    handleLabel: "Handle",
+    handleHint: "Букви, цифри и . _ - Между 3 и 30 знака.",
+    save: "Запази",
+    cancel: "Отказ",
+    savedToast: "Профилът е запазен",
+    handleTakenToast: "Този handle вече е зает",
   },
 
   leaderboard: {

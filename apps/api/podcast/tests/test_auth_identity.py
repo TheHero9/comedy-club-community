@@ -62,13 +62,23 @@ class TestHumanize:
     def test_skips_an_external_id_and_falls_through(self):
         assert humanize("user_33Kq", "Иван Петров") == "Иван Петров"
 
-    def test_reduces_an_email_to_its_local_part(self):
-        # 🔒 The full address must never be the fallback: `display_name` is
-        # rendered publicly under every comment.
-        assert humanize("", "", "ivan.petrov@gmail.com") == "ivan.petrov"
+    def test_never_uses_an_email_at_all(self):
+        """🔒 Reversed on 2026-08-15, and the reversal is the point.
+
+        It used to reduce an address to its local part, on the theory that
+        "ivan.petrov" is at least recognisable. In practice Clerk returned no
+        name, and the owner's profile greeted them with what read as their own
+        email. The same value is `author_name` on every public comment, so that
+        fallback would have published the local part of real addresses
+        site-wide.
+        """
+        assert humanize("", "", "ivan.petrov@gmail.com") == ""
+        assert humanize("ivan@example.com", "Иван") == "Иван"
 
     def test_returns_empty_rather_than_an_id_when_nothing_is_usable(self):
         assert humanize("user_33Kq", "", None) == ""
+        # Empty is the honest answer: we do not know this person's name. The UI
+        # renders a neutral placeholder and invites them to set one.
 
     def test_truncates_to_the_column_width(self):
         # An unbounded provider value against a CharField(100) is a psycopg

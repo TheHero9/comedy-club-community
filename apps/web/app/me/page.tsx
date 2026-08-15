@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 
 import { EpisodeRow } from "@/components/episode/EpisodeCard";
 import { InstallAppGuide } from "@/components/profile/InstallAppGuide";
+import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Page, StatTile } from "@/components/shell/Page";
@@ -34,6 +36,7 @@ import { useCopy } from "@/components/i18n/LocaleProvider";
 
 export default function ProfilePage() {
   const copy = useCopy();
+  const [editing, setEditing] = useState(false);
   // `key` indexes into the /api/me payload, so it is typed against Me rather
   // than left as a widened string - otherwise `me[link.key]` is an implicit any.
   const LINKS: ReadonlyArray<{
@@ -89,30 +92,40 @@ export default function ProfilePage() {
         <div className="min-w-0">
           <div className="flex items-center gap-3.5">
             <PersonAvatar
-              name={me?.display_name || me?.username || copy.nav.profile}
+              name={me?.display_name || copy.profile.unnamed}
+              imageUrl={me?.avatar_url}
               size="lg"
               neutral
             />
             <div className="min-w-0 flex-1">
               <h1 className="text-h1">
-                {me ? me.display_name || me.username : <Skeleton className="h-7 w-40" />}
+                {me ? (
+                  // 🚨 Never `me.username` as a fallback: for a Clerk account
+                  // that IS the `sub`. An unset name says so plainly instead.
+                  me.display_name || copy.profile.unnamed
+                ) : (
+                  <Skeleton className="h-7 w-40" />
+                )}
               </h1>
               {me ? (
                 <div className="mt-1.5 flex items-center gap-2">
                   {/*
-                    🚨 `handle` is the user's YOUTUBE handle and is NULL until
-                    someone links it. It is NOT the Django username and must
-                    never fall back to it: for anyone signed in with Google that
-                    username IS the Clerk `sub`, so `@{me.username}` printed
-                    `@user_33Kq...` directly under a heading showing the exact
-                    same string. Two identical junk ids is what the owner saw on
-                    their first sign-in.
+                    🚨 NEVER falls back to `me.username`: for anyone signed in
+                    with Google that username IS the Clerk `sub`, so
+                    `@{me.username}` printed `@user_33Kq...` directly under a
+                    heading showing the exact same string.
 
-                    With no handle we say so, rather than inventing one.
+                    With no handle this is a prompt to set one, not an invented
+                    value. It is a self-chosen nickname since 2026-08-15 and is
+                    NOT proof of a YouTube identity.
                   */}
-                  <span className="font-mono text-[12.5px] text-subtle-foreground">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="font-mono text-[12.5px] text-subtle-foreground outline-none hover:text-foreground"
+                  >
                     {me.handle ? `@${me.handle}` : copy.profile.noHandle}
-                  </span>
+                  </button>
                   {me.memberships.some((membership) => membership.is_verified) ? (
                     <span className="inline-flex h-[22px] items-center rounded-pill bg-elevated px-2 text-[11px] font-semibold text-gold">
                       {copy.profile.memberBadge}
@@ -158,16 +171,14 @@ export default function ProfilePage() {
             ))}
           </nav>
 
-          {/* Sign-out exists only in Clerk mode; the dev identity is a build
-              setting, not a session, so there is nothing to sign out of. */}
           {canSignIn ? (
             <Button
               variant="outline"
               size="lg"
-              className="mt-4"
-              onClick={signOut}
+              className="mt-4 w-full md:w-auto"
+              onClick={() => setEditing(true)}
             >
-              {copy.auth.signOut}
+              {copy.profile.editProfile}
             </Button>
           ) : null}
         </div>
@@ -191,6 +202,29 @@ export default function ProfilePage() {
       <div className="mt-8">
         <InstallAppGuide />
       </div>
+
+      {/* 🚨 Sign-out lives at the very BOTTOM, past everything else.
+          It used to sit directly under the profile's navigation rows, where it
+          read as a fifth nav item - the most destructive action on the page,
+          styled and placed like "My ratings". Down here it is deliberately out
+          of the flow and hard to hit by accident.
+
+          Clerk mode only: the dev identity is a build setting, not a session,
+          so there is nothing to sign out of. */}
+      {canSignIn ? (
+        <div className="mt-10 border-t border-border pt-5">
+          <Button
+            variant="ghost"
+            size="md"
+            className="text-subtle-foreground"
+            onClick={signOut}
+          >
+            {copy.auth.signOut}
+          </Button>
+        </div>
+      ) : null}
+
+      <ProfileEditor open={editing} onOpenChange={setEditing} me={me} />
     </Page>
   );
 }

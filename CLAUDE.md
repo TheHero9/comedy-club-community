@@ -255,6 +255,11 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 
 - 🚨 **A channel's episode count spans THREE tabs, not one.** `/videos` alone silently loses past live streams, which for a podcast **are episodes**. On the test channel: 72 videos + 2 streams + 15 shorts = the 89 on the channel badge.
 - 🚨 **Ingest `videos` + `streams` ONLY. Shorts are NEVER ingested** (owner decision, 2026-08-08). They are promo clips, not episodes. `DEFAULT_TABS = ("videos", "streams")` is the permanent setting. If this is ever reversed, it costs a full re-backfill.
+- 🚨 **Excluding shorts is NOT enough - promo clips live on the `videos` tab too.** A manual pass over all 1,962 rows on 2026-08-15 removed **100** stand-up excerpts, trailers, show announcements and channel-update clips that had been ingested as episodes. Nothing in the metadata separates them from a real episode: duration is a hint, not a rule (a 1:45 news bulletin is real, an 11:55 "last day in the old studio" is not), so this is a human judgement and always will be.
+  - ✅ `manage.py export_review_page` writes a single self-contained HTML file - every episode as a clickable card grouped by channel, filters by kind/duration/text, marks kept in `localStorage` so a 1,962-item pass survives a closed tab. It **marks**; it never deletes.
+  - ✅ `manage.py remove_episodes <file>` deletes, from Postgres and BOTH Meilisearch indexes, dumping every affected row to JSON first. It prints the cascade before acting - the 100 episodes also took 119 transcript segments, 51 topic links and 15 now-orphaned topics.
+  - 🚨 **A deletion does not stick while a sync is scheduled.** Ingestion is `update_or_create(youtube_id=...)`, so the nightly `sync-channels-daily` would have recreated all 100 the next morning and silently undone the pass. That entry is now **unscheduled** in `config/celery.py`; re-enabling it without an exclusion list first WILL resurrect them. New episodes are pulled deliberately with `manage.py sync_channels`.
+  - ✅ The purged id list is committed at `podcast/data/removed-episodes.txt` (not `tmp/`), so it ships in the Docker image and the same command runs identically in prod.
 - 🚨 **Members-only videos give up full metadata with no login.** Pass `ignore_no_formats_error: True` to yt-dlp. That error is about playable *formats*, not metadata. Coverage went 65/74 → **74/74, zero errors**. Paywalled episodes must be listed, searched, rated and labelled like any other. We never touch the media.
 - ✅ **Thumbnails need no API call and NO upload.** Build from the video id:
   - `https://img.youtube.com/vi/{VIDEO_ID}/maxresdefault.jpg` (1280x720, best)
@@ -287,11 +292,11 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 
 | Handle | Channel ID | Episodes | Status |
 | ------ | ---------- | -------- | ------ |
-| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | 75 (74 at backfill + 1 via daily sync 2026-08-11) | ✅ Metadata complete |
-| `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | 1,318 (979 videos + 339 streams) | ✅ Metadata complete (degraded twice - 08-09 backfill, 08-13 sync incident - repaired both times) |
+| `@ivankirkov1` | `UCBy9yfnAqjC1gofLFJ8kMlw` | **71** (was 75; 4 removed 08-15) | ✅ Metadata complete |
+| `@comedyclubpodcast` | `UCEf1BL_OqYKu2-CVuuMoE2Q` | **1,225** (was 1,318; 93 removed 08-15) | ✅ Metadata complete (degraded twice - 08-09 backfill, 08-13 sync incident - repaired both times) |
 | `@comedyclubsport7786` | `UCqe-KdhynYVaIC5YA1Rl4IA` | 47 (47 videos, no streams/shorts tabs) | ✅ Metadata complete; ⏳ transcripts pending |
 | `@КомедиКлубКлюкиПодкаст` | `UCi6J4WBZMHtZ2YIAqfDyoww` | 139 (138 videos + 1 stream) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
-| `@ComedyClubNews` | `UCQ-cZDkcZUYG5Hb9IeHz4Dw` | 245 (236 videos + 9 streams) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
+| `@ComedyClubNews` | `UCQ-cZDkcZUYG5Hb9IeHz4Dw` | **243** (was 246; 3 removed 08-15) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
 | `@BFFPepiQ` | `UClo9PMxg3fLWOAMBE6ggl1w` | 80 (79 videos + 1 stream) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
 | `@delo404podcast` | `UCu3iYvciVyiwRKysLHA_wFg` | 57 (57 videos; 17 shorts excluded) | ✅ Metadata complete (API-repaired 08-13); ⏳ transcripts pending |
 
@@ -360,6 +365,9 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
   - 📏 Page sizes live in `apps/web/lib/search-limits.ts`, imported by the page AND the e2e specs. Never restate one in a test.
 - 🚨 **`/api/search/suggest` uses Meilisearch for the ORDER and Postgres for the TEXT.** It fires on nearly every keystroke, so the old `title__icontains` was a sequential scan per keystroke with no typo tolerance (`девствна` suggested nothing). But titles are re-read from Postgres by id, exactly like `_meilisearch_search` does: the index is eventually consistent, and suggesting a renamed episode's stale title sends the user to a zero-result page. Postgres stays the fallback when the index is down or empty.
 - ✅ Meilisearch index updates happen in **Celery tasks**, never inline in a request.
+- 🚨 **`ensure_index` must set `_settings_applied` with a BARE assignment, never `with _settings_lock`.** `ensure_index_once` calls it while already holding that non-reentrant lock, so taking it again self-deadlocks on the process's first index write. The episodes index hit this on 2026-08-14; **the transcript index was a copy that never got the fix and hung `remove_episodes` on 2026-08-15**. Both modules now carry the same comment - if a third index module is ever added, copy the comment with it.
+  - 🔍 **The symptom lies about where the fault is.** The Meilisearch task itself completes in ~9ms and the server stays perfectly healthy, so the queue is empty, `/health` is green, and only the Python client is frozen. It reads as "Meilisearch is slow" or "the network hung". Check `Get-CimInstance Win32_Process` for a live process against an idle index before blaming the search server.
+- ⚠️ **The per-episode index helpers are for the incremental path; do not loop them over a batch.** `remove_episode` / `remove_episode_segments` are one HTTP round trip each, so 100 episodes is 200 requests and long enough to look like a hang. Delete a whole id list in one `delete_documents([...])` call, and segments with one `delete_documents(filter="episode_id IN [...]")`. Still **by filter, never by computed id** - segment ids depend on the window size.
 - ✅ **Postgres is the source of truth.** A wiped Meilisearch index must be fully rebuildable from Postgres with one command (`manage.py reindex`).
 - ✅ Searchable document = episode title + description + channel name + topic labels + moment labels + participant names.
 - 🇧🇬 **Bulgarian content.** Verify Cyrillic tokenization and typo tolerance with real Bulgarian queries, not English test data. Never lowercase/slugify Cyrillic in a way that destroys it (`slugify` needs `allow_unicode=True` where slugs must stay readable).

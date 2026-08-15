@@ -114,7 +114,7 @@ class TestHandleUpdate:
             )
             assert response.status_code == 200
 
-    @pytest.mark.parametrize("bad", ["ab", "ivan petrov", "iv@n", "_ivan", "iva\x00n"])
+    @pytest.mark.parametrize("bad", ["ab", "ivan petrov", "iv@n", "_ivan"])
     def test_an_invalid_handle_is_a_422_with_a_reason(self, client, alice, bad):
         response = client.patch(
             "/api/me",
@@ -151,3 +151,18 @@ class TestNoEmailLeak:
         name = response.json()["display_name"]
         assert "@" not in name
         assert "ivan.petrov" not in name
+
+    def test_a_nul_byte_is_stopped_before_this_endpoint(self, client, alice):
+        """400, not 422, and that is correct.
+
+        `RejectNullBytesMiddleware` rejects U+0000 for the whole NinjaAPI, so it
+        never reaches the handle validator. Asserting 422 here would be
+        asserting that the outer defence had been removed.
+        """
+        response = client.patch(
+            "/api/me",
+            data={"handle": "iva" + chr(0) + "n"},
+            content_type="application/json",
+            **auth_header("alice"),
+        )
+        assert response.status_code == 400

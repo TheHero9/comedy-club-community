@@ -43,6 +43,20 @@ interface PersonAvatarProps {
   size?: keyof typeof SIZES;
   /** Neutral surface instead of a palette colour, for the signed-in user. */
   neutral?: boolean;
+  /**
+   * A real picture to show instead of the initials.
+   *
+   * 🚨 The signed-in user HAS one - Clerk gives us `image_url` from Google and
+   * we store it on `UserProfile.avatar_url` - and the profile page ignored it
+   * entirely, so people were greeted by two letters on a grey tile while their
+   * own photo sat unused in the database.
+   *
+   * A plain `<img>`, deliberately: see the note above. The URL comes from an
+   * identity provider and can move hosts, and `next/image` throws a hard error
+   * for a host missing from `remotePatterns` - which would take down the whole
+   * profile page rather than degrade one avatar.
+   */
+  imageUrl?: string | null;
   className?: string;
 }
 
@@ -51,6 +65,7 @@ export function PersonAvatar({
   slug,
   size = "md",
   neutral = false,
+  imageUrl,
   className,
 }: PersonAvatarProps) {
   const { box, textClass } = SIZES[size];
@@ -67,9 +82,23 @@ export function PersonAvatar({
         className,
       )}
     >
+      {/* Initials sit BEHIND the image rather than instead of it, so a URL
+          that stops resolving degrades to the tile with no client JS and no
+          layout shift - the same trick ChannelAvatar uses for Google's opaque
+          avatar hashes, which do 404 between syncs. */}
       <span aria-hidden className={cn("font-display font-bold", textClass)}>
         {initials(name)}
       </span>
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageUrl}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          className="absolute inset-0 size-full object-cover"
+        />
+      ) : null}
       <span className="sr-only">{name}</span>
     </span>
   );

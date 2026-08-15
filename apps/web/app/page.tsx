@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { ChevronRight, Star } from "lucide-react";
 
-import { LinkPending } from "@/components/shared/LinkPending";
 import { SearchTrigger } from "@/components/search/SearchTrigger";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import { Page, SectionHeading } from "@/components/shell/Page";
-import { LinkButton } from "@/components/ui/button";
 import {
   getLeaderboard,
   LEADERBOARD_KINDS,
@@ -62,8 +60,6 @@ export default async function HomePage() {
 
   const totalEpisodes = catalogue.meta.total;
 
-  /** The examples list, aliased so the copy-key scanner can resolve it. */
-  const exampleQueries = copy.search.examples;
 
   /**
    * Channel avatars for the episode lists below, joined here rather than
@@ -93,23 +89,10 @@ export default async function HomePage() {
 
       <SearchTrigger className="mt-4.5 max-w-[560px]" />
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        {exampleQueries.map((example) => (
-          <LinkButton
-            key={example}
-            href={`/search?q=${encodeURIComponent(example)}`}
-            // See the note in app/search/page.tsx: /search is force-dynamic and
-            // a prefetch of it is a real search on the server.
-            prefetch={false}
-            variant="outline"
-            size="sm"
-            className="font-normal text-muted-foreground"
-          >
-            {example}
-            <LinkPending />
-          </LinkButton>
-        ))}
-      </div>
+      {/* 🚨 The four example-query chips used to sit here and are gone
+          (owner call, 2026-08-15). This page is now the search page, and a row
+          of pre-baked queries under the field competes with the field itself -
+          it reads as "pick one of these" rather than "type anything". */}
 
       {topRated.items.length > 0 ? (
         <section className="mt-9">

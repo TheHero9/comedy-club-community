@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { Logo } from "@/components/shell/Logo";
-import { SearchOverlay } from "@/components/shell/SearchOverlay";
 import { SettingsSheet } from "@/components/shell/SettingsSheet";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,6 @@ import { cn } from "@/lib/utils";
 export function AppHeader() {
   const copy = useCopy();
   const pathname = usePathname();
-  const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -76,15 +74,13 @@ export function AppHeader() {
           })}
         </nav>
 
-        {/* Desktop search trigger. Opens the overlay, never navigates. */}
-        <button
-          type="button"
-          onClick={() => setSearchOpen(true)}
-          className="hidden h-10 max-w-[400px] flex-1 items-center gap-2.5 rounded-lg border border-border-2 bg-card px-3.5 text-left text-[15px] text-subtle-foreground transition-colors duration-120 hover:border-border-3 md:flex"
-        >
-          <Search className="size-[17px] shrink-0" aria-hidden strokeWidth={2.2} />
-          <span className="flex-1 truncate">{copy.search.trigger}</span>
-        </button>
+        {/* 🚨 The header search field and the mobile search button are both
+            gone (owner call, 2026-08-15): search was reachable from three
+            places at once - here, the home page hero, and /search - and the
+            header copy was the one nobody used. `/search` is still in the
+            bottom nav on mobile and the footer on desktop, and the home page
+            IS the search page, so nothing became unreachable. */}
+        <span className="flex-1" />
 
         <div className="ml-auto flex items-center gap-2">
           {/* Theme moved in here with language: a bare sun/moon icon was the
@@ -100,17 +96,6 @@ export function AppHeader() {
             <Settings className="size-[17px]" aria-hidden strokeWidth={2.2} />
           </Button>
 
-          <Button
-            variant="elevated"
-            size="icon"
-            shape="rounded"
-            aria-label={copy.nav.openSearch}
-            onClick={() => setSearchOpen(true)}
-            className="md:hidden"
-          >
-            <Search className="size-[18px]" aria-hidden strokeWidth={2.2} />
-          </Button>
-
           <Link
             href="/me"
             aria-label={copy.nav.profile}
@@ -121,7 +106,6 @@ export function AppHeader() {
         </div>
       </header>
 
-      <SearchOverlay open={searchOpen} onOpenChange={setSearchOpen} />
       <SettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );

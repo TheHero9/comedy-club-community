@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import type { Metadata } from "next";
 
 import { SearchResultCard } from "@/components/search/SearchResultCard";
@@ -126,11 +127,6 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
 
   if (query.length === 0) {
     const topics = await listTopics({ limit: POPULAR_TOPIC_LIMIT });
-    /**
-     * Aliased before use rather than chained inline: `tests/copy.spec.ts` reads
-     * `copy.search.examples.map` as a copy KEY and cannot resolve it.
-     */
-    const exampleQueries = copy.search.examples;
 
     return (
       <Page>
@@ -141,31 +137,30 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
           {copy.search.subtitle}
         </p>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {exampleQueries.map((example) => (
-            <LinkButton
-              key={example}
-              href={`/search?q=${encodeURIComponent(example)}`}
-              // 🚨 `prefetch={false}` is load-bearing. /search is force-dynamic,
-              // so every prefetched query is a REAL Meilisearch round trip on
-              // the server - a dozen of them fired the moment this page
-              // painted, and the RSC prefetches for a dynamic route never
-              // settled, so the page never reached network idle. Search results
-              // are the last thing worth speculatively fetching anyway.
-              prefetch={false}
-              variant="elevated"
-              size="md"
-              className="font-normal"
-            >
-              {example}
-              <LinkPending />
-            </LinkButton>
-          ))}
-        </div>
+        {/* 🚨 States the REACH of search before anyone types, and states its
+            limit in the same breath. Transcript coverage is ~30% overall and
+            runs 99% to 0% by channel, so "most episodes, though not all" is the
+            strongest honest claim available - and the four example-query chips
+            that used to sit here said nothing about any of it. */}
+        <p className="mt-2.5 max-w-[560px] text-small text-subtle-foreground">
+          {copy.search.scopeNote}
+        </p>
+
 
         {topics.length > 0 ? (
-          <>
-            <p className="text-eyebrow mt-7">{copy.search.popularTopics}</p>
+          /* 🚨 Collapsed by default (owner call, 2026-08-15). A wall of topic
+             chips under an empty search field reads as the menu, and the field
+             stops looking like it accepts anything else. `<details>` keeps this
+             a Server Component and works before hydration. */
+          <details className="group mt-7">
+            <summary className="text-eyebrow inline-flex cursor-pointer list-none items-center gap-1.5 outline-none hover:text-foreground">
+              <ChevronDown
+                className="size-3.5 transition-transform duration-120 group-open:rotate-180"
+                aria-hidden
+                strokeWidth={2.4}
+              />
+              {copy.search.popularTopicsToggle}
+            </summary>
             <div className="mt-2.5 flex flex-wrap gap-2">
               {topics.map((topic) => (
                 <LinkButton
@@ -184,7 +179,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
                 </LinkButton>
               ))}
             </div>
-          </>
+          </details>
         ) : null}
       </Page>
     );
