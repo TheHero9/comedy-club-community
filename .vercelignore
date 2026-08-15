@@ -1,0 +1,18 @@
+# Vercel builds only apps/web (+ workspace packages). Keep the upload lean -
+# the Python API, its virtualenv and the research data blow the 100 MB limit.
+apps/api
+tools
+docs
+specs
+Designs
+scripts
+.claude
+.next
+apps/web/.next
+apps/web/.turbo
+.turbo
+node_modules
+apps/web/node_modules
+apps/web/e2e
+apps/web/test-results
+apps/web/playwright-report
