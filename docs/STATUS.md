@@ -26,7 +26,7 @@
 | 5 | Celery + scheduled sync | 🟡 | Worker + beat + 9 tasks LIVE. Data API path awaits `YOUTUBE_API_KEY`; yt-dlp fallback active. |
 | 6 | Next.js foundation + typed client | ✅ | Next 16 App Router + Tailwind v4 + shadcn/ui + `@ccc/api-types` generated from OpenAPI. `typecheck`/`lint`/`build` green, home page renders live `/api/health`. |
 | 7 | Public browse (SEO) | ✅ | Home, channels, channel + **ratings grid**, episode detail, browse, search. All Server Components. |
-| 8 | Clerk auth end to end | 🟡 | **Architecture done + pluggable.** Clerk backend written but unverified (no keys). Dev backend unblocks waves 9-13. |
+| 8 | Clerk auth end to end | ✅ | **Complete 2026-08-15.** Clerk production instance on comedycommunity.club; frontend via pluggable ViewerAuthProvider (keyless builds keep the dev identity, so the suite runs unchanged). |
 | 9 | Ratings, watch log, favorites | ✅ | |
 | 10 | Membership + verification + scores | ✅ | |
 | 11 | Community content | ✅ | |
