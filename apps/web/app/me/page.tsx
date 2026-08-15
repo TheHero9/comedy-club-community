@@ -10,7 +10,9 @@ import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Page, StatTile } from "@/components/shell/Page";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { EpisodeList, Me } from "@/lib/api/podcast";
-import { IS_SIGNED_IN, viewerApi } from "@/lib/auth";
+import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
+import { Button } from "@/components/ui/button";
+import { viewerApi } from "@/lib/auth";
 import { copy } from "@/lib/copy";
 
 /**
@@ -36,9 +38,10 @@ const LINKS = [
 ] as const;
 
 export default function ProfilePage() {
+  const { signedIn, canSignIn, signOut } = useViewerAuth();
   const profile = useQuery({
     queryKey: ["me"],
-    enabled: IS_SIGNED_IN,
+    enabled: signedIn,
     retry: false,
     queryFn: ({ signal }) =>
       viewerApi.get<Me>("/api/me", { signal, cache: "no-store" }),
@@ -46,7 +49,7 @@ export default function ProfilePage() {
 
   const history = useQuery({
     queryKey: ["me", "watched"],
-    enabled: IS_SIGNED_IN,
+    enabled: signedIn,
     retry: false,
     queryFn: ({ signal }) =>
       viewerApi.get<EpisodeList>("/api/me/watched", {
@@ -56,7 +59,7 @@ export default function ProfilePage() {
       }),
   });
 
-  if (!IS_SIGNED_IN || profile.isError) {
+  if (!signedIn || profile.isError) {
     return (
       <Page>
         <h1 className="text-h1">{copy.nav.profile}</h1>
@@ -132,6 +135,19 @@ export default function ProfilePage() {
               </Link>
             ))}
           </nav>
+
+          {/* Sign-out exists only in Clerk mode; the dev identity is a build
+              setting, not a session, so there is nothing to sign out of. */}
+          {canSignIn ? (
+            <Button
+              variant="outline"
+              size="lg"
+              className="mt-4"
+              onClick={signOut}
+            >
+              {copy.auth.signOut}
+            </Button>
+          ) : null}
         </div>
 
         <section className="hidden rounded-2xl border border-border bg-card p-4 md:block">

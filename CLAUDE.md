@@ -664,7 +664,11 @@ YYYYMMDD-feature-name        e.g. 20260808-p1-ingestion
 
 ## 🧪 Testing
 
-**753 automated tests. Run them all with `npm run test` from the repo root.**
+**753 automated tests.** ⚡ **Most of them run in CI on every push and PR**
+(`.github/workflows/ci.yml`): typecheck, lint, ruff, migration-drift, Vitest, pytest.
+**Push instead of re-running those locally.** Only Playwright and the perf budgets have
+to run on your machine, because they need the real ingested corpus - and those should be
+**scoped to the change**, not run wholesale. See "Match the gate to the change" below.
 
 ```bash
 npm run test                 # everything: Vitest + Playwright + pytest
@@ -714,6 +718,97 @@ If a row genuinely cannot be covered, leave it **uncovered with a written reason
 Three bugs shipped during the initial build and **all three passed `typecheck`, `lint` AND `build`**: a root `loading.tsx` that turned every `notFound()` into a soft 404, an `Error` instance in the RSC render tree that hung the request for 60s, and `subsets: ["latin"]` that silently dropped Cyrillic to a fallback font. Static gates cannot see any of them. Each now has a named regression test.
 
 Full spec: [`specs/02-test-hardening/`](specs/02-test-hardening/05-results.md).
+
+### 🚨 Match the gate to the change - do NOT run everything by reflex
+
+**CI runs the hermetic gates on every push and PR** (`.github/workflows/ci.yml`):
+typecheck, `turbo lint`, ruff, `makemigrations --check`, Vitest and pytest. **Do not
+re-run those locally just to feel safe** - push and let the pipeline do it.
+
+What CI *cannot* run is the Playwright E2E suite and the perf budgets: both assert
+against the ~1,961 **really ingested** episodes, and the only way to get that corpus is
+to scrape YouTube. Faking it with fixtures would make them assert against something
+other than the thing they exist to protect. So they stay local - which makes them
+expensive, which is exactly why they must be **scoped**:
+
+```bash
+# ✅ the specs that touch what you changed, one viewport while iterating
+npx playwright test e2e/public-browse.spec.ts --project=desktop
+
+# ❌ 259 tests x 2 viewports for a three-file visual change
+npx playwright test
+```
+
+Run the **full** suite for: a change to `lib/copy.ts`, routing, `next.config.ts`,
+`globals.css` tokens, a shared shell component, or anything touching search. A card
+tweak does not qualify.
+
+**Budget the cost honestly.** A full local E2E pass is ~10 minutes, and a production
+build is ~40s. A visual tweak deserves: static gates (~1 min) → the relevant spec file
+→ look at a screenshot. That is the whole loop.
+
+### 🚨 A local `next dev` on 3000 makes the ENTIRE E2E suite fail
+
+Cost a wasted ~11-minute run on 2026-08-15. The suite's `webServer` block starts its own
+dev server on **3100**, and `reuseExistingServer` only reuses something *already
+listening on 3100*. But **Next refuses a second dev server for the same directory** - so
+with a dev server already up on 3000, the E2E webServer never starts and **every single
+test fails**, including `smoke-dev-server-serves-the-home-page`.
+
+- 🔍 **Tell-tale:** the failure count is the whole suite, and `test-results/` fills with
+  a directory per test. A real regression fails a handful of related specs, never all of
+  them. **When everything fails, suspect the harness, not the app.**
+- ✅ **Fix:** point the suite at a server that is already up, rather than letting it
+  start one:
+  ```bash
+  cd apps/web && npx next build && npx next start --port 3200   # once
+  E2E_PORT=3200 npx playwright test --reporter=line
+  ```
+  This is also the production build CLAUDE.md wants for honest signal, and it doubles as
+  the benchmark server, so one build serves both.
+- ⚠️ The default `list` reporter **buffers all output until the run ends**, so a
+  backgrounded run looks hung and its log stays empty. Use `--reporter=line` for
+  progress you can actually watch.
+- ⚠️ **Never pipe the run through `tail`.** `npx playwright test | tail -40` reports
+  **`tail`'s** exit code, so an interrupted or failing run reads as success. Redirect to
+  a file (`> run.log 2>&1`), check `$?`, then grep the file.
+
+### 🚨 Never run `next build` while `next start` is serving that build
+
+This manufactured **15 failures in `public-browse.spec.ts`** on 2026-08-15 that had
+nothing to do with the code under test. `next start` holds the chunk manifest it booted
+with; rebuilding replaces the hashed files on disk underneath it. The running server
+then serves HTML referencing chunks that no longer exist:
+
+```
+500  /_next/static/chunks/1f_wq8lh506j2.css
+404  /_next/static/chunks/0z6mpqwepmrqz.css
+```
+
+🔍 **The failures do not look like a CSS problem.** With the stylesheet missing the
+grid collapses, cards overlap, and Playwright reports
+`<a href="/e/…"> subtree intercepts pointer events` → `locator.click: Test timeout`.
+It reads exactly like a z-index or overlay bug in whatever you just changed.
+
+- ✅ **Kill the server, build, then start.** In that order, every time.
+- 🔍 **Tell-tale:** `_next/static/chunks/*.css` returning 500 or 404. Probe with a
+  10-line Playwright script that logs `response` events over 400 before you start
+  bisecting your own diff - it is seconds, and it names the real cause outright.
+
+### ⚠️ Prove "is this failure mine?" with a stash, but only once
+
+A budget or test that fails on a route your diff does not import is usually
+pre-existing. Confirm it in one pass rather than reasoning about it:
+
+```bash
+git stash push -- <only the files you changed>
+npx next build && <re-run the one failing check>     # same number => not yours
+git stash pop && npx next build
+```
+
+Byte-identical output proves it. **Scope the stash to your files** (not a bare
+`git stash`) so unrelated working-tree state is not disturbed, and re-run only the
+**one** failing check, not the whole suite.
 
 ---
 

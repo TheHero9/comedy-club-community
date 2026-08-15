@@ -1,38 +1,64 @@
 /**
- * The auth seam.
+ * The auth seam - token side.
  *
- * Clerk is the identity provider this project has chosen, but its keys have not
- * landed yet, so nothing here issues or verifies a token - it only decides what
- * `Authorization` header the browser sends. When Clerk arrives, `viewerToken`
- * becomes a call to Clerk's `getToken()` and nothing else in the app changes.
+ * Which identity a request carries is decided here; whether the UI treats the
+ * viewer as signed in lives in `components/auth/ViewerAuthProvider.tsx`. Both
+ * switch on the same thing, mirroring the API's pluggable AUTH_BACKEND
+ * (docs/03-auth-decisions.md):
  *
- * 🔒 Until then there is an OPT-IN development identity. The Django API already
- * ships a `DevAuth` backend that accepts `Authorization: Bearer dev:<username>`
- * and exists exactly so waves 9-13 could be built before Clerk; `prod.py`
- * refuses to boot with that backend selected, and `DevAuth` itself returns None
- * unless DEBUG is on or the backend is explicitly "dev".
+ * - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` set -> Clerk. `viewerToken()` returns
+ *   the Clerk session JWT, which the Django API verifies against JWKS.
+ * - unset (local dev, CI, the whole test suite) -> the OPT-IN development
+ *   identity. Setting `NEXT_PUBLIC_DEV_USER` in `apps/web/.env.local` sends
+ *   `Authorization: Bearer dev:<username>`, which only the API's DevAuth
+ *   backend accepts - and `prod.py` refuses to boot with that backend, so a
+ *   deployed API can never trust it.
  *
- * Setting `NEXT_PUBLIC_DEV_USER` in `apps/web/.env.local` turns the signed-in
- * half of the redesign (rating sheet, watch log, favourites, profile) on
- * locally. Leaving it unset - the default, and the only correct value for any
- * deployed environment - renders the signed-out state the design specifies,
- * where every affordance is still visible and tapping one opens the sign-in
- * sheet.
+ * 🔒 The two modes are mutually exclusive by construction: when the Clerk key
+ * is present the dev identity is ignored entirely.
  */
 import { createApiClient } from "@/lib/api/client";
 
 /**
- * Read straight off `process.env` so Next can inline it at build time.
- * Destructuring or dynamic access would break the inlining and leave it
+ * Read straight off `process.env` so Next can inline these at build time.
+ * Destructuring or dynamic access would break the inlining and leave them
  * undefined in the browser bundle.
  */
 const DEV_USER = process.env.NEXT_PUBLIC_DEV_USER ?? "";
+const CLERK_KEY = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
 
-/** True when this build has an identity to act as. */
-export const IS_SIGNED_IN = DEV_USER.length > 0;
+/** True when this build talks to Clerk instead of the dev identity. */
+export const CLERK_ENABLED = CLERK_KEY.length > 0;
 
-export function viewerToken(): string | null {
-  return IS_SIGNED_IN ? `dev:${DEV_USER}` : null;
+/** True when the dev identity is active (never in a Clerk build). */
+export const DEV_SIGNED_IN = !CLERK_ENABLED && DEV_USER.length > 0;
+
+/**
+ * Clerk's browser global. Typed locally instead of importing Clerk's types so
+ * this module stays dependency-free for the no-Clerk builds the test suite
+ * runs.
+ */
+declare global {
+  interface Window {
+    Clerk?: {
+      session?: { getToken(): Promise<string | null> } | null;
+    };
+  }
+}
+
+export async function viewerToken(): Promise<string | null> {
+  if (CLERK_ENABLED) {
+    // Server Components never make authenticated calls in this app (everything
+    // behind identity is client-rendered), so "no window" simply means no token.
+    if (typeof window === "undefined") return null;
+    try {
+      return (await window.Clerk?.session?.getToken()) ?? null;
+    } catch {
+      // Offline or Clerk not yet booted: an anonymous request beats a crash.
+      return null;
+    }
+  }
+  return DEV_SIGNED_IN ? `dev:${DEV_USER}` : null;
 }
 
 /**

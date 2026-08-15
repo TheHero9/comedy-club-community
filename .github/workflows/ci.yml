@@ -1,0 +1,119 @@
+name: CI
+
+# Runs the gates that DO NOT need the real ingested corpus, so a change can be
+# verified without tying up a developer machine for ten minutes.
+#
+# 🚨 What is deliberately NOT here: the Playwright E2E suite and the perf
+# budgets. Both assert against the ~1,961 real episodes in the local Postgres,
+# and the only way to get that corpus is to scrape YouTube - which is slow,
+# rate-limited, and soft-blocks on large runs. Faking it with fixtures would
+# make those suites assert against data that is not the thing they exist to
+# protect. They stay local and SCOPED; see "Verifying a change" in CLAUDE.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A new push supersedes an in-flight run on the same ref.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web - typecheck, lint, unit, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npx turbo lint
+
+      # perf-budget.spec.ts probes for the servers and SKIPS when they are
+      # down, so the unit suite is hermetic here by design, not by exclusion.
+      - name: Unit + contract tests
+        run: npx vitest run
+        working-directory: apps/web
+
+      - name: Production build
+        run: npm run build
+        working-directory: apps/web
+        env:
+          # Build-time only. No secret is needed to compile; pages that fetch
+          # are dynamic and are not prerendered against a live API here.
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+
+  api:
+    name: api - pytest
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: podcast
+          # Bulgarian content: a non-UTF8 test database would pass every
+          # ASCII assertion and fail only on real data.
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d podcast"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+      meilisearch:
+        image: getmeili/meilisearch:v1.11
+        env:
+          MEILI_MASTER_KEY: masterKeyForLocalDevOnly
+          MEILI_ENV: development
+          MEILI_NO_ANALYTICS: "true"
+        ports: ["7700:7700"]
+
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-a-real-secret
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      # 5432 here, not the 54320 used locally: that port exists only to dodge
+      # two native Postgres services on the Windows dev box. See CLAUDE.md.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/podcast
+      REDIS_URL: redis://localhost:6379/0
+      CELERY_BROKER_URL: redis://localhost:6379/1
+      MEILI_URL: http://localhost:7700
+      MEILI_MASTER_KEY: masterKeyForLocalDevOnly
+      PYTHONIOENCODING: utf-8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Ruff
+        run: uv run ruff check .
+        working-directory: apps/api
+
+      - name: Migrations are generated, never hand-written - fail on drift
+        run: uv run python manage.py makemigrations --check --dry-run
+        working-directory: apps/api
+
+      - name: pytest
+        run: uv run pytest -q
+        working-directory: apps/api

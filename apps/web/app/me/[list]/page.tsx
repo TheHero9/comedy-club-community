@@ -13,7 +13,8 @@ import { LinkButton } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { EpisodeList } from "@/lib/api/podcast";
 import type { Schema } from "@ccc/api-types";
-import { IS_SIGNED_IN, viewerApi } from "@/lib/auth";
+import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
+import { viewerApi } from "@/lib/auth";
 import { copy } from "@/lib/copy";
 
 type PersonalTag = Schema<"PersonalTagOut">;
@@ -64,6 +65,7 @@ const LISTS = {
 type ListKey = keyof typeof LISTS;
 
 export default function ProfileListPage({ params }: PageProps<"/me/[list]">) {
+  const { signedIn } = useViewerAuth();
   const { list } = use(params);
   if (!(list in LISTS)) notFound();
 
@@ -73,7 +75,7 @@ export default function ProfileListPage({ params }: PageProps<"/me/[list]">) {
 
   const query = useQuery({
     queryKey: ["me", key],
-    enabled: IS_SIGNED_IN,
+    enabled: signedIn,
     retry: false,
     queryFn: ({ signal }) =>
       viewerApi.get<EpisodeList | PersonalTag[]>(config.path, {
@@ -83,7 +85,7 @@ export default function ProfileListPage({ params }: PageProps<"/me/[list]">) {
       }),
   });
 
-  if (!IS_SIGNED_IN || query.isError) {
+  if (!signedIn || query.isError) {
     return (
       <Page>
         <h1 className="text-h1">{config.title}</h1>

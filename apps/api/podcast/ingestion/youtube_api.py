@@ -25,7 +25,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Iterable
+from collections.abc import Iterable
 
 from django.conf import settings
 

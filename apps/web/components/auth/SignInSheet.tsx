@@ -1,5 +1,6 @@
 "use client";
 
+import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { copy } from "@/lib/copy";
@@ -12,9 +13,10 @@ import { copy } from "@/lib/copy";
  * it needs to convert, and it hides the product's whole point behind an account
  * wall they cannot see a reason to cross.
  *
- * The sign-in action itself is a stub until Clerk keys land. It says so rather
- * than pretending: a button that silently does nothing is worse than one that
- * explains why.
+ * The button opens Clerk's sign-in modal. In keyless builds (local dev, CI,
+ * the test suite) there is no sign-in flow, so it stays the disabled stub the
+ * tests were written against - a button that silently does nothing would be
+ * worse than one that explains why.
  */
 export function SignInSheet({
   open,
@@ -23,6 +25,8 @@ export function SignInSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { canSignIn, signIn } = useViewerAuth();
+
   return (
     <Sheet
       open={open}
@@ -35,8 +39,14 @@ export function SignInSheet({
         size="xl"
         block
         className="mt-4"
-        disabled
-        aria-disabled
+        disabled={!canSignIn}
+        aria-disabled={!canSignIn}
+        onClick={() => {
+          if (!canSignIn) return;
+          // Close the sheet first so Clerk's modal is not stacked inside it.
+          onOpenChange(false);
+          signIn();
+        }}
       >
         {copy.auth.signIn}
       </Button>

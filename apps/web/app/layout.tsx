@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Unbounded, Onest, JetBrains_Mono } from "next/font/google";
 
+import { ViewerAuthProvider } from "@/components/auth/ViewerAuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { SiteFooter } from "@/components/shell/SiteFooter";
@@ -80,6 +81,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <Providers>
+          <ViewerAuthProvider>
           <AppHeader />
           {/* Bottom padding clears the fixed mobile bar. The bar is either the
               bottom nav or, on an episode route, the action bar - never both. */}
@@ -87,6 +89,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <SiteFooter />
           <BottomNav />
           <Toaster />
+          </ViewerAuthProvider>
         </Providers>
       </body>
     </html>

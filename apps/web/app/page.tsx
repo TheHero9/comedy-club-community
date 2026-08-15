@@ -58,6 +58,18 @@ export default async function HomePage() {
 
   const totalEpisodes = newest.meta.total;
 
+  /**
+   * Channel avatars for the episode lists below, joined here rather than
+   * carried on every `EpisodeBrief`. The channel list is already fetched above
+   * for its own section, so this costs one Map and zero extra bytes on the
+   * wire - see the note on `EpisodeCard`'s `channelAvatarUrl` prop.
+   *
+   * `?? ""` on lookup, never a skipped badge: an episode whose channel somehow
+   * missed the list still renders the initials tile. One card silently losing
+   * its badge would read as a bug.
+   */
+  const channelAvatars = new Map(channels.map((c) => [c.id, c.avatar_url]));
+
   return (
     <Page>
       <h1 className="text-display">
@@ -107,7 +119,13 @@ export default async function HomePage() {
           <ol className="mt-3.5 flex flex-col gap-2">
             {topRated.items.map((entry) => (
               <li key={entry.episode.youtube_id}>
-                <TopRatedRow episode={entry.episode} rank={entry.rank} />
+                <TopRatedRow
+                  episode={entry.episode}
+                  rank={entry.rank}
+                  channelAvatarUrl={
+                    channelAvatars.get(entry.episode.channel_id) ?? ""
+                  }
+                />
               </li>
             ))}
           </ol>
@@ -123,6 +141,7 @@ export default async function HomePage() {
                 key={episode.youtube_id}
                 episode={episode}
                 sizes="(min-width: 768px) 280px, 50vw"
+                channelAvatarUrl={channelAvatars.get(episode.channel_id) ?? ""}
                 priority={index < 2}
               />
             ))}
@@ -133,6 +152,7 @@ export default async function HomePage() {
                 key={episode.youtube_id}
                 episode={episode}
                 sizes="280px"
+                channelAvatarUrl={channelAvatars.get(episode.channel_id) ?? ""}
                 className="hidden md:block"
               />
             ))}
@@ -178,9 +198,11 @@ export default async function HomePage() {
 function TopRatedRow({
   episode,
   rank,
+  channelAvatarUrl,
 }: {
   episode: EpisodeBrief;
   rank: number;
+  channelAvatarUrl: string;
 }) {
   const style = rankStyle(rank);
 
@@ -213,7 +235,14 @@ function TopRatedRow({
         <p className="text-title-card line-clamp-2 text-foreground">
           {episode.title}
         </p>
-        <p className="mt-1 text-[11.5px] text-subtle-foreground">
+        {/* Inline rather than overlaid: this row's thumbnail is 70px, and a
+            badge on it would read as the subject of the picture. */}
+        <p className="mt-1 flex items-center gap-1.5 text-[11.5px] text-subtle-foreground">
+          <ChannelAvatar
+            name={episode.channel_name}
+            avatarUrl={channelAvatarUrl}
+            size="2xs"
+          />
           {copy.episode.ratings(episode.rating_count)}
         </p>
       </div>

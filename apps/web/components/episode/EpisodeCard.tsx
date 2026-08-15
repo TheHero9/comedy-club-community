@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { ScoreChip } from "@/components/shared/ScoreChip";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import type { EpisodeBrief } from "@/lib/api/podcast";
@@ -21,6 +22,24 @@ interface EpisodeCardProps {
   sizes?: string;
   /** Show the rating count next to the date. */
   showRatingCount?: boolean;
+  /**
+   * The owning channel's avatar, shown as a badge on the thumbnail.
+   *
+   * 🚨 Presence of the PROP - not truthiness of its value - is what turns the
+   * badge on, so `""` still renders the initials fallback tile. That split is
+   * the point: a channel whose avatar URL has gone stale (they are opaque
+   * content hashes and do 404 between syncs) must still show a badge, while a
+   * caller that never passes the prop gets no badge at all.
+   *
+   * Opt-in because it is only worth pixels in a MIXED list. On a channel page
+   * every card carries the same avatar, which is noise, not information.
+   *
+   * ⚠️ Deliberately not a field on `EpisodeBrief`: the API would then ship it
+   * on every episode of every list, including the 1,318-row channel grid whose
+   * payload budget was expensive to win. Callers already holding the channel
+   * list join it themselves for free.
+   */
+  channelAvatarUrl?: string | null;
   priority?: boolean;
   className?: string;
 }
@@ -29,6 +48,7 @@ export function EpisodeCard({
   episode,
   sizes = "(min-width: 768px) 300px, 50vw",
   showRatingCount = false,
+  channelAvatarUrl,
   priority = false,
   className,
 }: EpisodeCardProps) {
@@ -57,6 +77,19 @@ export function EpisodeCard({
             size="sm"
           />
         </span>
+        {channelAvatarUrl !== undefined ? (
+          // Bottom-left is the only free corner: the score chip owns top-left
+          // and the duration pill owns bottom-right. The ring separates the
+          // badge from whatever the thumbnail happens to be behind it.
+          <span className="absolute bottom-[7px] left-[7px]">
+            <ChannelAvatar
+              name={episode.channel_name}
+              avatarUrl={channelAvatarUrl}
+              size="xs"
+              className="ring-2 ring-[rgba(20,17,15,0.55)]"
+            />
+          </span>
+        ) : null}
         {duration ? (
           <span className="absolute right-[7px] bottom-[7px] rounded-[5px] bg-[rgba(20,17,15,0.86)] px-[5px] py-0.5 font-mono text-[11px] text-[#F7F4F0] tabular">
             {duration}

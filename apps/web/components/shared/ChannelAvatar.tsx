@@ -21,6 +21,13 @@ import { cn } from "@/lib/utils";
  * image renders nothing at all and reveals the tile under it.
  */
 const SIZES = {
+  /**
+   * The two badge sizes are circular where the larger tiles are squircles. That
+   * is deliberate: at this scale a rounded square reads as another chip, and the
+   * score chip already sits in the opposite corner of the same thumbnail.
+   */
+  "2xs": { box: "size-[18px] rounded-full", textClass: "text-[8px]", px: 18 },
+  xs: { box: "size-7 rounded-full", textClass: "text-[10px]", px: 28 },
   sm: { box: "size-14 rounded-2xl", textClass: "text-[19px]", px: 56 },
   md: { box: "size-16 rounded-3xl", textClass: "text-[21px]", px: 64 },
   lg: { box: "size-16 rounded-[24px] md:size-24", textClass: "text-[21px] md:text-[32px]", px: 96 },

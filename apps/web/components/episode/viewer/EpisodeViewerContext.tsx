@@ -18,7 +18,8 @@ import type {
   ViewerState,
   WatchSummary,
 } from "@/lib/api/podcast";
-import { IS_SIGNED_IN, viewerApi } from "@/lib/auth";
+import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
+import { viewerApi } from "@/lib/auth";
 import { copy } from "@/lib/copy";
 import { toIsoDay } from "@/lib/format";
 
@@ -84,6 +85,7 @@ export function EpisodeViewerProvider({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { signedIn } = useViewerAuth();
   const [myRating, setMyRating] = useState<number | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [watchEvents, setWatchEvents] = useState<WatchSummary["events"]>([]);
@@ -117,7 +119,7 @@ export function EpisodeViewerProvider({
   const eliteScore = live ? live.eliteScore : seed.eliteScore;
 
   useEffect(() => {
-    if (!IS_SIGNED_IN) return;
+    if (!signedIn) return;
     const controller = new AbortController();
     const path = `/api/episodes/${encodeURIComponent(seed.youtubeId)}`;
 
@@ -141,7 +143,7 @@ export function EpisodeViewerProvider({
       .catch(() => undefined);
 
     return () => controller.abort();
-  }, [seed.youtubeId]);
+  }, [seed.youtubeId, signedIn]);
 
   const closeSheet = useCallback(() => setSheet(null), []);
   const openSheet = useCallback(
@@ -150,10 +152,10 @@ export function EpisodeViewerProvider({
   );
 
   const requireIdentity = useCallback(() => {
-    if (IS_SIGNED_IN) return true;
+    if (signedIn) return true;
     setSheet("signin");
     return false;
-  }, []);
+  }, [signedIn]);
 
   const applyRatingResult = useCallback(
     (result: RatingResult) => {
@@ -283,7 +285,7 @@ export function EpisodeViewerProvider({
       publicScore,
       ratingCount,
       eliteScore,
-      signedIn: IS_SIGNED_IN,
+      signedIn,
       myRating,
       isFavorite,
       watchEvents,
@@ -321,6 +323,7 @@ export function EpisodeViewerProvider({
       saving,
       seed,
       sheet,
+      signedIn,
       toggleFavorite,
       toggleWatched,
       watchEvents,
