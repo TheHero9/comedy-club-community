@@ -170,9 +170,14 @@ def ensure_index(*, wait: bool = True) -> Any:
     if wait:
         _wait(task, SETTINGS_TIMEOUT_MS)
 
+    # 🚨 A bare assignment, NOT `with _settings_lock` - ensure_index_once calls
+    # this while already holding that non-reentrant lock, and taking it again
+    # here self-deadlocks on the process's first transcript-index write. Same
+    # bug the episodes index hit on 2026-08-14; this copy never got the fix, and
+    # it hung `remove_episodes` on 2026-08-15. The lock guards the do-once
+    # dance; the boolean write itself is atomic under the GIL.
     global _settings_applied
-    with _settings_lock:
-        _settings_applied = True
+    _settings_applied = True
     return index
 
 

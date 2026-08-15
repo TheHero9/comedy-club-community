@@ -1,0 +1,115 @@
+# Episodes removed from the catalogue on 2026-08-15 after a full manual review
+# of all 1,962 ingested videos (see `manage.py export_review_page`).
+#
+# These are promo clips, trailers, stand-up excerpts and channel announcements
+# that were uploaded to the `videos` tab and therefore ingested as episodes.
+# They are not podcast episodes and nothing in the metadata separates them from
+# one reliably - duration is a hint, not a rule - so the pass was done by eye.
+#
+# 🚨 Kept in the repo, not in tmp/, for two reasons: it ships inside the Docker
+# image so `remove_episodes` runs identically in prod, and it is the record of
+# WHICH videos were purged. `sync-channels-daily` is unscheduled in
+# config/celery.py precisely because a sync would recreate every id below.
+#
+# Format: one youtube id per line; everything after `#` is ignored.
+
+Bd42KjWrhGg  # comedy-club-news-podcast-подкаст-новини | 1:59 | Stand up comedy Bulgaria - Николаос Цитиридис Стендъп Комеди в Зала 1 НДК
+Hy5VuWUc2g4  # comedy-club-news-podcast-подкаст-новини | 1:45 | Божков Левски Диков и най-скъпата шега в историята
+Yuuu7N5ehao  # comedy-club-news-podcast-подкаст-новини | 0:00 | Стари Кучета в Парламента Новините на Комеди Клуб Подкаст
+Q361I8JPY2E  # ivan-kirkov | 4:06 | Младите Комедианти
+tF9jIUQeJHM  # ivan-kirkov | 5:50 | Нов проект над който работих
+wHMxOzj3D9c  # ivan-kirkov | 4:36 | Старт на проекта
+XKeRiMf-h08  # ivan-kirkov | 0:48 | Новите
+wy9vt2Cqh-w  # комеди-клуб-подкаст-comedy-club-podcast | 1:57 | Стендъп Комедия за Приятелството в Комеди Клуб / Stand Up comedy
+gGKDIenNV50  # комеди-клуб-подкаст-comedy-club-podcast | 1:39 | Стендъп Комеди с Иван Кирков Counter Strike и истинските мъже
+Ts3iY_wjzgs  # комеди-клуб-подкаст-comedy-club-podcast | 1:05 | Междузвездни войни в кухнята - стендъп комедия с Никола Тодороски
+DUYxlP7W1bE  # комеди-клуб-подкаст-comedy-club-podcast | 1:00 | Жените са светофари - Николаос - Стендъп комедия в Комеди Клуб
+3j7OFF-mfKw  # комеди-клуб-подкаст-comedy-club-podcast | 2:01 | Жените и мъжете в Мола - стендъп комедия с Васил Ножаров в Комеди Клуб София
+2WZwomDaeOU  # комеди-клуб-подкаст-comedy-club-podcast | 1:01 | Мъжете и дюнерите - стендъп комедия в Комеди Клуб София с Петя - Stand up comedy Bulgaria
+XqOVLNCSjlo  # комеди-клуб-подкаст-comedy-club-podcast | 1:33 | Стендъп Комедия в България - Счетоводство на Гръцки - Ники Банков The Comedy Club Sofia
+jNa7t34tQhI  # комеди-клуб-подкаст-comedy-club-podcast | 1:04 | Stand up Comedy Bulgaria - Ivan Kirkov стендъп комедия в Комеди Клуб София
+mv3YwN7EPNE  # комеди-клуб-подкаст-comedy-club-podcast | 1:22 | Стендъп комедия Комеди Клуб София - Сашо говори за офиса
+iA9ii3APt8Y  # комеди-клуб-подкаст-comedy-club-podcast | 1:30 | Училище за секс в Австрия стендъп комедия с Никола Тородоски в Комеди Клуб
+Og-lKRS1XO4  # комеди-клуб-подкаст-comedy-club-podcast | 4:36 | Стендъп Комедия Иван Кирков Лъжата - The Comedy Club Sofia Stand up
+eTF_ARjMLtg  # комеди-клуб-подкаст-comedy-club-podcast | 2:49 | Стендъп комедия Опит в Секса - Комеди Клуб София Николаос Цитиридис
+IT8tvL_v_P0  # комеди-клуб-подкаст-comedy-club-podcast | 2:05 | Пътуване до Рим - Стендъп Комеди The Comedy Club Sofia Комеди Клуб София - Deyansky Sasho
+9pzxLWRtPm4  # комеди-клуб-подкаст-comedy-club-podcast | 2:15 | Брутални нърд шеги от Калин в Комеди Клуб The Comedy Club Sofia
+_Y4cGh8OAcM  # комеди-клуб-подкаст-comedy-club-podcast | 0:47 | Да Направим Яки Неща Заедно в Комеди Клуб България - Иван Кирков
+vpmpjRYJgys  # комеди-клуб-подкаст-comedy-club-podcast | 2:20 | Сайтове за запознанства Васил Ножаров в Комеди Клуб София
+C-oJ0-EOomY  # комеди-клуб-подкаст-comedy-club-podcast | 4:33 | Стендъп Комеди с Иван Кирков в The Comedy Club Sofia Комедия
+K3K-PP8IBEw  # комеди-клуб-подкаст-comedy-club-podcast | 4:15 | Фитнес и Батки - стендъп комеди с Васил Ножаров в Комеди Клуб София
+GKr3XiZj4fQ  # комеди-клуб-подкаст-comedy-club-podcast | 5:12 | Стендъп Комеди с Иван Кирков CS WC3 и Шефа в България
+FPnpoqxT-7o  # комеди-клуб-подкаст-comedy-club-podcast | 3:39 | Стендъп Комеди България с Христо в The Comedy Club Sofia
+0H0TpLUKekY  # комеди-клуб-подкаст-comedy-club-podcast | 1:51 | Баба и Сексуалния ми живот - Комеди Клуб София с Ники
+ZkuKX59wgDg  # комеди-клуб-подкаст-comedy-club-podcast | 2:02 | Как да станеш филмова звезда - Стендъп Комедия с Петя в Комеди Клуб София
+rhftD4Nwvjo  # комеди-клуб-подкаст-comedy-club-podcast | 3:51 | Готините Мацки НЕ могат да Готвят - стендъп комеди с Иван Кирков
+KB7CsaIappk  # комеди-клуб-подкаст-comedy-club-podcast | 1:19 | Николаос и гърците - Стендъп Комедия в Комеди Клуб София
+imjMntCD8Io  # комеди-клуб-подкаст-comedy-club-podcast | 2:34 | Троловете в Интернет - Стендъп Комедия в Комеди Клуб с Николаос
+fE3Cc8xqIls  # комеди-клуб-подкаст-comedy-club-podcast | 2:45 | Сексуалните експерименти и Шакира - Стендъп Комедия в Комеди Клуб София
+yD8zcTJHTNg  # комеди-клуб-подкаст-comedy-club-podcast | 0:40 | Еди Изард идва в България на 3ти април 2017
+xtNnwEF4CYs  # комеди-клуб-подкаст-comedy-club-podcast | 1:51 | Зала едно НДК стендъп с най-добрите
+_g3mWtuJ-60  # комеди-клуб-подкаст-comedy-club-podcast | 1:13 | Комеди Клуб The Comedy Club Sofia в Зала 1 НДК
+lwLYNSvoN8o  # комеди-клуб-подкаст-comedy-club-podcast | 1:47 | Брутални шеги и гнусотии с Калин в Комеди Клуб София
+1GZjTxpZe3Y  # комеди-клуб-подкаст-comedy-club-podcast | 1:57 | Черен Хумор с Иван Кирков - Комеди Клуб София Стендъп Комедия
+RSgO_myb4Yk  # комеди-клуб-подкаст-comedy-club-podcast | 1:45 | IT и фитнеса - Ники в Комеди Клуба - Стендъп Комедия
+2ugnrO38d7o  # комеди-клуб-подкаст-comedy-club-podcast | 2:09 | Васил Ножаров в Комеди Клуб София - Кученцето
+yykGyTZD3_k  # комеди-клуб-подкаст-comedy-club-podcast | 3:19 | Стендъп Комедията в България и Иван Кирков 2017 - Stand up comedy in Bulgaria
+6ut6mTUe33w  # комеди-клуб-подкаст-comedy-club-podcast | 2:27 | На 33 с Жива Баба - Комеди Клуб София и Ники Банков stand-up comedy
+zR4vv92QO-s  # комеди-клуб-подкаст-comedy-club-podcast | 4:34 | Берое и Левски - Стендъп Комедия с Иван Кирков в Комеди Клуб София
+pegTx1Wmme0  # комеди-клуб-подкаст-comedy-club-podcast | 1:27 | Неловките Моменти - Stand-up Comedy с Васил Ножаров
+54Oy7AfRzOw  # комеди-клуб-подкаст-comedy-club-podcast | 2:57 | ДОРИ И АЗ НЕ ВЯРВАМ - Поли Генова и Иван Кирков
+0NcV4DfqqSU  # комеди-клуб-подкаст-comedy-club-podcast | 2:57 | Стендъп Комедия в Комеди Клуб София с Ники Банков и Луната
+ZwX7KPkrNsc  # комеди-клуб-подкаст-comedy-club-podcast | 2:28 | Каменица и Китара   Stand up Comedy  в Комеди Клуб София
+XOb5WY1WwUA  # комеди-клуб-подкаст-comedy-club-podcast | 2:13 | Stand up Comedy Сашо в Комеди Клуб София - Мъж си избира жена Alexander Deyansky
+gxWwyEZ3hRE  # комеди-клуб-подкаст-comedy-club-podcast | 2:06 | Комеди Клуб София - Цецо Куца - stand up comedy
+Vo5xfTMmtKk  # комеди-клуб-подкаст-comedy-club-podcast | 1:56 | Майка ми ме пита какво ще правя - Стендъп с Петя в Комеди Клуба
+LyXEHtKY2e8  # комеди-клуб-подкаст-comedy-club-podcast | 2:09 | Суши на Първа Среща Стендъп Комедия в Комеди Клуба с Николаос
+h4IBgXNH7ZY  # комеди-клуб-подкаст-comedy-club-podcast | 1:09 | Иван Кирков КЪСА 100 лева в Комеди Клуб София
+cgppAX7Ptmk  # комеди-клуб-подкаст-comedy-club-podcast | 3:32 | Стендъп Комеди Иван Кирков и Скобарите #1 Stand-up at The Comedy Club
+3rRz1JzNa6Y  # комеди-клуб-подкаст-comedy-club-podcast | 1:41 | Стендъп Комедия с Комеди Клуб София - Рекордно шоу 1 април 2018 Зала 1 НДК
+LYHJRM1Nxqs  # комеди-клуб-подкаст-comedy-club-podcast | 2:04 | Феминизъм #1 Стендъп Комеди Клуб Зала 1 НДК с Николаос
+oH5gsRDxMgc  # комеди-клуб-подкаст-comedy-club-podcast | 2:11 | Stand Up Comedy с Ники Банков #2 Комеди Клуб София в Зала 1 НДК 2018
+AlyGZIwjA4k  # комеди-клуб-подкаст-comedy-club-podcast | 1:47 | Стендъп Комеди с Александър Деянски в Зала 1 НДК #4 Комеди Клуб София
+d23lyQvEBCU  # комеди-клуб-подкаст-comedy-club-podcast | 2:41 | Петя Кюпова #5 Stand up Comedy от България и Комеди Клуб
+Cofa9DqWoNY  # комеди-клуб-подкаст-comedy-club-podcast | 3:21 | Stand up Comedy в България с Христо Радоев #6 Комеди Клуб София
+P4xM8C5bk2s  # комеди-клуб-подкаст-comedy-club-podcast | 1:57 | Бънджи Васил Ножаров #7 Комеди Клуб Стендъп Комедия
+AuOGPySRteo  # комеди-клуб-подкаст-comedy-club-podcast | 3:54 | Вегани и Иван Кирков #8 Комеди Клуб Стендъп Комедия
+1m7TX8ozxTc  # комеди-клуб-подкаст-comedy-club-podcast | 1:14 | Комеди Клуб Революция 15 октомври Зала 1 НДК
+eLt3qO64K8U  # комеди-клуб-подкаст-comedy-club-podcast | 1:40 | Подгрявка преди шоуто в Зала 1 НДК
+pfGwM4bdEYk  # комеди-клуб-подкаст-comedy-club-podcast | 0:32 | Stand up Comedy в Зала 1 НДК с Комеди Клуб София
+8A9Jdcp4hy0  # комеди-клуб-подкаст-comedy-club-podcast | 7:07 | Стендъп Комеди #9 Кибритче Иван Кирков Comedy Club Stand-up Comedy
+FgaSFPnVpnc  # комеди-клуб-подкаст-comedy-club-podcast | 4:34 | Полицейска Проверка #10 Stand Up Comedy с Николаос Цитиридис
+G7Ay3mBvlWE  # комеди-клуб-подкаст-comedy-club-podcast | 2:46 | Ники Банков - Проблеми С Гаджето #11 Комеди Клуб Стендъп Комеди
+tFPzABLp8Ao  # комеди-клуб-подкаст-comedy-club-podcast | 1:56 | Стара Загора помага на Нотр Дам - Христо Радоев - #12 stand up comedy
+343hoqbqk4E  # комеди-клуб-подкаст-comedy-club-podcast | 3:08 | Плевен и децата на 90те #13 Сашо Деянски в Комеди Клуб София Stand-up Comedy Deyansky
+UEf27Z2-s7A  # комеди-клуб-подкаст-comedy-club-podcast | 4:23 | Мъжете са Добри Бащи #14 Сашо Деянски Комеди Клуб София Stand-up Comedy Sasho Deyansky
+kJfciSvT9Es  # комеди-клуб-подкаст-comedy-club-podcast | 3:00 | Престъпленията в САЩ и България #15 Иван Кирков в Комеди Клуба Stand-up Comedy
+1mRJCSKzsQE  # комеди-клуб-подкаст-comedy-club-podcast | 3:29 | 7 години COMEDY.BG Stand-up Комедия България
+sYm96yzZVi4  # комеди-клуб-подкаст-comedy-club-podcast | 3:50 | България Търси Талант Николаос Цитиридис в Комеди Клуб София Stand up Comedy стендъп комеди
+0R53j7Uq_JI  # комеди-клуб-подкаст-comedy-club-podcast | 4:57 | Езикова Гимназия Иван Кирков #18 Стендъп комедия в Комеди Клуб София Stand up Comedy Club Sofia
+tG8OhWkA5Fo  # комеди-клуб-подкаст-comedy-club-podcast | 4:52 | Батман и Жокера - Иван Кирков Stand-up comedy в Комеди Клуб София - Стендъп Комедия
+4K4nVfG8_6w  # комеди-клуб-подкаст-comedy-club-podcast | 3:14 | Зад Кулисите на Комеди Клуб София в Зала 1 НДК
+Y04pvSlizdQ  # комеди-клуб-подкаст-comedy-club-podcast | 3:27 | Контрола в Атобуса Гърби Студентите - Иван Кирков стендъп комедия #21
+GCv54A-I24o  # комеди-клуб-подкаст-comedy-club-podcast | 1:43 | Николаос Цитиридис в Комеди Клуб София - Забрана за Излизане #22 Nikolaos Tsitiridis
+wNfRVwqoBKc  # комеди-клуб-подкаст-comedy-club-podcast | 1:40 | Николаос Цитиридис Кучета от Приют #23 Комеди Клуб София Стендъп
+j0dncVd9kkE  # комеди-клуб-подкаст-comedy-club-podcast | 4:11 | Президентът Оттегля Доверието #25 Ники Банков в Комеди Клуб София стендъп комеди
+Odmu8pvEMWU  # комеди-клуб-подкаст-comedy-club-podcast | 2:25 | Супергерои #26 Стендъп с Петя Кюпова в Комеди Клуб София
+uJbrhCcWu8I  # комеди-клуб-подкаст-comedy-club-podcast | 2:17 | Сашо Деянски в Комеди Клуб София - Чужди Езици Стендъп Комедия
+T9vtOx_iDVk  # комеди-клуб-подкаст-comedy-club-podcast | 5:33 | Паркиране до Детска Градина - Сашо Деянски в Комеди Клуб София
+sPVAhrT-BRk  # комеди-клуб-подкаст-comedy-club-podcast | 7:30 | Мама Ми Купува Всички Дрехи #30 Стендъп Комеди Клуб София
+S-LOqMvUyrQ  # комеди-клуб-подкаст-comedy-club-podcast | 4:01 | Иван Кирков и Българският Христофор Колумб #31 Стендъп Комеди в Комеди Клуб София Stand-up comedy
+BPT52fKNfG0  # комеди-клуб-подкаст-comedy-club-podcast | 6:39 | Държавен Служител - Ники Банков в Комеди Клуб София - Стендъп Комедия
+WmKQEvzd7v0  # комеди-клуб-подкаст-comedy-club-podcast | 6:09 | Бойко и Протестите - Иван Кирков Stand up Comedy в Комеди Клуба стендъп комедия
+15rPYwUe8GU  # комеди-клуб-подкаст-comedy-club-podcast | 3:44 | Карантината е като Казарма - Сашо Деянски в Комеди Клуб София
+4y-LMYoXcQE  # комеди-клуб-подкаст-comedy-club-podcast | 2:23 | Условия в Любовта Николаос Цитиридис в Комеди Клуб София
+wHTG00Rmt44  # комеди-клуб-подкаст-comedy-club-podcast | 6:44 | Гейпарадите - Ники Банков в Комеди Клуб София stand up comedy
+qgKHXDiw9tI  # комеди-клуб-подкаст-comedy-club-podcast | 3:29 | Иван Кирков - Стендъп Комеди за Изборите
+7mV7bqHO8uo  # комеди-клуб-подкаст-comedy-club-podcast | 8:00 | ЕТО ЗА КОГО ЩЕ ГЛАСУВАМ
+Ra1RN4Qdrxg  # комеди-клуб-подкаст-comedy-club-podcast | 10:47 | Големи промени в Комеди Клуба
+0nWBzR-U9kI  # комеди-клуб-подкаст-comedy-club-podcast | 2:52 | Всяка Жена го прави - Емо Йоцов в Комеди Клуб София Stand-up comedy
+dhh4BqfcvAM  # комеди-клуб-подкаст-comedy-club-podcast | 4:42 | Мастършеф и Hell's Kitchen Петя Кюпова стендъп комедия в Комеди Клуба
+y6R2yz_NDjA  # комеди-клуб-подкаст-comedy-club-podcast | 11:55 | Последен ден в старото студио
+TmudVT5DPBE  # комеди-клуб-подкаст-comedy-club-podcast | 6:16 | Благодаря ви
+WUBYzmNujjI  # комеди-клуб-подкаст-comedy-club-podcast | 1:38 | Какво се случва в Пловдив
+lqdZczaO4YI  # комеди-клуб-подкаст-comedy-club-podcast | 7:00 | Проектите през Лятото
+FaaT6kUFWwo  # комеди-клуб-подкаст-comedy-club-podcast | 4:17 | Три Коли - Stand-up comedy с Ицо Радоев

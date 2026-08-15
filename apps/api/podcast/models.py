@@ -455,22 +455,28 @@ class UserProfile(models.Model):
 
     display_name = models.CharField(max_length=100, blank=True)
 
-    # --- Deviation 13: the public handle is the user's YOUTUBE handle --------
-    # 🚨 This is NOT a second copy of the display name, and it is NOT the Django
-    # username. It is the `@handle` of the YouTube account the person watches
-    # with, so a channel membership can later be linked to a real subscriber.
+    # --- Deviation 13: the public handle -------------------------------------
+    # 🚨 This is NOT the Django username, which for a Clerk-provisioned account
+    # IS the `sub` - rendering that here is what put the same `user_33Kq...`
+    # string on the profile page twice.
     #
-    # Ours to assign, never free-form user input: a self-chosen handle would be
-    # worthless for that linkage. Blank until we know it, and the UI must render
-    # NOTHING rather than invent one - showing the Django username here is what
-    # produced "name and handle are the same random id" on the live site.
+    # ⚠️ Ownership changed on 2026-08-15. It was originally "the YouTube handle,
+    # assigned by us" so a membership could be linked to a real subscriber. The
+    # owner overruled that: "users can and will edit it, it's their name
+    # basically". So it is now a self-chosen nickname and CANNOT be treated as
+    # proof of a YouTube identity - if that linkage is ever wanted, it needs a
+    # separate verified field, not this one.
+    #
+    # NULL until the user picks one, and the UI renders nothing rather than
+    # inventing a value. NULL rather than "" so the unique constraint keeps
+    # allowing many users without a handle.
     handle = models.CharField(
-        max_length=100,
+        max_length=30,
         blank=True,
         null=True,
         unique=True,
         db_index=True,
-        help_text="The user's YouTube handle, e.g. @someone. Assigned by us.",
+        help_text="Self-chosen public nickname, e.g. @someone. Not verified.",
     )
 
     avatar_url = models.URLField(blank=True)

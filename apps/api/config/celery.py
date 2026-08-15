@@ -16,11 +16,15 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
 app.conf.beat_schedule = {
-    # Pull new episodes once a day, in the quiet hours (Europe/Sofia).
-    "sync-channels-daily": {
-        "task": "podcast.sync_all_channels",
-        "schedule": crontab(hour=4, minute=0),
-    },
+    # 🚨 The daily channel sync is DELIBERATELY NOT SCHEDULED (owner decision,
+    # 2026-08-15). 100 promo clips and stand-up excerpts were reviewed and
+    # deleted from the catalogue; ingestion is `update_or_create(youtube_id=...)`,
+    # so a scheduled sync would recreate every one of them the next morning and
+    # silently undo that pass. Re-enabling this entry without an exclusion list
+    # first WILL resurrect them - see `remove_episodes` and tmp/to-remove.txt.
+    #
+    # New episodes are pulled deliberately instead: `manage.py sync_channels`.
+    # The trade-off is a catalogue that goes stale until someone runs it.
     # Self-healing score sweep. Ratings recompute on write, so this only repairs
     # drift from a missed signal or a verification change - hourly is plenty.
     "recompute-scores-hourly": {
