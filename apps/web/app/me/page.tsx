@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 
 import { EpisodeRow } from "@/components/episode/EpisodeCard";
+import { InstallAppGuide } from "@/components/profile/InstallAppGuide";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Page, StatTile } from "@/components/shell/Page";
@@ -65,6 +66,9 @@ export default function ProfilePage() {
         <h1 className="text-h1">{copy.nav.profile}</h1>
         <div className="mt-5">
           <SignedOutNotice />
+        </div>
+        <div className="mt-5">
+          <InstallAppGuide />
         </div>
       </Page>
     );
@@ -164,6 +168,10 @@ export default function ProfilePage() {
             </p>
           )}
         </section>
+      </div>
+
+      <div className="mt-8">
+        <InstallAppGuide />
       </div>
     </Page>
   );
