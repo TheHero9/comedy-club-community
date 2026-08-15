@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { Button } from "@/components/ui/button";
@@ -82,5 +83,59 @@ export function ConfirmButton({
         {copy.common.cancel}
       </Button>
     </div>
+  );
+}
+
+
+/**
+ * The icon-sized variant: an X that becomes a labelled confirm.
+ *
+ * Same contract as `ConfirmButton`, sized for a row action. It expands to a
+ * text button when armed rather than staying a 26px icon - a confirmation you
+ * can hit as easily as the thing you were trying to avoid is not one.
+ */
+export function ConfirmIconButton({
+  onConfirm,
+  label,
+  confirmLabel,
+}: {
+  onConfirm: () => void;
+  /** Accessible name of the resting X button. */
+  label: string;
+  confirmLabel: string;
+}) {
+  const [armed, setArmed] = useState(false);
+
+  if (!armed) {
+    return (
+      <Button
+        variant="quiet"
+        size="icon"
+        className="size-[26px]"
+        aria-label={label}
+        onClick={() => setArmed(true)}
+      >
+        <X className="size-3" aria-hidden strokeWidth={2.6} />
+      </Button>
+    );
+  }
+
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <Button
+        variant="primary"
+        size="xs"
+        autoFocus
+        onClick={() => {
+          setArmed(false);
+          onConfirm();
+        }}
+      >
+        {confirmLabel}
+      </Button>
+      <Button variant="quiet" size="icon" className="size-[26px]" onClick={() => setArmed(false)}>
+        <X className="size-3" aria-hidden strokeWidth={2.6} />
+      </Button>
+    </span>
   );
 }

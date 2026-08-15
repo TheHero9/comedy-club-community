@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { EpisodeRow } from "@/components/episode/EpisodeCard";
+import { GridFitToggle } from "@/components/grid/GridFitToggle";
 import { RatingsGrid } from "@/components/grid/RatingsGrid";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { MetaLine, Page, SectionHeading, StatTile } from "@/components/shell/Page";
@@ -13,6 +14,7 @@ import {
   listEpisodes,
   type ChannelGrid,
 } from "@/lib/api/podcast";
+import { GRID_ANCHOR } from "@/components/grid/grid-model";
 import { getCopy } from "@/lib/locale";
 import { formatCompactNumber } from "@/lib/format";
 import { decodeRouteParam } from "@/lib/route-params";
@@ -167,7 +169,10 @@ export default async function ChannelPage({
         />
       </div>
 
-      <section className="mt-7">
+      {/* 🚨 `id` and `scroll-mt` are a pair. Episode pages deep-link here with
+          `#ratings-grid`, and without the scroll margin the sticky 54/64px
+          header lands on top of the heading you just jumped to. */}
+      <section id={GRID_ANCHOR} className="mt-7 scroll-mt-20">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-h2">{copy.channel.gridTitle}</h2>
 
@@ -198,7 +203,12 @@ export default async function ChannelPage({
           {copy.channel.hintDesktop}
         </p>
 
-        <RatingsGrid grid={grid} />
+        {/* 🚨 Wrapped, not replaced. "Fit to screen" is a CSS scale over the
+            grid the server already sent - the flagship channel is ~2,024 cells
+            and re-rendering it at a second size would undo the payload work. */}
+        <GridFitToggle>
+          <RatingsGrid grid={grid} />
+        </GridFitToggle>
       </section>
 
       {episodes.items.length > 0 ? (

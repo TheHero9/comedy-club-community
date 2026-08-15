@@ -62,9 +62,10 @@ export function RateSheet() {
           <p className="font-display text-[17px] font-bold">
             {copy.rating.sheetTitle}
           </p>
-          <p className="mt-1 truncate text-[12.5px] text-subtle-foreground">
-            {viewer.title}
-          </p>
+          {/* 🚨 The episode title used to repeat here and is gone (owner
+              call, 2026-08-15). The sheet opens over the episode page, whose
+              H1 is that same title - so it restated what was already on screen
+              and pushed the 1-10 row further from the thumb. */}
         </div>
         <span
           className={cn(

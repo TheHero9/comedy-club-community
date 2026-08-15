@@ -1,6 +1,15 @@
 import type { Schema } from "@ccc/api-types";
 
 import { copy } from "@/lib/copy";
+
+/**
+ * The id `RatingsGrid` renders and every deep link targets.
+ *
+ * 🚨 Shared, not restated. An episode page links to `#<GRID_ANCHOR>` on the
+ * channel page; the previous attempt hard-coded `#year-<n>`, nothing carried
+ * that id, and the button silently jumped nowhere.
+ */
+export const GRID_ANCHOR = "ratings-grid";
 import { formatScore } from "@/lib/format";
 
 export type Grid = Schema<"ChannelGridOut">;

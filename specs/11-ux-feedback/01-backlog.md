@@ -197,3 +197,66 @@ phase. **Confirm the row exists before arming a destructive one-off.**
 | Web default locale | `<html lang="en">`, "Every episode." |
 | `/e/BADID` | still a hard 404 |
 | Search split + pagination | both regions render, "load more" present, timing readout gone |
+
+
+---
+
+## Batch 2, 2026-08-15 (items 32-47)
+
+A second walkthrough after the first batch shipped. 16 items, all built.
+
+| # | Task | Surface |
+| - | ---- | ------- |
+| 32 | Remove the four example-query chips under the search bar | Home |
+| 33 | Remove the same chips | Search |
+| 34 | Popular topics collapsed by default | Search |
+| 35 | Say what search covers - and that transcripts are most episodes, not all | Search |
+| 36 | Remove the header search trigger; it existed in three places | Header |
+| 37 | Display name must never fall back to an email | API |
+| 38 | Show the real Google avatar instead of two initials | Profile |
+| 39 | Let the user edit their handle | Profile + API |
+| 40 | Move sign-out out of the navigation stack | Profile |
+| 41 | Sticky year column glitched while scrolling | Channel |
+| 42 | "Fit to screen" for the whole ratings grid | Channel |
+| 43 | Explain how moments get logged | Episode |
+| 44 | Community score beside your own, labelled, at the top | Episode |
+| 45 | "See every rating" jumped nowhere | Episode |
+| 46 | Confirm before removing a logged watch date | Episode |
+| 47 | Drop the episode title from the rating sheet | Episode |
+
+### Two diagnoses that changed what got built
+
+**"I can see my email" was not an email field.** `/api/me` has never returned
+one and `MeOut` has no such key. What rendered was the DISPLAY NAME, because
+`humanize()` fell back to the email's local part when Clerk supplied no name.
+The fix is not to hide a field - it is to stop that fallback existing, since the
+same value is `author_name` on every public comment.
+
+**"I see two letters" was an ignored avatar.** Clerk gives us `image_url` from
+Google and we store it on `UserProfile.avatar_url`, but the profile page passed
+only `name` to `PersonAvatar`, which renders initials. The picture was in the
+database the whole time. Initials now sit *behind* the image, so a URL that
+stops resolving degrades to the tile with no client JS and no layout shift.
+
+### #45 was a bug I shipped in batch 1
+
+The "See every rating" link pointed at `/channels/<slug>#year-<n>` and **no
+element carried that id**, so the browser jumped nowhere and the button read as
+dead. `GRID_ANCHOR` is now a shared constant rendered by the channel page and
+consumed by the episode page, with `scroll-mt-20` so the sticky header does not
+land on top of the heading you just jumped to.
+
+### #41: the sticky column was fighting its own container
+
+`position: sticky; left: 0` resolves against the scrollport's padding box. The
+scroller carried `px-4`, so the year column parked 16px in and the scrolling
+cells slid through the gap beside it. The gutter moved onto the table as a
+margin, and the sticky cells gained a `4px` shadow in the same colour to cover
+the `border-spacing` gap.
+
+### #42 is a CSS scale, deliberately
+
+The flagship channel is ~2,024 cells and getting that grid to 916 KB was
+expensive. "Fit to screen" is `transform: scale()` on a wrapper around the grid
+the server already sent - re-rendering at a second size would either double the
+payload or need a client round trip.

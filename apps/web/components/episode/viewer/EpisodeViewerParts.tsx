@@ -52,6 +52,14 @@ function RateButton({ size = "md" }: { size?: "sm" | "md" }) {
       <span className="mt-1 block text-[12.5px] font-semibold whitespace-nowrap">
         {rated ? copy.episode.yourRating(viewer.myRating!) : copy.episode.rate}
       </span>
+      {/* The counterpart label to "Community" beside it. Only once a score
+          exists - before that the button reads "Rate", which is its own
+          label. */}
+      {rated ? (
+        <span className="mt-px block text-[10.5px] text-subtle-foreground">
+          {copy.episode.yourScore2}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -64,9 +72,14 @@ export function EpisodeHeaderScore() {
   const viewer = useEpisodeViewer();
 
   return (
+    /* 🚨 The community score and YOUR score sit side by side, labelled, at the
+       top of the page. The community number used to be here unlabelled while
+       "Community ratings" lived in a section far below, so there was nothing to
+       compare it against without scrolling - and the owner could not tell which
+       number was whose. */
     <div className="hidden shrink-0 items-center gap-5 pt-1 md:flex">
       <div className="text-right">
-        <p className="text-eyebrow">{copy.episode.scoreLabel}</p>
+        <p className="text-eyebrow">{copy.episode.communityScore}</p>
         <p className="mt-0.5 flex items-baseline justify-end gap-1.5">
           <Star className="size-[18px] self-center fill-gold text-gold" aria-hidden />
           <span className="font-mono text-[24px] font-bold tabular">
@@ -109,6 +122,8 @@ export function EpisodeScoreStrip() {
           </span>
         </p>
         <p className="mt-0.5 text-[11.5px] text-subtle-foreground">
+          {copy.episode.communityScore}
+          {copy.common.separator}{" "}
           {viewer.ratingCount > 0
             ? copy.episode.ratings(viewer.ratingCount)
             : copy.episode.noRatings}

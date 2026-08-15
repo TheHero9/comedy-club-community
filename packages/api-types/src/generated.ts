@@ -1333,6 +1333,8 @@ export interface components {
         ProfileIn: {
             /** Display Name */
             display_name?: string | null;
+            /** Handle */
+            handle?: string | null;
             /** Bio */
             bio?: string | null;
             /** Avatar Url */

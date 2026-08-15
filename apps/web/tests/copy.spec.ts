@@ -454,6 +454,12 @@ describe("6.3 no em-dash or en-dash anywhere in the repo", () => {
       "node_modules", ".next", ".git", ".turbo", ".venv", "venv",
       "__pycache__", ".pytest_cache", "dist", "build",
       "test-results", "playwright-report", ".vercel", "staticfiles",
+      // Generated scratch output, already in .gitignore. `manage.py
+      // export_review_page` writes real episode titles here, and a YouTube
+      // title may legitimately contain an em-dash - which is the author's, not
+      // ours. Every other entry in this list is generated or vendored for the
+      // same reason.
+      "tmp",
     ]),
   });
 

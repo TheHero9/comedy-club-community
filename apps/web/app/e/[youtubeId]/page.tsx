@@ -35,10 +35,10 @@ import {
   formatDuration,
   formatScore,
   formatTimestamp,
-  yearOf,
   youtubeMomentUrl,
 } from "@/lib/format";
 import { bandStyle } from "@/lib/score-bands";
+import { GRID_ANCHOR } from "@/components/grid/grid-model";
 import { decodeRouteParam } from "@/lib/route-params";
 import { cn } from "@/lib/utils";
 
@@ -160,7 +160,6 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
   ]);
 
   const duration = formatDuration(episode.duration_sec);
-  const year = yearOf(episode.upload_date);
 
   return (
     <EpisodeViewerProvider
@@ -306,6 +305,13 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
               title={copy.episode.moments}
               meta={moments.length > 0 ? String(moments.length) : undefined}
             >
+              {/* 🚨 Printed whether or not there are moments. The owner's words
+                  were "I have no clue how do we log them" - and with moments
+                  present the list explained nothing, while with none the empty
+                  state only said "nothing labelled yet". */}
+              <p className="mt-2.5 text-small text-subtle-foreground">
+                {copy.episode.momentsHowTo}
+              </p>
               {moments.length > 0 ? (
                 <>
                   {/* Timeline. Ticks are positioned by timestamp, so the bar
@@ -447,13 +453,14 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
 
             {/* 🚨 The ratings grid is the best page on the site and was
                 reachable only from /channels. From an episode you are already
-                looking at, the grid is the answer to "how does this compare",
-                so the link belongs here. `year` deep-links to the row this
-                episode sits in. */}
+                looking at, the grid is the answer to "how does this compare".
+
+                ⚠️ This used to append `#year-<n>`, and NO element carried that
+                id - so the browser jumped nowhere and the button read as
+                broken. It now links to the grid itself, which `RatingsGrid`
+                anchors with a real `id`. */}
             <Link
-              href={`/channels/${encodeURIComponent(episode.channel_slug)}${
-                year === null ? "" : `#year-${year}`
-              }`}
+              href={`/channels/${encodeURIComponent(episode.channel_slug)}#${GRID_ANCHOR}`}
               className={cn(
                 buttonVariants({ variant: "outline", size: "lg", block: true }),
                 "mt-5.5 max-w-[400px]",

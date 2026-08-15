@@ -31,7 +31,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count, Q
 
-from podcast.models import Channel, Episode
+from podcast.models import Episode
 
 PAGE_TITLE = "Преглед на каталога"
 

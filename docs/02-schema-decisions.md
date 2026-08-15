@@ -262,10 +262,36 @@ relying on `Meta.ordering`, so the intent is visible at the query.
 
 `CharField(max_length=100, blank=True, null=True, unique=True, db_index=True)`.
 
-**This is the user's YOUTUBE handle**, not a second display name and not the
-Django username. It exists so a `ChannelMembership` can eventually be tied to a
-real subscriber account. It is assigned by us (admin), never free-form user
-input - a self-chosen handle would be worthless for that linkage.
+`CharField(max_length=30, blank=True, null=True, unique=True, db_index=True)`.
+
+**This is a self-chosen public nickname.** Not a second display name, and not
+the Django username.
+
+🚨 **Ownership reversed on 2026-08-15, same day it was introduced.** It shipped
+as "the YouTube handle, assigned by us", so a `ChannelMembership` could later be
+tied to a real subscriber account. The owner overruled that within hours:
+*"user editable yea because users can and will edit it, it's their name
+basically"*.
+
+The consequence is worth stating plainly: **the handle can no longer be treated
+as evidence of a YouTube identity.** Anyone can type anything. If that linkage
+is ever wanted, it needs a separate, verified field - reusing this one would
+silently trust user input as proof.
+
+Validation lives in `podcast/services/handles.py`, not in the endpoint:
+
+- **NFKC first.** Without it `ｉｖａｎ` (fullwidth) and `ivan` are different rows
+  that render identically - an impersonation vector.
+- **Casefolded**, so `IVAN` cannot dodge the unique constraint on `ivan`.
+- 🇧🇬 **Cyrillic is allowed.** The check is Unicode `isalnum()`, not an ASCII
+  range; an ASCII-only rule would tell most of this audience their own name is
+  invalid.
+- **Empty normalises to NULL, never `""`.** The column is unique, and Postgres
+  treats every NULL as distinct while `""` is a value - so a second user
+  clearing their handle would collide with the first.
+- **A taken handle is a 409, not a 500.** Checked before the write for a useful
+  message, and the `IntegrityError` is caught as well, because the check alone
+  loses a race between two users claiming the same name.
 
 **The bug that motivated it.** Clerk's default session token carries only
 `sub`, `sid`, `iss`, `exp`, `iat`, `nbf`, `azp`, `jti`, `v` - no name, no email,
@@ -287,8 +313,16 @@ Three fixes, all needed:
 2. `humanize()` in `podcast/auth/backends.py` refuses to let an
    identity-provider id become anything user-visible, and REPAIRS a profile
    already storing one on the next authenticated request.
-3. `handle` is `NULL` until known, and the UI prints "no YouTube handle linked
-   yet" rather than falling back to the username.
+3. `handle` is `NULL` until the user picks one, and the UI prints a prompt to
+   add one rather than falling back to the username.
+
+🚨 **`humanize()` no longer falls back to an email either (2026-08-15).** It
+used to reduce `ivan.petrov@gmail.com` to `ivan.petrov`, on the theory that a
+local part is at least recognisable. In practice Clerk returned no name and the
+owner's profile greeted them with what read as their own email address - and
+because the same value is `author_name` on every public comment, that fallback
+would have published the local part of real addresses site-wide. It now returns
+`""`, and the UI renders a neutral placeholder inviting the user to set a name.
 
 `author_name` on public comments goes through `humanize()` too - without it, a
 raw Clerk id would have been published site-wide under every comment.

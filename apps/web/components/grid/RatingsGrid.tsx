@@ -162,14 +162,26 @@ async function DesktopGrid({ grid }: { grid: Grid }) {
           a positioned ancestor those spans resolve their containing block above
           this scroller, escape its overflow and stretch the document instead.
           Measured once at documentElement.scrollWidth 4121 on a 390px screen. */}
-      <div className="relative overflow-x-auto px-4">
-        <table data-grid="desktop" className="w-max border-separate border-spacing-1">
+      {/* 🚨 `px-4` moved OFF this element and onto the table.
+          `position: sticky; left: 0` resolves against the scrollport's padding
+          box, so with padding here the year column parked 16px in and the
+          scrolling cells slid through the gap beside it - which is the
+          "it's fixed but buggy when you scroll" the owner saw. The gutter is
+          now the table's margin, so the sticky edge is the real edge.
+
+          `relative` stays load-bearing: Tailwind's `sr-only` is
+          `position: absolute`, so without a positioned ancestor those spans
+          resolve above this scroller, escape its overflow and stretch the
+          document. Measured once at documentElement.scrollWidth 4121 on a
+          390px screen. */}
+      <div className="relative overflow-x-auto">
+        <table data-grid="desktop" className="mx-4 w-max border-separate border-spacing-1">
           <caption className="sr-only">
             {copy.channel.gridLabel(grid.channel_name)}
           </caption>
           <thead>
             <tr>
-              <th scope="col" className="sticky left-0 z-20 w-[88px] bg-card-2">
+              <th scope="col" className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] w-[88px]">
                 <span className="sr-only">{copy.channel.yearColumn}</span>
               </th>
               {grid.rows.map((row) => (
@@ -188,7 +200,7 @@ async function DesktopGrid({ grid }: { grid: Grid }) {
               <tr key={season.year}>
                 <th
                   scope="row"
-                  className="sticky left-0 z-20 w-[88px] bg-card-2 pr-3 text-left align-middle"
+                  className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] w-[88px] pr-3 text-left align-middle"
                 >
                   <span className="flex flex-col">
                     <span className="font-display text-[15px] font-bold text-foreground">
@@ -320,14 +332,16 @@ async function DenseGrid({ grid }: { grid: Grid }) {
   const copy = await getCopy();
   return (
     <div className="mt-4 rounded-3xl border border-border bg-card-2 py-4">
-      <div className="relative overflow-x-auto px-4">
-        <table data-grid="dense" className="w-max border-separate border-spacing-px">
+      {/* Same fix as the roomy grid: the gutter is the table's margin, so the
+          sticky year column parks against the real scroll edge. */}
+      <div className="relative overflow-x-auto">
+        <table data-grid="dense" className="mx-4 w-max border-separate border-spacing-px">
           <caption className="sr-only">
             {copy.channel.gridLabel(grid.channel_name)}
           </caption>
           <thead>
             <tr>
-              <th scope="col" className="sticky left-0 z-20 bg-card-2 pr-3">
+              <th scope="col" className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] pr-3">
                 <span className="sr-only">{copy.channel.yearColumn}</span>
               </th>
               {grid.rows.map((row) => (
@@ -353,7 +367,7 @@ async function DenseGrid({ grid }: { grid: Grid }) {
               <tr key={season.year}>
                 <th
                   scope="row"
-                  className="sticky left-0 z-20 bg-card-2 pr-3 text-left align-middle"
+                  className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] pr-3 text-left align-middle"
                 >
                   <span className="flex items-baseline gap-1.5 leading-tight">
                     <span className="font-display text-[13px] font-bold">

@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 
 import { useEpisodeViewer } from "@/components/episode/viewer/EpisodeViewerContext";
 import { notify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
+import { ConfirmIconButton } from "@/components/shared/ConfirmButton";
 import { Sheet } from "@/components/ui/sheet";
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { formatDate, relativeDay, toIsoDay } from "@/lib/format";
@@ -149,15 +150,18 @@ export function WatchLogSheet() {
                 <span className="font-mono text-[11px] text-subtle-foreground">
                   {relativeDay(event.watched_on, today)}
                 </span>
-                <Button
-                  variant="quiet"
-                  size="icon"
-                  className="size-[26px]"
-                  aria-label={copy.episode.removeWatch(formatDate(event.watched_on, copy.common.months))}
-                  onClick={() => viewer.removeWatch(event.id)}
-                >
-                  <X className="size-3" aria-hidden strokeWidth={2.6} />
-                </Button>
+                {/* 🚨 Asks first. This is the destructive control in the
+                    logged-viewings list and it is a 26px target sitting right
+                    beside the date it deletes - a mis-tap silently removes a
+                    viewing with no undo. The calendar above is a genuine
+                    toggle and needs no prompt; this does. */}
+                <ConfirmIconButton
+                  label={copy.episode.removeWatch(
+                    formatDate(event.watched_on, copy.common.months),
+                  )}
+                  confirmLabel={copy.watchLog.confirmClearCta}
+                  onConfirm={() => viewer.removeWatch(event.id)}
+                />
               </li>
             ))}
           </ul>
