@@ -1,7 +1,10 @@
 # 📊 STATUS
 
-**Updated:** 2026-08-11
-**Overall:** 🟢 **Waves 1-13 built and test-hardened, and the full visual redesign is shipped.** 41 API paths, all ten designed routes live in Bulgarian across two themes, and **958 automated tests** (423 pytest + 166 Vitest + 369 Playwright) that all run from `npm run test`.
+**Updated:** 2026-08-15
+**Overall:** 🚀 **LIVE IN PRODUCTION at https://comedycommunity.club** (2026-08-15). Web on Vercel, API + Celery + Postgres + Redis + Meilisearch on Railway, Clerk production auth, 7 channels / 1,962 episodes / 579 transcripts served. Launch smoke test 13/13. Full topology and the six deployment gotchas: [`specs/10-deployment/`](../specs/10-deployment/01-production-setup.md).
+
+> ⚠️ Still deferred before the membership-verification flow is used by real users:
+> R2 + signed URLs for verification screenshots (`NEXT_TIME.md` § Security).
 
 > 🆕 **2026-08-11 hardening sweep:** 7 real bugs found and fixed, including the
 > root cause of the "unexplained flaky E2E" recorded below on 2026-08-10 - it was
