@@ -214,8 +214,15 @@ def comment_out(comment) -> dict:
     }
 
 
-def moment_out(moment) -> dict:
+def moment_out(moment, viewer=None) -> dict:
+    """🔒 `is_mine` is decided here, from the verified actor.
+
+    It cannot be derived on the client from `author`: that is a display name,
+    so two members called Иван collide, and it is editable, so it is not an
+    identity. Comparing ids server-side is the only honest answer.
+    """
     profile = getattr(moment.user, "profile", None) if moment.user else None
+    viewer_id = getattr(viewer, "id", None)
     return {
         "id": moment.id,
         "timestamp_sec": moment.timestamp_sec,
@@ -223,7 +230,41 @@ def moment_out(moment) -> dict:
         "score": moment.score,
         "created_at": moment.created_at,
         "author": (profile.display_name if profile else None),
+        "is_mine": bool(viewer_id and moment.user_id == viewer_id),
     }
+
+
+def proposal_out(proposal, viewer=None) -> dict:
+    """One participant proposal, in the shape both the episode page and the
+    moderation queue read."""
+    profile = getattr(proposal.proposed_by, "profile", None) if proposal.proposed_by else None
+    viewer_id = getattr(viewer, "id", None)
+    return {
+        "id": proposal.id,
+        "display_name": proposal.display_name,
+        "person_slug": proposal.person.slug if proposal.person_id else None,
+        "role": proposal.role,
+        "status": proposal.status,
+        "created_at": proposal.created_at,
+        "proposed_by": (profile.display_name if profile else None),
+        "note": proposal.note,
+        "verified_at": proposal.verified_at,
+        "is_mine": bool(viewer_id and proposal.proposed_by_id == viewer_id),
+    }
+
+
+def proposal_queue_out(proposal, viewer=None) -> dict:
+    """The queue additionally needs which episode, and the RAW typed text.
+
+    A moderator has to see exactly what the member wrote - `display_name` hides
+    it once a person is attached, and the typed spelling is the whole reason a
+    human is reviewing this.
+    """
+    data = proposal_out(proposal, viewer)
+    data["episode_youtube_id"] = proposal.episode.youtube_id
+    data["episode_title"] = proposal.episode.title
+    data["proposed_name"] = proposal.proposed_name
+    return data
 
 
 def person_out(person) -> dict:

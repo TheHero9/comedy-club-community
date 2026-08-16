@@ -431,6 +431,108 @@ class EpisodeParticipant(models.Model):
         return f"{self.person} as {self.get_role_display()}"
 
 
+class ParticipantProposal(models.Model):
+    """A member's suggestion that someone took part in an episode.
+
+    🚨 SEPARATE FROM `EpisodeParticipant` ON PURPOSE - see specs/14 §Design.
+    The obvious shortcut is a `status` column on EpisodeParticipant, but that
+    model is already read by the episode serializer, the `?person=` filter, the
+    person detail endpoint, the Postgres search fallback and the Meilisearch
+    document builder. A status column means every one of those must learn to
+    filter it, and the one that gets forgotten silently publishes unverified
+    data into SEARCH, where it is least visible. Same principle as the NUL-byte
+    middleware and the API-wide throttle: a new reader must not be able to leak
+    by omission. With a separate table, a pending proposal is structurally
+    incapable of reaching any of them, and EpisodeParticipant keeps its exact
+    current meaning - a confirmed participant.
+
+    🚨 A PROPOSAL NEVER CREATES A `Person` (owner ruling, 2026-08-16). Personas
+    are admin-curated; a member either picks an existing one or types a name,
+    and a moderator maps that text onto the right persona - creating it by hand
+    first if it is genuinely new. Free-text personas would be catastrophic here:
+    the auto-captions mishear `Тонката` as `Донката`, and the same person is
+    also `Тони`, so user input would split one filmography across three pages
+    and permanently pollute the `participant_slugs` facet.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    episode = models.ForeignKey(
+        Episode, on_delete=models.CASCADE, related_name="participant_proposals"
+    )
+    # Set when the member picked an existing persona from autocomplete. NULL
+    # when they typed a name instead - that is what `proposed_name` carries.
+    person = models.ForeignKey(
+        Person, on_delete=models.CASCADE, null=True, blank=True, related_name="proposals"
+    )
+    proposed_name = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Free text typed by the member when no persona matched.",
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=EpisodeParticipant.Role.choices,
+        default=EpisodeParticipant.Role.GUEST,
+    )
+
+    proposed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name="participant_proposals"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="participant_proposals_reviewed",
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(
+        max_length=280,
+        blank=True,
+        help_text="Why it was rejected, or which persona a typed name was mapped to.",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            # A proposal that names nobody cannot be reviewed, so it must not
+            # exist. Enforced in the DB, not just in the serializer - the same
+            # rule the rest of this schema follows.
+            models.CheckConstraint(
+                condition=~models.Q(person__isnull=True, proposed_name=""),
+                name="proposal_names_someone",
+            ),
+            # One pending suggestion per person per episode per member. Scoped
+            # to PENDING deliberately: a rejected proposal must not block the
+            # same member from proposing again once something changes.
+            models.UniqueConstraint(
+                fields=["episode", "person", "proposed_by"],
+                condition=models.Q(status="pending"),
+                name="uniq_pending_proposal_per_user",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["episode", "status"]),
+        ]
+
+    def __str__(self):
+        who = self.person.name if self.person else (self.proposed_name or "?")
+        return f"[{self.get_status_display()}] {who} in {self.episode.youtube_id}"
+
+    @property
+    def display_name(self) -> str:
+        """What to show for this proposal, whichever way it was made."""
+        return self.person.name if self.person else self.proposed_name
+
+
 # ---------------------------------------------------------------------------
 # USERS, PROFILES & MEMBERSHIP
 # ---------------------------------------------------------------------------
@@ -795,13 +897,31 @@ class Report(models.Model):
         RESOLVED = "resolved", "Resolved"
         DISMISSED = "dismissed", "Dismissed"
 
+    class Category(models.TextChoices):
+        WRONG_PARTICIPANTS = "wrong_participants", "Wrong participants"
+        WRONG_INFO = "wrong_info", "Wrong information"
+        NOT_AN_EPISODE = "not_an_episode", "Not an episode"
+        BUG = "bug", "Something is broken"
+        SUGGESTION = "suggestion", "Suggestion"
+        OTHER = "other", "Other"
+
     reporter = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="reports_made"
     )
     reason = models.CharField(max_length=280)
+    category = models.CharField(
+        max_length=32, choices=Category.choices, default=Category.OTHER, db_index=True
+    )
 
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
+    # 🚨 NULLABLE so a general report can point at nothing. "The site is broken"
+    # and "this suggestion" have no target, and forcing one would mean inventing
+    # a fake row to attach them to. The REPORTABLE allow-list in
+    # podcast/api/moderation.py still governs what a target MAY be - a null
+    # target is not an open-ended content type, it is the absence of one.
+    content_type = models.ForeignKey(
+        ContentType, on_delete=models.CASCADE, null=True, blank=True
+    )
+    object_id = models.PositiveIntegerField(null=True, blank=True)
     target = GenericForeignKey("content_type", "object_id")
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)

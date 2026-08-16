@@ -33,6 +33,11 @@ export type ViewerState = Schema<"ViewerStateOut">;
 export type WatchSummary = Schema<"WatchSummaryOut">;
 export type RatingResult = Schema<"RatingOut">;
 export type FavoriteResult = Schema<"FavoriteOut">;
+export type EpisodeCast = Schema<"EpisodeCastOut">;
+export type Proposal = Schema<"ProposalOut">;
+export type ProposalQueueItem = Schema<"ProposalQueueOut">;
+export type Report = Schema<"ReportOut">;
+export type PersonBrief = Schema<"PersonBriefOut">;
 
 /**
  * Public content changes at most once a day (the ingestion sync), so a short
@@ -78,6 +83,20 @@ export function getEpisode(youtubeId: string) {
 export function listMoments(youtubeId: string) {
   return api.get<Moment[]>(
     `/api/episodes/${encodeURIComponent(youtubeId)}/moments`,
+    PUBLIC_CACHE,
+  );
+}
+
+/**
+ * Confirmed cast and open proposals, as the API returns them: two lists.
+ *
+ * 🚨 Do not merge them for convenience. Only `confirmed` exists in
+ * EpisodeParticipant, so only `confirmed` is what search and `?person=` agree
+ * with - a blended list invites rendering a pending guess as fact.
+ */
+export function listCast(youtubeId: string) {
+  return api.get<EpisodeCast>(
+    `/api/episodes/${encodeURIComponent(youtubeId)}/participants`,
     PUBLIC_CACHE,
   );
 }

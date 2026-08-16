@@ -810,6 +810,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/episodes/{youtube_id}/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cast
+         * @description Confirmed cast plus this episode's open proposals, as SEPARATE lists.
+         *
+         *     Never merged: only `confirmed` exists in EpisodeParticipant, so only
+         *     `confirmed` is what Meilisearch and `?person=` agree with. A caller handed
+         *     one blended list would inevitably render a pending guess as fact.
+         */
+        get: operations["podcast_api_community_list_cast"];
+        put?: never;
+        /**
+         * Propose Participant
+         * @description Suggest someone. Creates a PROPOSAL - never a Person, never a participant.
+         *
+         *     🚨 `name` is free text and stays free text until a moderator maps it onto a
+         *     persona. See services/participants.py for why letting it become a `Person`
+         *     would wreck the cast index.
+         */
+        post: operations["podcast_api_community_propose_participant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/participant-proposals/{proposal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw Proposal
+         * @description Take back your own suggestion, while it is still pending.
+         */
+        delete: operations["podcast_api_community_withdraw_proposal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/participant-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Proposals
+         * @description 🔒 Moderators only. The review queue.
+         */
+        get: operations["podcast_api_community_list_proposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/participant-proposals/{proposal_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Proposal
+         * @description 🔒 Moderators only. `person_slug` is the correction - "yes, but under the
+         *     right name" - and is REQUIRED when the proposal is only typed text.
+         */
+        post: operations["podcast_api_community_approve_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/participant-proposals/{proposal_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Proposal
+         * @description 🔒 Moderators only. The row stays - it is the audit trail, and the member
+         *     who filed it is shown the note.
+         */
+        post: operations["podcast_api_community_reject_proposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports": {
         parameters: {
             query?: never;
@@ -823,7 +937,11 @@ export interface paths {
          */
         get: operations["podcast_api_moderation_list_reports"];
         put?: never;
-        /** Create Report */
+        /**
+         * Create Report
+         * @description File a report. The target is OPTIONAL - a broken page or a suggestion
+         *     points at nothing, and forcing a target would mean inventing a row.
+         */
         post: operations["podcast_api_moderation_create_report"];
         delete?: never;
         options?: never;
@@ -863,6 +981,33 @@ export interface paths {
         post?: never;
         /** Withdraw Report */
         delete: operations["podcast_api_moderation_withdraw_report"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Reports
+         * @description Your own reports, with what a moderator decided and why.
+         *
+         *     🔁 THIS IS THE FEEDBACK LOOP. `resolution_note` has existed on the model
+         *     since wave 13 and had no reader, so a member filed a report and never
+         *     learned anything. A moderator writes one line; the reporter sees it here.
+         *
+         *     🔒 Filters on `request.auth`. It never accepts a user id from the client -
+         *     that would let anyone read anyone's reports.
+         */
+        get: operations["podcast_api_moderation_list_my_reports"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1580,6 +1725,16 @@ export interface components {
              * @default []
              */
             personal_tags: string[];
+            /**
+             * My Moment Ids
+             * @default []
+             */
+            my_moment_ids: number[];
+            /**
+             * My Proposal Ids
+             * @default []
+             */
+            my_proposal_ids: number[];
         };
         /** RatingOut */
         RatingOut: {
@@ -1780,22 +1935,170 @@ export interface components {
             created_at: string;
             /** Author */
             author?: string | null;
+            /**
+             * Is Mine
+             * @default false
+             */
+            is_mine: boolean;
         };
-        /** MomentIn */
+        /**
+         * MomentIn
+         * @description Either form of timestamp. `timestamp` is what a human typed ("1:30:29");
+         *     `timestamp_sec` is kept so existing callers keep working. The string wins
+         *     when both arrive - see services/timestamps.resolve_timestamp.
+         */
         MomentIn: {
+            /**
+             * Timestamp
+             * @description e.g. 1:30:29
+             */
+            timestamp?: string | null;
             /** Timestamp Sec */
-            timestamp_sec: number;
+            timestamp_sec?: number | null;
             /** Label */
             label: string;
+        };
+        /**
+         * EpisodeCastOut
+         * @description Confirmed and pending are separate lists, never merged.
+         *
+         *     Only `confirmed` is in EpisodeParticipant, and therefore only `confirmed`
+         *     is what Meilisearch and `?person=` agree with. Merging them in the payload
+         *     would invite a caller to render unverified data as fact.
+         */
+        EpisodeCastOut: {
+            /**
+             * Confirmed
+             * @default []
+             */
+            confirmed: components["schemas"]["PersonBriefOut"][];
+            /**
+             * Pending
+             * @default []
+             */
+            pending: components["schemas"]["ProposalOut"][];
+        };
+        /** ProposalOut */
+        ProposalOut: {
+            /** Id */
+            id: number;
+            /** Display Name */
+            display_name: string;
+            /** Person Slug */
+            person_slug?: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Proposed By */
+            proposed_by?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Verified At */
+            verified_at?: string | null;
+            /**
+             * Is Mine
+             * @default false
+             */
+            is_mine: boolean;
+        };
+        /**
+         * ParticipantProposeIn
+         * @description Exactly one of `person_slug` / `name`.
+         *
+         *     🚨 `name` is FREE TEXT and never becomes a `Person`. A moderator maps it
+         *     onto a persona that already exists, creating that persona by hand first if
+         *     it is genuinely new. See services/participants.py for why.
+         */
+        ParticipantProposeIn: {
+            /** Person Slug */
+            person_slug?: string | null;
+            /** Name */
+            name?: string | null;
+            /**
+             * Role
+             * @default guest
+             */
+            role: string;
+        };
+        /** ProposalQueueOut */
+        ProposalQueueOut: {
+            /** Id */
+            id: number;
+            /** Display Name */
+            display_name: string;
+            /** Person Slug */
+            person_slug?: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Proposed By */
+            proposed_by?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Verified At */
+            verified_at?: string | null;
+            /**
+             * Is Mine
+             * @default false
+             */
+            is_mine: boolean;
+            /** Episode Youtube Id */
+            episode_youtube_id: string;
+            /** Episode Title */
+            episode_title: string;
+            /**
+             * Proposed Name
+             * @default
+             */
+            proposed_name: string;
+        };
+        /**
+         * ProposalReviewIn
+         * @description `person_slug` is the moderator's correction - "this person IS in the
+         *     episode, but under the right name".
+         */
+        ProposalReviewIn: {
+            /** Person Slug */
+            person_slug?: string | null;
+            /** Role */
+            role?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
         };
         /** ReportOut */
         ReportOut: {
             /** Id */
             id: number;
             /** Target Type */
-            target_type: string;
+            target_type?: string | null;
             /** Target Id */
-            target_id: number;
+            target_id?: number | null;
+            /**
+             * Category
+             * @default other
+             */
+            category: string;
             /** Reason */
             reason: string;
             /** Status */
@@ -1810,16 +2113,27 @@ export interface components {
              * @default
              */
             resolution_note: string;
+            /** Resolved At */
+            resolved_at?: string | null;
         };
-        /** ReportIn */
+        /**
+         * ReportIn
+         * @description A target is OPTIONAL: "the site is broken" and "here is a suggestion"
+         *     point at nothing, and inventing a row to attach them to would be worse.
+         */
         ReportIn: {
             /**
              * Target Type
-             * @description comment | moment | episodetopic | rating
+             * @description episode | comment | moment | episodetopic | rating
              */
-            target_type: string;
+            target_type?: string | null;
             /** Target Id */
-            target_id: number;
+            target_id?: number | null;
+            /**
+             * Category
+             * @default other
+             */
+            category: string;
             /** Reason */
             reason: string;
         };
@@ -2988,6 +3302,151 @@ export interface operations {
             };
         };
     };
+    podcast_api_community_list_cast: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                youtube_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeCastOut"];
+                };
+            };
+        };
+    };
+    podcast_api_community_propose_participant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                youtube_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantProposeIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+        };
+    };
+    podcast_api_community_withdraw_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    podcast_api_community_list_proposals: {
+        parameters: {
+            query?: {
+                status?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalQueueOut"][];
+                };
+            };
+        };
+    };
+    podcast_api_community_approve_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalReviewIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+        };
+    };
+    podcast_api_community_reject_proposal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalReviewIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+        };
+    };
     podcast_api_moderation_list_reports: {
         parameters: {
             query?: {
@@ -3079,6 +3538,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    podcast_api_moderation_list_my_reports: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"][];
                 };
             };
         };

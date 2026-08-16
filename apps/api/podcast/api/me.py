@@ -23,6 +23,8 @@ from podcast.models import (
     ChannelMembership,
     Episode,
     Favorite,
+    Moment,
+    ParticipantProposal,
     PersonalTag,
     Rating,
     UserProfile,
@@ -271,6 +273,14 @@ def get_viewer_state(request, youtube_id: str):
             PersonalTag.objects.filter(user=user, episode=episode).values_list(
                 "text", flat=True
             )
+        ),
+        "my_moment_ids": list(
+            Moment.objects.filter(user=user, episode=episode).values_list("id", flat=True)
+        ),
+        "my_proposal_ids": list(
+            ParticipantProposal.objects.filter(
+                proposed_by=user, episode=episode
+            ).values_list("id", flat=True)
         ),
     }
 

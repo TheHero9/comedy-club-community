@@ -1,0 +1,45 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Intermediate page for a bulk action that has to carry a note.
+
+🚨 It exists because `queryset.update(...)` cannot write one. The report queue's
+bulk resolve/dismiss used to set status/resolved_by/resolved_at and silently
+drop `resolution_note` - so the member saw a "Fixed" chip with no message, and
+the note is the entire point of the feedback loop.
+
+The hidden `_selected_action` inputs re-post the selection, and `apply_note`
+tells the action this is the confirmed second pass rather than the first.
+{% endcomment %}
+{% block content %}
+<h1>{{ title }}</h1>
+
+<form method="post">
+  {% csrf_token %}
+
+  <p>{{ objects|length }} row{{ objects|length|pluralize }} selected:</p>
+  <ul>
+    {% for object in objects %}
+      <li>{{ object }}</li>
+    {% endfor %}
+  </ul>
+
+  <p>
+    <label for="id_note">{{ form.note.label }}</label><br>
+    {{ form.note }}
+  </p>
+  <p class="help">
+    Left blank, the row is still updated - it just carries no explanation back
+    to the person who filed it.
+  </p>
+
+  {% for object in objects %}
+    <input type="hidden" name="{{ action_checkbox_name }}" value="{{ object.pk }}">
+  {% endfor %}
+  <input type="hidden" name="action" value="{{ action_name }}">
+
+  <div class="submit-row">
+    <input type="submit" name="apply_note" value="Confirm" class="default">
+    <a href="." class="button cancel-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

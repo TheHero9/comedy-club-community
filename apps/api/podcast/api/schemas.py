@@ -99,6 +99,11 @@ class MomentOut(Schema):
     score: int
     created_at: datetime
     author: str | None = None
+    # 🔒 Computed on the server from request.auth, never from a client-supplied
+    # id. `author` is a DISPLAY NAME and cannot answer "is this mine" - two
+    # members called Иван are indistinguishable by it, and a display name is
+    # also editable, so it is not an identity.
+    is_mine: bool = False
 
 
 class EpisodeBriefOut(Schema):
@@ -158,6 +163,12 @@ class ViewerStateOut(Schema):
     watch_count: int = 0
     last_watched_on: date | None = None
     personal_tags: list[str] = []
+    # 🔒 "Which of these are mine" lives HERE rather than on the public moment
+    # and cast endpoints, because those are cached public reads with no actor.
+    # The client marks its own rows by intersecting these ids - the server
+    # never has to trust a client-supplied identity to do it.
+    my_moment_ids: list[int] = []
+    my_proposal_ids: list[int] = []
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +451,12 @@ class VoteIn(Schema):
 
 
 class MomentIn(Schema):
-    timestamp_sec: int = Field(..., ge=0)
+    """Either form of timestamp. `timestamp` is what a human typed ("1:30:29");
+    `timestamp_sec` is kept so existing callers keep working. The string wins
+    when both arrive - see services/timestamps.resolve_timestamp."""
+
+    timestamp: str | None = Field(None, max_length=12, description="e.g. 1:30:29")
+    timestamp_sec: int | None = Field(None, ge=0)
     label: str = Field(..., min_length=1, max_length=200)
 
 
@@ -464,24 +480,92 @@ class PersonDetailOut(PersonOut):
 
 
 # ---------------------------------------------------------------------------
+# Participant proposals (spec 14)
+# ---------------------------------------------------------------------------
+
+
+class ParticipantProposeIn(Schema):
+    """Exactly one of `person_slug` / `name`.
+
+    🚨 `name` is FREE TEXT and never becomes a `Person`. A moderator maps it
+    onto a persona that already exists, creating that persona by hand first if
+    it is genuinely new. See services/participants.py for why.
+    """
+
+    person_slug: str | None = Field(None, max_length=220)
+    name: str | None = Field(None, max_length=200)
+    role: str = Field("guest", max_length=20)
+
+
+class ProposalOut(Schema):
+    id: int
+    display_name: str
+    person_slug: str | None = None
+    role: str
+    status: str
+    created_at: datetime
+    proposed_by: str | None = None
+    # Populated on rejection so the member who filed it learns WHY, the same
+    # feedback loop the report queue gives.
+    note: str = ""
+    verified_at: datetime | None = None
+    is_mine: bool = False
+
+
+class EpisodeCastOut(Schema):
+    """Confirmed and pending are separate lists, never merged.
+
+    Only `confirmed` is in EpisodeParticipant, and therefore only `confirmed`
+    is what Meilisearch and `?person=` agree with. Merging them in the payload
+    would invite a caller to render unverified data as fact.
+    """
+
+    confirmed: list[PersonBriefOut] = []
+    pending: list[ProposalOut] = []
+
+
+class ProposalReviewIn(Schema):
+    """`person_slug` is the moderator's correction - "this person IS in the
+    episode, but under the right name"."""
+
+    person_slug: str | None = Field(None, max_length=220)
+    role: str | None = Field(None, max_length=20)
+    note: str = Field("", max_length=280)
+
+
+class ProposalQueueOut(ProposalOut):
+    episode_youtube_id: str
+    episode_title: str
+    proposed_name: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Moderation (wave 13)
 # ---------------------------------------------------------------------------
 
 
 class ReportIn(Schema):
-    target_type: str = Field(..., description="comment | moment | episodetopic | rating")
-    target_id: int
+    """A target is OPTIONAL: "the site is broken" and "here is a suggestion"
+    point at nothing, and inventing a row to attach them to would be worse."""
+
+    target_type: str | None = Field(
+        None, description="episode | comment | moment | episodetopic | rating"
+    )
+    target_id: int | None = None
+    category: str = Field("other", max_length=32)
     reason: str = Field(..., min_length=1, max_length=280)
 
 
 class ReportOut(Schema):
     id: int
-    target_type: str
-    target_id: int
+    target_type: str | None = None
+    target_id: int | None = None
+    category: str = "other"
     reason: str
     status: str
     created_at: datetime
     resolution_note: str = ""
+    resolved_at: datetime | None = None
 
 
 class ReportResolveIn(Schema):

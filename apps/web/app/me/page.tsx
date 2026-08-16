@@ -19,6 +19,7 @@ import { EpisodeRow } from "@/components/episode/EpisodeCard";
 import { InstallAppGuide } from "@/components/profile/InstallAppGuide";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
+import { MyReports } from "@/components/shared/MyReports";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Page, PageHeading, StatTile } from "@/components/shell/Page";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -291,6 +292,9 @@ export default function ProfilePage() {
 
           Clerk mode only: the dev identity is a build setting, not a session,
           so there is nothing to sign out of. */}
+      {/* Closes the reporting loop: what a moderator decided, and why. */}
+      <MyReports />
+
       {canSignIn ? (
         <div className="mt-10 border-t border-border pt-5">
           <Button

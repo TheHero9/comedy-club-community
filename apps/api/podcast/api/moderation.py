@@ -32,11 +32,19 @@ public_router = Router(tags=["leaderboards"], auth=None)
 # Only these may be reported. An open-ended content type would let anyone create
 # report rows pointing at arbitrary tables.
 REPORTABLE = {
+    # 🚨 "This should not be listed" is the crowdsourced version of the manual
+    # pass that removed 100 promo clips on 2026-08-15. The next batch of junk
+    # gets flagged by whoever finds it instead of by one person scrolling a
+    # review page.
+    "episode": Episode,
     "comment": Comment,
     "moment": Moment,
     "episodetopic": EpisodeTopic,
     "rating": Rating,
 }
+
+# Categories that describe the SITE rather than a row, so they carry no target.
+TARGETLESS_CATEGORIES = {Report.Category.BUG, Report.Category.SUGGESTION}
 
 
 # ---------------------------------------------------------------------------
@@ -46,9 +54,35 @@ REPORTABLE = {
 
 @router.post("/reports", response=ReportOut)
 def create_report(request, payload: ReportIn):
+    """File a report. The target is OPTIONAL - a broken page or a suggestion
+    points at nothing, and forcing a target would mean inventing a row."""
+    category = payload.category if payload.category in Report.Category.values else (
+        Report.Category.OTHER
+    )
+
+    if payload.target_type is None:
+        # 🚨 The absence of a target is not an open-ended content type. It is a
+        # report ABOUT THE SITE, and only these categories may be filed that
+        # way - otherwise "wrong participants" with no episode would be a
+        # perfectly valid, perfectly useless row.
+        if category not in TARGETLESS_CATEGORIES:
+            raise HttpError(
+                422,
+                f"A {category!r} report needs something to point at; only "
+                f"{sorted(TARGETLESS_CATEGORIES)} may be filed without a target",
+            )
+        report = Report.objects.create(
+            reporter=request.auth,
+            category=category,
+            reason=payload.reason.strip(),
+        )
+        return _report_out(report)
+
     model = REPORTABLE.get(payload.target_type.lower())
     if model is None:
         raise HttpError(422, f"Cannot report a {payload.target_type!r}")
+    if payload.target_id is None:
+        raise HttpError(422, "target_id is required when target_type is given")
 
     if not model.objects.filter(id=payload.target_id).exists():
         raise HttpError(404, "Reported item not found")
@@ -58,7 +92,7 @@ def create_report(request, payload: ReportIn):
         content_type=ContentType.objects.get_for_model(model),
         object_id=payload.target_id,
         status=Report.Status.PENDING,
-        defaults={"reason": payload.reason.strip()},
+        defaults={"reason": payload.reason.strip(), "category": category},
     )
     if not created:
         raise HttpError(409, "You have already reported this item")
@@ -109,15 +143,40 @@ def withdraw_report(request, report_id: int):
 
 
 def _report_out(report: Report) -> dict:
+    # 🚨 content_type is NULLABLE now (a general "the site is broken" report
+    # points at nothing), so it must not be dereferenced blind. This exact line
+    # used to read `report.content_type.model` and would have 500'd on the first
+    # general report ever filed.
     return {
         "id": report.id,
-        "target_type": report.content_type.model,
+        "target_type": report.content_type.model if report.content_type_id else None,
         "target_id": report.object_id,
+        "category": report.category,
         "reason": report.reason,
         "status": report.status,
         "created_at": report.created_at,
         "resolution_note": report.resolution_note,
+        "resolved_at": report.resolved_at,
     }
+
+
+@router.get("/me/reports", response=list[ReportOut])
+def list_my_reports(request, limit: int = Query(50, ge=1, le=200)):
+    """Your own reports, with what a moderator decided and why.
+
+    🔁 THIS IS THE FEEDBACK LOOP. `resolution_note` has existed on the model
+    since wave 13 and had no reader, so a member filed a report and never
+    learned anything. A moderator writes one line; the reporter sees it here.
+
+    🔒 Filters on `request.auth`. It never accepts a user id from the client -
+    that would let anyone read anyone's reports.
+    """
+    queryset = (
+        Report.objects.filter(reporter=request.auth)
+        .select_related("content_type")
+        .order_by("-created_at")
+    )
+    return [_report_out(report) for report in queryset[:limit]]
 
 
 # ---------------------------------------------------------------------------

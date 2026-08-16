@@ -20,6 +20,9 @@ import { CommentCard } from "@/components/episode/CommentCard";
 import { EpisodeDescription } from "@/components/episode/EpisodeDescription";
 import { EpisodeRailCard } from "@/components/episode/EpisodeCard";
 import { EpisodeViewerProvider } from "@/components/episode/viewer/EpisodeViewerContext";
+import { CastSection } from "@/components/episode/CastSection";
+import { MomentsSection } from "@/components/episode/MomentsSection";
+import { ReportDialog } from "@/components/shared/ReportDialog";
 import {
   EpisodeActionBar,
   EpisodeHeaderScore,
@@ -29,16 +32,17 @@ import {
 } from "@/components/episode/viewer/EpisodeViewerParts";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LinkPending } from "@/components/shared/LinkPending";
-import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import { MetaLine } from "@/components/shell/Page";
 import { buttonVariants, LinkButton } from "@/components/ui/button";
 import { isApiError } from "@/lib/api/client";
 import {
   getEpisode,
+  listCast,
   listComments,
   listEpisodes,
   listMoments,
+  listPeople,
   type Episode,
   type EpisodeBrief,
 } from "@/lib/api/podcast";
@@ -47,8 +51,6 @@ import {
   formatDate,
   formatDuration,
   formatScore,
-  formatTimestamp,
-  youtubeMomentUrl,
 } from "@/lib/format";
 import { bandStyle } from "@/lib/score-bands";
 import { GRID_ANCHOR } from "@/components/grid/grid-model";
@@ -166,10 +168,14 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
     throw error;
   }
 
-  const [moments, comments, similar] = await Promise.all([
+  const [moments, comments, similar, cast, people] = await Promise.all([
     listMoments(youtubeId).catch(() => []),
     listComments(youtubeId, { limit: COMMENT_LIMIT }).catch(() => null),
     loadSimilar(episode),
+    // Both `.catch` to an empty shape: the cast is additive, and a throw inside
+    // a Server Component is an unhandled throw and therefore a 500 page.
+    listCast(youtubeId).catch(() => ({ confirmed: [], pending: [] })),
+    listPeople().catch(() => []),
   ]);
 
   const duration = formatDuration(episode.duration_sec);
@@ -322,108 +328,39 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
                 renders nothing here rather than a toggle onto an apology. */}
             <EpisodeDescription text={episode.description} />
 
-            {episode.participants.length > 0 ? (
-              <Section
-                title={copy.episode.cast}
-                icon={Users}
-                meta={String(episode.participants.length)}
-              >
-                <div className="noscroll mt-3 flex gap-2.5 overflow-x-auto pb-0.5">
-                  {episode.participants.map((person) => (
-                    <Link
-                      key={person.slug}
-                      href={`/episodes?person=${encodeURIComponent(person.slug)}`}
-                      className="w-[92px] shrink-0 text-center outline-none"
-                    >
-                      <span className="mx-auto block w-16">
-                        <PersonAvatar name={person.name} slug={person.slug} size="md" />
-                      </span>
-                      <span className="mt-2 block text-[12.5px] leading-tight font-semibold">
-                        {person.name}
-                      </span>
-                      <span className="mt-0.5 block text-[11px] text-subtle-foreground">
-                        {copy.episode.role(person.role)}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </Section>
-            ) : null}
+            {/* 🚨 A client component, not server-rendered JSX. The cast is
+                fetched with `revalidate: 60`, and `router.refresh()` does NOT
+                invalidate the server fetch cache - a member's suggestion would
+                stay invisible for up to a minute and read as a failed save.
+                The server still renders `cast`, so first paint and crawlers
+                are unchanged. */}
+            <Section
+              title={copy.episode.cast}
+              icon={Users}
+              meta={
+                cast.confirmed.length > 0 ? String(cast.confirmed.length) : undefined
+              }
+            >
+              <CastSection
+                youtubeId={episode.youtube_id}
+                initialCast={cast}
+                people={people}
+              />
+            </Section>
 
+            {/* Same reasoning as the cast: client-owned after first paint,
+                because the list is cached with `revalidate: 60` and a refresh
+                would not show the member their own new moment. */}
             <Section
               title={copy.episode.moments}
               icon={Clock}
               meta={moments.length > 0 ? String(moments.length) : undefined}
             >
-              {/* 🚨 Printed whether or not there are moments. The owner's words
-                  were "I have no clue how do we log them" - and with moments
-                  present the list explained nothing, while with none the empty
-                  state only said "nothing labelled yet". */}
-              <p className="mt-2.5 text-small text-subtle-foreground">
-                {copy.episode.momentsHowTo}
-              </p>
-              {moments.length > 0 ? (
-                <>
-                  {/* Timeline. Ticks are positioned by timestamp, so the bar
-                      only means something when the duration is known. */}
-                  {episode.duration_sec ? (
-                    <div className="relative mt-3 h-8">
-                      <span className="absolute inset-x-0 top-[13px] h-1.5 rounded-pill bg-elevated" />
-                      {moments.map((moment) => (
-                        <span
-                          key={moment.id}
-                          className="absolute top-[7px] h-[18px] w-1 rounded-pill bg-gold"
-                          style={{
-                            left: `${Math.min(
-                              99,
-                              (moment.timestamp_sec / episode.duration_sec!) * 100,
-                            )}%`,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <ul className="mt-1 flex flex-col gap-2">
-                    {moments.map((moment) => (
-                      <li key={moment.id}>
-                        <a
-                          href={youtubeMomentUrl(
-                            episode.youtube_id,
-                            moment.timestamp_sec,
-                          )}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex min-h-[52px] items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 outline-none"
-                        >
-                          <span className="inline-flex h-[27px] shrink-0 items-center rounded-sm bg-elevated px-2 font-mono text-[12.5px] font-bold text-gold tabular">
-                            {formatTimestamp(moment.timestamp_sec)}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[14px] leading-snug">
-                              {moment.label}
-                            </span>
-                            {moment.author ? (
-                              <span className="mt-0.5 block text-[11px] text-subtle-foreground">
-                                {moment.author}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="font-mono text-[12.5px] text-muted-foreground tabular">
-                            {copy.episode.momentVotes(moment.score)}
-                          </span>
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                <EmptyState
-                  className="mt-3"
-                  title={copy.episode.momentsEmptyTitle}
-                  body={copy.episode.momentsEmptyBody}
-                />
-              )}
+              <MomentsSection
+                youtubeId={episode.youtube_id}
+                durationSec={episode.duration_sec}
+                initialMoments={moments}
+              />
             </Section>
 
             <Section title={copy.episode.community} icon={MessageSquare}>
@@ -483,6 +420,13 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
                 />
               )}
             </Section>
+
+            {/* Flag on the episode itself. "This is not an episode" is the
+                crowdsourced form of the manual pass that removed 100 promo
+                clips - the next batch gets found by whoever stumbles on it. */}
+            <div className="mt-6 flex justify-end">
+              <ReportDialog targetType="episode" targetId={episode.id} compact />
+            </div>
 
             {similar.items.length > 0 ? (
               <Section

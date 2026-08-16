@@ -15,23 +15,48 @@ from ninja import Query, Router
 from ninja.errors import HttpError
 
 from podcast.auth import get_auth
-from podcast.auth.permissions import is_moderator, require_self_or_moderator
-from podcast.models import Comment, Episode, EpisodeTopic, EpisodeTopicVote, Moment
+from podcast.auth.permissions import (
+    is_moderator,
+    require_moderator,
+    require_self_or_moderator,
+)
+from podcast.models import (
+    Comment,
+    Episode,
+    EpisodeTopic,
+    EpisodeTopicVote,
+    Moment,
+    ParticipantProposal,
+    Person,
+)
+from podcast.services import participants as participant_service
 from podcast.services import topics as topic_service
 from podcast.services.indexing import schedule_episode_reindex
+from podcast.services.timestamps import TimestampError, resolve_timestamp
 
 from .schemas import (
     CommentIn,
     CommentListOut,
     CommentOut,
+    EpisodeCastOut,
     EpisodeTopicOut,
     MessageOut,
     MomentIn,
     MomentOut,
+    ParticipantProposeIn,
+    ProposalOut,
+    ProposalQueueOut,
+    ProposalReviewIn,
     TopicIn,
     VoteIn,
 )
-from .serializers import comment_out, moment_out, paginated_meta
+from .serializers import (
+    comment_out,
+    moment_out,
+    paginated_meta,
+    proposal_out,
+    proposal_queue_out,
+)
 
 router = Router(tags=["community"], auth=get_auth())
 
@@ -188,6 +213,9 @@ def list_moments(request, youtube_id: str):
     in-episode structure."""
     episode = get_object_or_404(Episode, youtube_id=youtube_id)
     moments = episode.moments.select_related("user", "user__profile").order_by("timestamp_sec")
+    # Public and cached, so there is no actor here and `is_mine` is always
+    # false. The signed-in view gets `my_moment_ids` from
+    # GET /episodes/{id}/me and marks its own rows from that.
     return [moment_out(moment) for moment in moments]
 
 
@@ -197,10 +225,20 @@ def add_moment(request, youtube_id: str, payload: MomentIn):
     are the PRIMARY searchable structure inside an episode."""
     episode = get_object_or_404(Episode, youtube_id=youtube_id)
 
-    if episode.duration_sec and payload.timestamp_sec > episode.duration_sec:
+    # 🚨 Parsed HERE, from what the member typed. The web form parses the same
+    # grammar for instant feedback, but a client is never an authority on its
+    # own input - same rule as never trusting a client-supplied user id.
+    try:
+        timestamp_sec = resolve_timestamp(
+            timestamp=payload.timestamp, timestamp_sec=payload.timestamp_sec
+        )
+    except TimestampError as exc:
+        raise HttpError(422, str(exc)) from exc
+
+    if episode.duration_sec and timestamp_sec > episode.duration_sec:
         raise HttpError(
             422,
-            f"Timestamp {payload.timestamp_sec}s is past the end of this episode "
+            f"Timestamp {timestamp_sec}s is past the end of this episode "
             f"({episode.duration_sec}s)",
         )
 
@@ -212,7 +250,7 @@ def add_moment(request, youtube_id: str, payload: MomentIn):
         moment = Moment.objects.create(
             episode=episode,
             user=request.auth,
-            timestamp_sec=payload.timestamp_sec,
+            timestamp_sec=timestamp_sec,
             label=label,
         )
     # Moment labels are indexed text - with no creator chapters, they ARE the
@@ -220,7 +258,7 @@ def add_moment(request, youtube_id: str, payload: MomentIn):
     schedule_episode_reindex(episode.pk)
 
     moment.user = request.auth
-    return moment_out(moment)
+    return moment_out(moment, viewer=request.auth)
 
 
 @router.delete("/moments/{moment_id}", response=MessageOut)
@@ -233,3 +271,138 @@ def delete_moment(request, moment_id: int):
     # must stop matching, not linger until the nightly rebuild.
     schedule_episode_reindex(episode_id)
     return {"detail": "Moment deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Participants (spec 14)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/episodes/{youtube_id}/participants", response=EpisodeCastOut, auth=None)
+def list_cast(request, youtube_id: str):
+    """Confirmed cast plus this episode's open proposals, as SEPARATE lists.
+
+    Never merged: only `confirmed` exists in EpisodeParticipant, so only
+    `confirmed` is what Meilisearch and `?person=` agree with. A caller handed
+    one blended list would inevitably render a pending guess as fact.
+    """
+    episode = get_object_or_404(Episode, youtube_id=youtube_id)
+    confirmed, pending = participant_service.episode_cast(episode)
+    return {
+        "confirmed": [
+            {
+                "id": link.person.id,
+                "name": link.person.name,
+                "slug": link.person.slug,
+                "avatar_url": link.person.avatar_url,
+                "role": link.role,
+            }
+            for link in confirmed
+        ],
+        "pending": [proposal_out(proposal) for proposal in pending],
+    }
+
+
+@router.post("/episodes/{youtube_id}/participants", response=ProposalOut)
+def propose_participant(request, youtube_id: str, payload: ParticipantProposeIn):
+    """Suggest someone. Creates a PROPOSAL - never a Person, never a participant.
+
+    🚨 `name` is free text and stays free text until a moderator maps it onto a
+    persona. See services/participants.py for why letting it become a `Person`
+    would wreck the cast index.
+    """
+    episode = get_object_or_404(Episode, youtube_id=youtube_id)
+
+    person = None
+    if payload.person_slug:
+        person = get_object_or_404(Person, slug=payload.person_slug)
+
+    valid_roles = {choice[0] for choice in ParticipantProposal._meta.get_field("role").choices}
+    if payload.role not in valid_roles:
+        raise HttpError(422, f"Role must be one of {sorted(valid_roles)}")
+
+    try:
+        proposal = participant_service.propose(
+            episode=episode,
+            user=request.auth,
+            person=person,
+            name=payload.name or "",
+            role=payload.role,
+        )
+    except participant_service.ProposalError as exc:
+        raise HttpError(422, str(exc)) from exc
+
+    return proposal_out(proposal, viewer=request.auth)
+
+
+@router.delete("/participant-proposals/{proposal_id}", response=MessageOut)
+def withdraw_proposal(request, proposal_id: int):
+    """Take back your own suggestion, while it is still pending."""
+    proposal = get_object_or_404(ParticipantProposal, id=proposal_id)
+    require_self_or_moderator(request.auth, proposal.proposed_by_id or -1)
+    if proposal.status != ParticipantProposal.Status.PENDING:
+        raise HttpError(409, "Only a pending proposal can be withdrawn")
+    proposal.delete()
+    return {"detail": "Proposal withdrawn"}
+
+
+@router.get("/moderation/participant-proposals", response=list[ProposalQueueOut])
+def list_proposals(
+    request,
+    status: str = Query("pending"),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """🔒 Moderators only. The review queue."""
+    require_moderator(request.auth)
+
+    queryset = ParticipantProposal.objects.select_related(
+        "episode", "person", "proposed_by", "proposed_by__profile"
+    ).order_by("-created_at")
+    if status != "all":
+        queryset = queryset.filter(status=status)
+    return [proposal_queue_out(proposal) for proposal in queryset[:limit]]
+
+
+@router.post("/moderation/participant-proposals/{proposal_id}/approve", response=ProposalOut)
+def approve_proposal(request, proposal_id: int, payload: ProposalReviewIn):
+    """🔒 Moderators only. `person_slug` is the correction - "yes, but under the
+    right name" - and is REQUIRED when the proposal is only typed text."""
+    moderator = require_moderator(request.auth)
+    proposal = get_object_or_404(
+        ParticipantProposal.objects.select_related("episode", "person"), id=proposal_id
+    )
+
+    person = None
+    if payload.person_slug:
+        person = get_object_or_404(Person, slug=payload.person_slug)
+
+    try:
+        participant_service.approve(
+            proposal=proposal,
+            moderator=moderator.user,
+            person=person,
+            role=payload.role,
+            note=payload.note,
+        )
+    except participant_service.ProposalError as exc:
+        raise HttpError(422, str(exc)) from exc
+
+    proposal.refresh_from_db()
+    return proposal_out(proposal, viewer=request.auth)
+
+
+@router.post("/moderation/participant-proposals/{proposal_id}/reject", response=ProposalOut)
+def reject_proposal(request, proposal_id: int, payload: ProposalReviewIn):
+    """🔒 Moderators only. The row stays - it is the audit trail, and the member
+    who filed it is shown the note."""
+    moderator = require_moderator(request.auth)
+    proposal = get_object_or_404(ParticipantProposal, id=proposal_id)
+
+    try:
+        participant_service.reject(
+            proposal=proposal, moderator=moderator.user, note=payload.note
+        )
+    except participant_service.ProposalError as exc:
+        raise HttpError(422, str(exc)) from exc
+
+    return proposal_out(proposal, viewer=request.auth)

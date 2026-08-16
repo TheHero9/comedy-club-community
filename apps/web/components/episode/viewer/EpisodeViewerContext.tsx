@@ -75,6 +75,13 @@ interface EpisodeViewerValue extends EpisodeViewerSeed {
   /** The ISO day currently being written, so the tapped cell can show it. */
   pendingDay: string | null;
   toggleFavorite: () => Promise<void>;
+  /**
+   * True when there is an identity; otherwise opens the sign-in sheet and
+   * returns false. Already supplied on the value - declaring it here lets the
+   * cast and moment sections reuse the one sign-in affordance the page has,
+   * instead of inventing a second one.
+   */
+  requireIdentity: () => boolean;
 }
 
 const EpisodeViewerContext = createContext<EpisodeViewerValue | null>(null);
@@ -338,6 +345,7 @@ export function EpisodeViewerProvider({
       sheet,
       openSheet,
       closeSheet,
+      requireIdentity,
       requestRate: () => {
         if (requireIdentity()) setSheet("rate");
       },

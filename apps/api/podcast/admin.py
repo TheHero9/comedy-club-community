@@ -4,8 +4,11 @@ Every list view here is tuned to avoid N+1 queries (list_select_related) and to 
 FK widgets usable at ~1,000 episodes (raw_id_fields / autocomplete_fields).
 """
 
+from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
 from django.db.models import Count
+from django.shortcuts import render
 from django.utils import timezone
 from django.utils.html import format_html
 
@@ -20,6 +23,7 @@ from .models import (
     EpisodeTopicVote,
     Favorite,
     Moment,
+    ParticipantProposal,
     Person,
     PersonalTag,
     Rating,
@@ -233,6 +237,83 @@ class TranscriptSegmentAdmin(admin.ModelAdmin):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Bulk actions that carry a note
+# ---------------------------------------------------------------------------
+
+
+class NoteActionForm(forms.Form):
+    """One note applied to every selected row."""
+
+    note = forms.CharField(
+        max_length=280,
+        required=False,
+        widget=forms.TextInput(attrs={"size": 70, "autofocus": "autofocus"}),
+    )
+
+
+def _note_action(model_admin, request, queryset, *, title, action_name, apply, note_label):
+    """Django's action-with-intermediate-form, so a bulk action can WRITE A NOTE.
+
+    🚨 This exists because `queryset.update(...)` cannot. The previous bulk
+    resolve/dismiss actions set status, resolved_by and resolved_at and never
+    touched `resolution_note` - so bulk-resolving left the note empty and the
+    member saw a "Fixed" chip with no message. The note IS the feedback loop;
+    an action that silently drops it defeats the feature it appears to serve.
+    """
+    form = NoteActionForm(request.POST if "apply_note" in request.POST else None)
+    if "apply_note" in request.POST and form.is_valid():
+        count = apply(request, queryset, form.cleaned_data["note"])
+        model_admin.message_user(request, f"Updated {count} row(s).", messages.SUCCESS)
+        return None
+
+    form.fields["note"].label = note_label
+    return render(
+        request,
+        "admin/note_action.html",
+        {
+            "title": title,
+            "objects": queryset,
+            "form": form,
+            "action_name": action_name,
+            "action_checkbox_name": ACTION_CHECKBOX_NAME,
+            "opts": model_admin.model._meta,
+        },
+    )
+
+
+def _apply_rejection(request, queryset, note):
+    from podcast.services import participants as participant_service
+
+    rejected = 0
+    for proposal in queryset:
+        try:
+            participant_service.reject(
+                proposal=proposal, moderator=request.user, note=note
+            )
+            rejected += 1
+        except participant_service.ProposalError:
+            continue
+    return rejected
+
+
+def _apply_report_status(status):
+    def apply(request, queryset, note):
+        updated = 0
+        for report in queryset.exclude(status=status):
+            report.status = status
+            report.resolution_note = note[:280]
+            report.resolved_by = request.user
+            report.resolved_at = timezone.now()
+            report.save(
+                update_fields=["status", "resolution_note", "resolved_by", "resolved_at"]
+            )
+            updated += 1
+        return updated
+
+    return apply
+
+
 @admin.register(Person)
 class PersonAdmin(admin.ModelAdmin):
     list_display = ("name", "appearance_count", "user")
@@ -255,6 +336,96 @@ class EpisodeParticipantAdmin(admin.ModelAdmin):
     search_fields = ("episode__title", "person__name")
     list_select_related = ("episode", "person")
     raw_id_fields = ("episode", "person", "added_by")
+
+
+@admin.register(ParticipantProposal)
+class ParticipantProposalAdmin(admin.ModelAdmin):
+    """The review queue for community-suggested participants.
+
+    🚨 THE WORKFLOW, and why Approve does not ask for a name: a proposal that
+    carries only typed text has no persona yet. Create the `Person` by hand
+    first (Podcast > People), then open the proposal, set `person` to it, save,
+    and Approve. That is the "this person IS in the episode, but not under the
+    correct name" step - approving MAPS the text onto a real persona rather
+    than turning it into one.
+
+    Approving a proposal with no `person` set is refused rather than guessed:
+    inventing a persona from user text is exactly what would split Тонката /
+    Тони / Донката into three people.
+    """
+
+    list_display = (
+        "created_at",
+        "status",
+        "what_was_proposed",
+        "person",
+        "role",
+        "episode",
+        "proposed_by",
+        "verified_by",
+    )
+    list_filter = ("status", "role", "created_at", "episode__channel")
+    search_fields = ("proposed_name", "person__name", "episode__title", "note")
+    list_select_related = ("episode", "person", "proposed_by", "verified_by")
+    raw_id_fields = ("episode", "proposed_by", "verified_by")
+    autocomplete_fields = ("person",)
+    readonly_fields = ("created_at", "verified_at", "proposed_name", "proposed_by")
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
+    actions = ("approve_selected", "reject_selected")
+
+    @admin.display(description="Proposed as")
+    def what_was_proposed(self, obj):
+        """The RAW text the member typed, which display_name hides once a
+        person is attached - and that spelling is the whole reason a human is
+        looking at this row."""
+        if obj.proposed_name:
+            return format_html("<em>{}</em>", obj.proposed_name)
+        return obj.person.name if obj.person_id else "-"
+
+    @admin.action(description="Approve selected (uses each row's Person)")
+    def approve_selected(self, request, queryset):
+        from podcast.services import participants as participant_service
+
+        approved = 0
+        skipped = []
+        for proposal in queryset.select_related("episode", "person"):
+            try:
+                participant_service.approve(
+                    proposal=proposal, moderator=request.user
+                )
+                approved += 1
+            except participant_service.ProposalError as exc:
+                skipped.append(f"#{proposal.id}: {exc}")
+
+        if approved:
+            self.message_user(
+                request, f"Approved {approved} proposal(s).", messages.SUCCESS
+            )
+        if skipped:
+            # Never silent. A skipped row means a typed name with no persona
+            # chosen yet, and the moderator has to know which ones to go back to.
+            self.message_user(
+                request,
+                "Skipped "
+                + str(len(skipped))
+                + ": "
+                + "; ".join(skipped[:5])
+                + ("..." if len(skipped) > 5 else ""),
+                messages.WARNING,
+            )
+
+    @admin.action(description="Reject selected (with a note)")
+    def reject_selected(self, request, queryset):
+        return _note_action(
+            self,
+            request,
+            queryset,
+            title="Reject participant proposals",
+            action_name="reject_selected",
+            apply=_apply_rejection,
+            note_label="Why (shown to the member who proposed it)",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -443,11 +614,23 @@ class EpisodeTopicVoteAdmin(admin.ModelAdmin):
 
 @admin.register(Moment)
 class MomentAdmin(admin.ModelAdmin):
-    list_display = ("episode", "timestamp_display", "label", "score", "user")
-    list_filter = ("episode__channel",)
+    """Also the activity feed: "who is adding what, right now".
+
+    🚨 `ordering` is set here deliberately. `Moment.Meta.ordering` is
+    `["timestamp_sec"]` - position INSIDE an episode, which is right for the
+    episode page and useless for moderation, where the question is what arrived
+    most recently. A ModelAdmin's `ordering` overrides Meta for the admin only,
+    so both readings stay correct. Without `created_at` in list_display there
+    was no way to answer the question at all.
+    """
+
+    list_display = ("created_at", "user", "episode", "timestamp_display", "label", "score")
+    list_filter = ("episode__channel", "created_at", "user")
     search_fields = ("label", "episode__title")
     list_select_related = ("episode", "user")
     raw_id_fields = ("episode", "user")
+    ordering = ("-created_at",)
+    date_hierarchy = "created_at"
 
     @admin.display(description="At", ordering="timestamp_sec")
     def timestamp_display(self, obj):
@@ -462,8 +645,10 @@ class MomentAdmin(admin.ModelAdmin):
 
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
-    list_display = ("id", "status", "reason", "target_display", "reporter", "created_at")
-    list_filter = ("status", "content_type", "created_at")
+    list_display = (
+        "id", "status", "category", "reason", "target_display", "reporter", "created_at"
+    )
+    list_filter = ("status", "category", "content_type", "created_at")
     search_fields = ("reason", "resolution_note", "reporter__username")
     list_select_related = ("reporter", "content_type", "resolved_by")
     raw_id_fields = ("reporter", "resolved_by")
@@ -472,19 +657,35 @@ class ReportAdmin(admin.ModelAdmin):
 
     @admin.display(description="Target")
     def target_display(self, obj):
+        # 🚨 content_type is nullable now - a general "the site is broken"
+        # report points at nothing. This used to dereference
+        # `obj.content_type.model` unconditionally and would have raised on the
+        # first such report, taking the whole changelist down with it.
+        if not obj.content_type_id:
+            return "(no target - about the site)"
         target = obj.target
         return f"{obj.content_type.model}: {target}" if target else "(deleted)"
 
-    @admin.action(description="Mark as resolved")
+    @admin.action(description="Mark as resolved (with a note)")
     def mark_resolved(self, request, queryset):
-        updated = queryset.exclude(status=Report.Status.RESOLVED).update(
-            status=Report.Status.RESOLVED, resolved_by=request.user, resolved_at=timezone.now()
+        return _note_action(
+            self,
+            request,
+            queryset,
+            title="Resolve reports",
+            action_name="mark_resolved",
+            apply=_apply_report_status(Report.Status.RESOLVED),
+            note_label="What you did (shown to the person who reported it)",
         )
-        self.message_user(request, f"Resolved {updated} report(s).", messages.SUCCESS)
 
-    @admin.action(description="Dismiss")
+    @admin.action(description="Dismiss (with a note)")
     def mark_dismissed(self, request, queryset):
-        updated = queryset.exclude(status=Report.Status.DISMISSED).update(
-            status=Report.Status.DISMISSED, resolved_by=request.user, resolved_at=timezone.now()
+        return _note_action(
+            self,
+            request,
+            queryset,
+            title="Dismiss reports",
+            action_name="mark_dismissed",
+            apply=_apply_report_status(Report.Status.DISMISSED),
+            note_label="Why (shown to the person who reported it)",
         )
-        self.message_user(request, f"Dismissed {updated} report(s).", messages.SUCCESS)

@@ -1,3 +1,4 @@
+import { ReportDialog } from "@/components/shared/ReportDialog";
 import Link from "next/link";
 
 import { getCopy } from "@/lib/locale";
@@ -41,6 +42,12 @@ export async function SiteFooter() {
           <p className="mt-2.5 text-[12.5px] leading-relaxed text-subtle-foreground">
             {copy.nav.footerBlurb}
           </p>
+          {/* Site-wide report entry point. This is the only one that can carry
+              NO target - "the search is broken" points at nothing, and forcing
+              a target would mean inventing a row to attach it to. */}
+          <div className="mt-3">
+            <ReportDialog compact />
+          </div>
         </div>
 
         <div className="flex gap-9 text-[13px] text-muted-foreground">
