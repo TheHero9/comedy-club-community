@@ -142,8 +142,14 @@ export default function MembershipsPage() {
                     🚨 A row with no renewal day predates this feature, so there
                     is nothing honest to count from. It asks to be filled in
                     rather than showing a number nobody supplied.
+
+                    ⚠️ `== null`, catching undefined as well as null. The field
+                    is absent entirely from an API older than 2026-08-16, and
+                    the web deploys on every push while the API does not (see
+                    CLAUDE.md § Production) - a strict `=== null` would render
+                    the literal string "undefined months" in that window.
                   */}
-                  {membership.months === null
+                  {membership.months == null
                     ? copy.memberships.needsDetails
                     : copy.memberships.monthsAndRenewal(
                         membership.months,

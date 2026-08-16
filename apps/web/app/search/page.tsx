@@ -269,7 +269,20 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
   const nextSpokenWanted = Math.min(spokenWanted + SPOKEN_LIMIT, SPOKEN_MAX_RESULTS);
 
   const transcriptsDown = spoken != null && !spoken.available;
-  const nothingAtAll = results.total === 0 && (spoken?.totalEpisodes ?? 0) === 0;
+
+  /**
+   * 🚨 Based on what is RENDERABLE, not on a count.
+   *
+   * A count can be absent for reasons that have nothing to do with the query:
+   * `total_episodes` is a field the API only started sending on 2026-08-16, and
+   * the web deploys on every push while the API does not (see CLAUDE.md
+   * § Production). During that window `totalEpisodes` is `undefined`, and a
+   * check of `(spoken?.totalEpisodes ?? 0) === 0` would declare "Nothing
+   * matches" over a page that has spoken cards to show - re-creating the exact
+   * bug this section was built to fix, where `баница` reported nothing while
+   * 173 passages said the word out loud.
+   */
+  const nothingAtAll = results.total === 0 && spokenOnly.length === 0;
 
   /** A one-word query cannot have partial matches, so the wording never implies it. */
   const multiWord = queryTokens(query).length >= 2;
@@ -496,7 +509,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             from 99% on one channel to 0% on another, so "not in the results" is
             not evidence of "never said".
           */}
-          {spoken != null && spoken.totalEpisodes > 0 ? (
+          {spokenOnly.length > 0 || passagesByEpisode.size > 0 ? (
             <p className="mt-5 text-small text-faint-foreground">
               {copy.search.spokenPartial}
             </p>
