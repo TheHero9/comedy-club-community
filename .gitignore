@@ -59,3 +59,6 @@ tools/youtube-metadata/out/
 tmp/
 
 .vercel
+
+# Local server logs written by scripts/serve-local.mjs
+.local/
