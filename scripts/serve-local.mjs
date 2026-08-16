@@ -220,10 +220,10 @@ if (flag("--build")) {
   // then serves HTML referencing chunks that no longer exist, which shows up
   // as 404s on `_next/static/chunks/*.css` and reads like a z-index bug.
   say("\nbuilding...");
-  execFileSync("npx", ["next", "build"], {
+  if (!NEXT_BIN) die("could not find node_modules/next/dist/bin/next");
+  execFileSync(process.execPath, [NEXT_BIN, "build"], {
     cwd: WEB,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
 }
 
@@ -231,12 +231,12 @@ const expected = buildIdOnDisk();
 mkdirSync(LOG_DIR, { recursive: true });
 const logFd = openSync(LOG, "a");
 
-const child = spawn("npx", ["next", "start", "--port", String(PORT)], {
-  cwd: WEB,
-  detached: true,
-  stdio: ["ignore", logFd, logFd],
-  shell: process.platform === "win32",
-});
+if (!NEXT_BIN) die("could not find node_modules/next/dist/bin/next");
+const child = spawn(
+  process.execPath,
+  [NEXT_BIN, "start", "--port", String(PORT)],
+  { cwd: WEB, detached: true, stdio: ["ignore", logFd, logFd] },
+);
 child.unref();
 
 say(`\nstarting next start --port ${PORT} (pid ${child.pid})`);

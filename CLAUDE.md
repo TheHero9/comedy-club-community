@@ -45,8 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Rules that keep production healthy
 
-- 🚨 **TODAY: a push to `main` still deploys the WEB ONLY. The API must be deployed by hand.** The automation is written but deliberately **not armed** - `.github/workflows/deploy-api.yml` is `workflow_dispatch`-only until the `RAILWAY_TOKEN` secret exists. Arming it is: add the secret, uncomment the `workflow_run` block. Full write-up and the rejected alternatives: [`specs/10-deployment/02-auto-deploy.md`](specs/10-deployment/02-auto-deploy.md).
-  - ⚠️ It is commented out rather than left running-and-failing on purpose. A job that goes red on every push until an unrelated setup step is done trains you to ignore red, and then hides the failure that matters.
+- ✅ **ARMED since 2026-08-16: a push to `main` deploys the WHOLE app.** Vercel rebuilds the web on the push; `.github/workflows/deploy-api.yml` deploys the API after CI goes green on that exact commit (`workflow_run` gate, `RAILWAY_TOKEN` secret set). A red CI run deploys nothing. Full write-up and the rejected alternatives: [`specs/10-deployment/02-auto-deploy.md`](specs/10-deployment/02-auto-deploy.md).
   - 🚨 **Deliberately NOT the Railway GitHub App**, even though that is one click and needs no token. This repo commits straight to `main` with no PR, and the api service's `preDeployCommand` is `migrate --noinput` - so a webhook deploy would run an unreviewed schema change against production Postgres seconds after a typo was typed, with `makemigrations --check` finding out afterwards. The workflow is gated on CI via `workflow_run` and checks out the sha CI actually passed. **If the app is ever installed as well, delete the workflow** or every push deploys twice.
   - 🚨 **Deploy order is `api` first, then `celery-worker`, then `celery-beat`, never in parallel.** Only `api` carries the migration, and the workers bake code into their own images - a worker left behind runs old task code against a new schema, which is how the nightly sync degraded 1,171 rows on 2026-08-13. Beat also fires overdue jobs the moment it starts.
 - 🚨 **`redeploy` is NOT a deploy.** It re-runs the most recent deployment *reusing that deployment's build AND its config*, so a service-config change you just made is silently ignored. A `startCommand` set via `update-service` followed by `redeploy` ran the OLD command: Celery started, the management command never executed, and the only evidence was the absence of its output between "Starting Container" and Celery's banner. The workflow uses `railway up`, which creates a genuine new build; anything manual must do the same.
@@ -702,6 +701,13 @@ npm run lint
 # Monorepo
 npx turbo dev
 npx turbo typecheck lint build
+
+# Local production server for E2E + the benchmark
+# 🚨 ALWAYS this, NEVER `npx next start` by hand - it kills orphans on the port
+#    and fails loudly if the server is not serving the build you just made.
+npm run serve            # free port 3200, build, start, verify the build id
+npm run serve:reuse      # same, without rebuilding
+npm run serve:kill       # just free the port
 ```
 
 ---
@@ -860,13 +866,25 @@ npx playwright test e2e/public-browse.spec.ts --project=desktop
 npx playwright test
 ```
 
-Run the **full** suite for: a change to `lib/copy.ts`, routing, `next.config.ts`,
-`globals.css` tokens, a shared shell component, or anything touching search. A card
-tweak does not qualify.
+🚨 **THE FULL SUITE IS FOR A PUSH TO `main`, NOT FOR AN ITERATION** (owner ruling,
+2026-08-16, after a 14-item batch took an hour). While work is in progress, run **only
+the specs covering what changed** - even for `lib/copy.ts` or a shared shell component.
+The full run is the gate immediately before pushing, and it is the only place the
+"a copy change touches everything" rule applies.
 
-**Budget the cost honestly.** A full local E2E pass is ~10 minutes, and a production
-build is ~40s. A visual tweak deserves: static gates (~1 min) → the relevant spec file
-→ look at a screenshot. That is the whole loop.
+🚨 **DO NOT DO A VISUAL SCREENSHOT WALKTHROUGH** (same ruling). The owner reviews the
+rendered result themselves, so a Playwright screenshot tour is duplicated work and it
+was ~8 minutes of the hour above. Screenshot **one** thing when a specific claim needs
+proving ("does the first grid column still get clipped"), never a tour of every page
+touched.
+
+✅ **The benchmark stays** (same ruling). `npm run benchmark` + the budget spec is ~3
+minutes and is the only thing that catches a payload regression; it caught the flagship
+channel page going 916 KB → 841 KB in this batch.
+
+**Budget the cost honestly.** A full local E2E pass is ~2 minutes of test time (more
+with startup), and a production build is ~25s. An iteration deserves: static gates →
+the relevant spec file. That is the whole loop.
 
 ### 🚨 A local `next dev` on 3000 makes the ENTIRE E2E suite fail
 
@@ -879,10 +897,10 @@ test fails**, including `smoke-dev-server-serves-the-home-page`.
 - 🔍 **Tell-tale:** the failure count is the whole suite, and `test-results/` fills with
   a directory per test. A real regression fails a handful of related specs, never all of
   them. **When everything fails, suspect the harness, not the app.**
-- ✅ **Fix:** point the suite at a server that is already up, rather than letting it
-  start one:
+- ✅ **Fix: `npm run serve`, then point the suite at it.** Never `npx next start` by hand
+  - see the next section for why.
   ```bash
-  cd apps/web && npx next build && npx next start --port 3200   # once
+  npm run serve                                   # kills orphans, builds, verifies
   E2E_PORT=3200 npx playwright test --reporter=line
   ```
   This is also the production build CLAUDE.md wants for honest signal, and it doubles as
@@ -893,6 +911,44 @@ test fails**, including `smoke-dev-server-serves-the-home-page`.
 - ⚠️ **Never pipe the run through `tail`.** `npx playwright test | tail -40` reports
   **`tail`'s** exit code, so an interrupted or failing run reads as success. Redirect to
   a file (`> run.log 2>&1`), check `$?`, then grep the file.
+
+### 🚨 NEVER start a local web server by hand. `npm run serve`, always.
+
+Cost ~15 minutes on 2026-08-16 and produced two convincing phantom bugs. **A
+`next start --port 3200` left running by an EARLIER session still owned the port.** The
+new `next start` died with `EADDRINUSE` into a backgrounded log nobody read, so every
+check for the next quarter of an hour ran against a build from hours before.
+
+It did not look like a stale server. It looked like real regressions:
+
+- `scroll={false}` "not working" - the old build simply did not have it
+- `<a> subtree intercepts pointer events` → `locator.click: Test timeout` - the old
+  build's hashed CSS chunks were gone from disk, so the grid collapsed and elements
+  overlapped
+
+That is the **same failure shape as every deployment incident on this project**:
+something reported success and served the old thing. The API answers it with
+`/api/health` reporting its commit; `scripts/serve-local.mjs` is the web half.
+
+```bash
+npm run serve          # free the port, build, start, VERIFY the build id, then report
+npm run serve:reuse    # same without rebuilding
+npm run serve:kill     # just free the port
+```
+
+- ✅ It kills whatever owns the port **by pid** (never by process name - port 3000 on
+  this machine belongs to an unrelated project that must survive), waits for the server
+  to actually answer, then compares the build id in the served HTML (`"b":"<id>"` in the
+  RSC flight payload) against `apps/web/.next/BUILD_ID`. **A mismatch exits non-zero.**
+- 🚨 **A green "started" message is not the check; the build id is.** If that comparison
+  ever stops finding an id, fix the extractor - do not delete the check, or the trap
+  comes straight back.
+- ⚠️ It builds only **after** freeing the port, because `next start` holds the chunk
+  manifest it booted with and rebuilding underneath it produces exactly the 404-on-CSS
+  symptom above.
+- 🔍 **Tell-tale you have hit this anyway:** a fix you just made "doesn't work" AND
+  something unrelated looks broken. Read the server's own log before believing either -
+  the `EADDRINUSE` was sitting in it the whole time.
 
 ### 🚨 A third-party script that only exists in production 404s the WHOLE suite
 

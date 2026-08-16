@@ -145,8 +145,17 @@ skips), ruff clean, no migration drift, 35/35 perf budgets pass.
 ⚠️ Two false alarms during verification, both environmental: a `next start`
 left over from an earlier session owned port 3200 (so every probe hit a stale
 build and `scroll={false}` looked broken), and the long-running `next dev` on
-3000 had exhausted its heap. **Read a backgrounded server's own log** - the
-`EADDRINUSE` was sitting in it the whole time.
+3000 had exhausted its heap.
+
+✅ **The first is now impossible to repeat silently.** `npm run serve`
+(`scripts/serve-local.mjs`) frees the port by pid, builds, starts, and compares
+the build id in the served HTML against `apps/web/.next/BUILD_ID`, **exiting
+non-zero on a mismatch**. Starting a local web server by hand is a documented
+mistake. Same idea as `/api/health` reporting its commit.
+
+**Process rulings, same day:** the full E2E suite runs before a **push**, not on
+every iteration (scoped specs while working, even for `lib/copy.ts`); no visual
+screenshot walkthroughs (the owner reviews the result); the benchmark stays.
 
 ---
 

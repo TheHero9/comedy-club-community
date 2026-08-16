@@ -76,6 +76,15 @@ class Command(BaseCommand):
             "--dry-run", action="store_true", help="Report the change, write nothing"
         )
         parser.add_argument(
+            "--verify-email",
+            default=None,
+            help=(
+                "Refuse unless Clerk confirms this address owns the matched account. "
+                "Use when granting by Clerk id, so the grant rests on proof rather "
+                "than on an inference about which row is whose."
+            ),
+        )
+        parser.add_argument(
             "--revoke",
             action="store_true",
             help="Take the access away again (role=member, staff/superuser off)",
@@ -121,6 +130,9 @@ class Command(BaseCommand):
 
         user = matches[0]
         self.stdout.write(f"before: {describe(user)}")
+
+        if options["verify_email"]:
+            self._verify_against_clerk(user, options["verify_email"], options["dry_run"])
 
         target_role = UserProfile.Role.MEMBER if options["revoke"] else UserProfile.Role.ADMIN
         target_flag = not options["revoke"]
@@ -168,6 +180,57 @@ class Command(BaseCommand):
                 "Granted. This account can now use the Django Admin site AND promote "
                 "other accounts from there (Podcast > User profiles > role)."
             )
+
+    def _verify_against_clerk(self, user, expected_email, dry_run):
+        """Prove the matched row belongs to `expected_email`, or refuse.
+
+        🚨 Why this is needed at all: a Clerk-provisioned account can hold a
+        BLANK email. `provision_user` keys on `clerk_user_id` and its update
+        path refreshes only display_name and avatar_url, so an account created
+        before Clerk supplied an email never gets one. Production's only real
+        account is exactly that - blank email, username equal to the raw Clerk
+        id - so the row cannot be identified from our own database.
+
+        Asking Clerk closes the gap with proof instead of an inference. The
+        identity provider is authoritative about which address owns which id,
+        and granting superuser on a guess is not acceptable.
+        """
+        from podcast.auth import clerk_api
+
+        profile = getattr(user, "profile", None)
+        clerk_id = getattr(profile, "clerk_user_id", None)
+        if not clerk_id:
+            raise CommandError(
+                "--verify-email needs a Clerk-provisioned account; this row has no "
+                "clerk_user_id, so Clerk cannot be asked about it."
+            )
+
+        fetched = clerk_api.fetch_user(clerk_id)
+        if fetched is None:
+            # Fails CLOSED, unlike the sign-in path which fails soft. There the
+            # token was already cryptographically verified so the user is
+            # authentic regardless; here the lookup IS the verification.
+            raise CommandError(
+                f"Clerk lookup failed for {clerk_id}. Not granting on an unverified "
+                f"identity. Check CLERK_SECRET_KEY is set in this environment."
+            )
+
+        actual = (fetched.get("email") or "").strip()
+        if actual.lower() != expected_email.strip().lower():
+            raise CommandError(
+                f"Clerk says {clerk_id} belongs to {actual or '(no email)'!r}, "
+                f"not {expected_email!r}. Refusing."
+            )
+
+        self.stdout.write(f"verified: Clerk confirms {clerk_id} is {actual}")
+
+        # Opportunistic repair. We hold the address that the provisioning path
+        # could not, and a blank email is why this account was unfindable in the
+        # first place. Writing it back makes the next lookup work by email.
+        if not user.email and not dry_run:
+            user.email = actual[:254]
+            user.save(update_fields=["email"])
+            self.stdout.write(f"backfilled the blank email to {user.email}")
 
     def _list(self):
         users = User.objects.select_related("profile").order_by("id")

@@ -128,3 +128,22 @@ Measured after: `th.right = 149.8`, `cell.left = 150.8`. One pixel of
    (`Jest worker encountered 2 child process exceptions`) and was 500ing pages
    that render fine. That is the documented dev-mode heap trap, not a
    regression.
+
+✅ **Fixed rather than noted.** `scripts/serve-local.mjs` (`npm run serve`) now
+frees the port by pid, builds, starts, and **compares the build id in the served
+HTML against `apps/web/.next/BUILD_ID`, exiting non-zero on a mismatch**. Same
+idea as `/api/health` reporting its commit: a green "started" message proves a
+process spawned, and the build id proves the *right* one answered. Starting a
+local server by hand is now a documented mistake.
+
+---
+
+## Process rulings taken the same day
+
+Prompted by the batch taking about an hour. Recorded in CLAUDE.md § Testing.
+
+| Ruling | Why |
+| ------ | --- |
+| 🚨 **The full E2E suite is for a push, not an iteration.** While iterating, run only the specs covering the change - even for `lib/copy.ts`. | The "a copy change touches everything" rule is a pre-push gate, not a per-edit one. |
+| 🚨 **No visual screenshot walkthrough.** The owner reviews the rendered result. | It was ~8 minutes of the hour and duplicated a review that was happening anyway. Screenshot ONE thing when a specific claim needs proving. |
+| ✅ **Keep the benchmark.** | ~3 minutes, and the only thing that catches a payload regression - it caught 916 KB → 841 KB here. |
