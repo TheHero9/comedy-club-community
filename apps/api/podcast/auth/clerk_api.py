@@ -80,8 +80,17 @@ def fetch_user(clerk_user_id: str) -> dict | None:
             payload = json.load(response)
     except (urllib.error.URLError, OSError, ValueError) as exc:
         # 🔒 Deliberately not the response body: it echoes account data.
+        #
+        # The HTTP STATUS is safe and load-bearing, though. Without it the log
+        # said only "HTTPError", which cannot distinguish a rejected key (401)
+        # from an id that belongs to a different Clerk instance (404) - and the
+        # remedies are opposite. Cost a diagnostic round trip on 2026-08-16.
+        status = getattr(exc, "code", None)
         logger.warning(
-            "Clerk user lookup failed for %s: %s", clerk_user_id, type(exc).__name__
+            "Clerk user lookup failed for %s: %s%s",
+            clerk_user_id,
+            type(exc).__name__,
+            f" (HTTP {status})" if status else "",
         )
         return None
 
