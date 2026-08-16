@@ -31,13 +31,16 @@ interface Props {
  * mirror `EpisodeParticipant.Role` in the API, which validates against its own
  * choices on both the propose AND the approve path.
  *
- * `regular` and `offcamera` were added 2026-08-16. A regular is a recurring
- * member of the show who is NOT a guest ("we won't allow for guests"), and
- * off-camera is the voice heard but never seen - which `producer`, a job
- * rather than a presence, did not cover. Ordered by how visible the person is
- * in the episode, not alphabetically.
+ * 🚨 THREE, and `regular` is FIRST because it is the default (owner ruling,
+ * 2026-08-16: "only regular, guest, off-camera, and the default to be
+ * regular"). `host`, `cohost` and `producer` are gone - the first two ranked
+ * people who are simply on the show every week, and the third was a credit
+ * rather than a presence in the episode.
+ *
+ * Ordered by how visible the person is in the episode, not alphabetically -
+ * which puts the default at the top of the list for free.
  */
-const ROLES = ["host", "cohost", "regular", "guest", "offcamera", "producer"] as const;
+const ROLES = ["regular", "guest", "offcamera"] as const;
 
 /**
  * Suggest who took part in an episode.
@@ -61,7 +64,9 @@ export function CastProposer({
   const [open, setOpen] = useState(false);
   const [personSlug, setPersonSlug] = useState("");
   const [customName, setCustomName] = useState("");
-  const [role, setRole] = useState<string>("guest");
+  // `regular` matches the API's own default, so the two cannot drift into
+  // disagreeing about what an unspecified role means.
+  const [role, setRole] = useState<string>("regular");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

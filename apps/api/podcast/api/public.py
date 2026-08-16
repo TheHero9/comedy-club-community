@@ -244,10 +244,33 @@ def get_topic(request, slug: str):
 
 
 @router.get("/people", response=list[PersonOut])
-def list_people(request, limit: int = Query(100, ge=1, le=MAX_LIMIT)):
-    people = Person.objects.annotate(_appearance_count=Count("appearances")).order_by(
-        "-_appearance_count", "name"
-    )[:limit]
+def list_people(
+    request,
+    q: str = Query("", description="Filter by name"),
+    limit: int = Query(100, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    """The persona catalogue, searchable and paged.
+
+    🚨 It used to take `limit` alone, which is a cap and not pagination - past
+    100 personas the rest were simply unreachable, and every caller rendered
+    whichever slice it happened to get as if it were the whole list. The owner
+    named the ceiling before it arrived: "the people section will have multiple
+    people there, you can't render 1000 people."
+
+    Ordered by appearance count so the personas a moderator actually reaches for
+    are on the first page, with `name` breaking ties - a stable second key
+    matters here, because an unstable sort under offset paging silently drops
+    and duplicates rows between pages.
+    """
+    people = Person.objects.annotate(_appearance_count=Count("appearances"))
+    if q.strip():
+        # 🇧🇬 `icontains` on a Cyrillic name is the right tool: this is a
+        # moderator picking a known persona from a short list, not the
+        # typo-tolerant public search, and it must never depend on Meilisearch
+        # being up to approve a proposal.
+        people = people.filter(name__icontains=q.strip())
+    people = people.order_by("-_appearance_count", "name", "id")[offset : offset + limit]
     return [person_out(person) for person in people]
 
 

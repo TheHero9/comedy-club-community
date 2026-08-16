@@ -85,7 +85,7 @@ def labelled_episode(episode):
     )
     person = Person.objects.create(name="Иван Кирков")
     EpisodeParticipant.objects.create(
-        episode=episode, person=person, role=EpisodeParticipant.Role.HOST
+        episode=episode, person=person, role=EpisodeParticipant.Role.REGULAR
     )
     return episode
 

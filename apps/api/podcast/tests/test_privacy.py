@@ -77,7 +77,7 @@ def populated(channel, episode, alice, bob):
     EpisodeTopic.objects.create(episode=episode, topic=topic, added_by=alice, score=3)
 
     person = Person.objects.create(name="Иван Кирков")
-    EpisodeParticipant.objects.create(episode=episode, person=person, role="host")
+    EpisodeParticipant.objects.create(episode=episode, person=person, role="regular")
 
     Comment.objects.create(user=alice, episode=episode, body="страхотен епизод")
     Moment.objects.create(user=alice, episode=episode, timestamp_sec=120, label="началото")

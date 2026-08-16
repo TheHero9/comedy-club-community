@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
+import { notify } from "@/components/ui/toast";
 import { viewerApi } from "@/lib/auth";
 import type { Report } from "@/lib/api/podcast";
 
@@ -22,6 +24,7 @@ export function MyReports() {
   const copy = useCopy();
   const { signedIn } = useViewerAuth();
   const [reports, setReports] = useState<Report[] | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -36,6 +39,27 @@ export function MyReports() {
       .catch(() => setReports([]));
     return () => controller.abort();
   }, [signedIn]);
+
+  /**
+   * Take back a report that has not been looked at yet.
+   *
+   * 🔒 The API only deletes a PENDING report owned by the caller, so this is
+   * not a way to erase a decision after the fact - it is the "I misread that,
+   * never mind" case, which otherwise leaves a moderator reviewing something
+   * the reporter has already given up on.
+   */
+  async function withdraw(id: number) {
+    setBusyId(id);
+    try {
+      await viewerApi.delete(`/api/reports/${id}`);
+      setReports((current) => (current ?? []).filter((report) => report.id !== id));
+      notify.success(copy.report.withdrawn);
+    } catch {
+      notify.error(copy.errors.generic);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (!signedIn || reports === null) return null;
 
@@ -94,11 +118,49 @@ export function MyReports() {
 
               <p className="mt-1.5 text-small">{report.reason}</p>
 
+              {/* WHAT you reported. Without it a member's own list is a wall of
+                  reasons with no subjects - they cannot tell two reports about
+                  different episodes apart. */}
+              {report.target_label ? (
+                <p className="mt-1 text-[12px] text-faint-foreground">
+                  {report.target_label}
+                </p>
+              ) : null}
+
+              {report.target_youtube_id ? (
+                <Link
+                  href={`/e/${report.target_youtube_id}`}
+                  className="mt-1 inline-block text-[12.5px] text-primary-text outline-none"
+                >
+                  {copy.report.openTarget}
+                </Link>
+              ) : null}
+
               {/* The whole point: the moderator's reply back to the reporter. */}
               {report.resolution_note ? (
                 <p className="mt-1.5 border-l-2 border-border pl-2.5 text-[12.5px] text-subtle-foreground">
                   {report.resolution_note}
+                  {report.resolved_by ? (
+                    <span className="mt-0.5 block text-[11.5px] text-faint-foreground">
+                      {copy.report.decidedBy(report.resolved_by)}
+                    </span>
+                  ) : null}
                 </p>
+              ) : report.status !== "pending" ? null : (
+                <p className="mt-1.5 text-[12px] text-faint-foreground">
+                  {copy.report.awaitingReply}
+                </p>
+              )}
+
+              {report.status === "pending" ? (
+                <button
+                  type="button"
+                  disabled={busyId === report.id}
+                  onClick={() => withdraw(report.id)}
+                  className="mt-2 rounded-pill border border-border px-3 py-1 text-[12px] text-subtle-foreground outline-none"
+                >
+                  {copy.report.withdraw}
+                </button>
               ) : null}
             </li>
           ))}

@@ -97,11 +97,18 @@ def provision_user(
     if profile:
         # Refresh mutable fields the identity provider owns.
         changed = []
+        # 🚨 `display_name_is_custom` is checked FIRST and is absolute. This
+        # block runs on every authenticated request, so without it a name the
+        # member typed is overwritten by Clerk's within a second of being saved
+        # - which is exactly what shipped, and read as "the save button does
+        # nothing". Once a member has named themselves, the provider no longer
+        # owns this field.
+        #
         # The second clause REPAIRS a row provisioned before this guard existed:
         # such a profile has the raw Clerk id sitting in display_name, and it
         # would otherwise stay there forever because the first clause only ever
         # overwrites a value that differs, not one that is wrong.
-        if display_name and (
+        if not profile.display_name_is_custom and display_name and (
             profile.display_name != display_name
             or looks_like_external_id(profile.display_name)
         ):

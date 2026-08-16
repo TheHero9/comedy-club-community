@@ -157,3 +157,68 @@ class TestProvisionIdentity:
 
         assert profile.role == UserProfile.Role.ADMIN
         assert not looks_like_external_id(profile.display_name)
+
+
+class TestACustomDisplayNameSurvivesTheNextRequest:
+    """🚨 The 2026-08-16 report: "I edit my display name, I click save, I get
+    'profile saved', then I go back and it's the same one that it was before."
+
+    `provision_user` runs on EVERY authenticated request and refreshes the
+    fields "the identity provider owns". Google supplies a real name through
+    Clerk, so that refresh always had something to write - and it silently
+    reverted the member's own edit within a second of them making it. The save
+    worked; the very next request undid it.
+
+    These tests are about ownership, not about the write path: the API endpoint
+    is covered elsewhere, and what could not be seen from there is that a
+    perfectly successful PATCH is erased by an unrelated GET.
+    """
+
+    def test_provisioning_again_does_not_overwrite_a_chosen_name(self, db):
+        provision_user(external_id="user_custom1", display_name="Demetrios Vlassis")
+
+        profile = UserProfile.objects.get(clerk_user_id="user_custom1")
+        profile.display_name = "Митко"
+        profile.display_name_is_custom = True
+        profile.save(update_fields=["display_name", "display_name_is_custom"])
+
+        # The next authenticated request, with Clerk still reporting the Google
+        # name. This is the line that used to undo the edit.
+        provision_user(external_id="user_custom1", display_name="Demetrios Vlassis")
+
+        profile.refresh_from_db()
+        assert profile.display_name == "Митко"
+
+    def test_a_provider_name_still_lands_when_the_member_has_not_chosen_one(self, db):
+        """The flag is a member's claim on the field, not a freeze on it.
+
+        Without this, "stop overwriting" would quietly become "never update",
+        and a member who changes their name at Google would be stuck with the
+        old one forever.
+        """
+        provision_user(external_id="user_custom2", display_name="Ivan Petrov")
+        provision_user(external_id="user_custom2", display_name="Иван Петров")
+
+        profile = UserProfile.objects.get(clerk_user_id="user_custom2")
+        assert profile.display_name == "Иван Петров"
+        assert profile.display_name_is_custom is False
+
+    def test_a_repairable_external_id_name_is_left_alone_once_chosen(self, db):
+        """The external-id repair branch must not be a back door.
+
+        `provision_user` repairs a profile whose display_name is a raw Clerk
+        `sub`. That repair is checked AFTER the ownership flag, so it cannot be
+        used to reach a name the member typed - otherwise a member who chose a
+        name matching the id pattern would have it rewritten under them.
+        """
+        provision_user(external_id="user_custom3", display_name="Ivan")
+
+        profile = UserProfile.objects.get(clerk_user_id="user_custom3")
+        profile.display_name = "user_33KqZmNhY2tlZA"
+        profile.display_name_is_custom = True
+        profile.save(update_fields=["display_name", "display_name_is_custom"])
+
+        provision_user(external_id="user_custom3", display_name="Ivan")
+
+        profile.refresh_from_db()
+        assert profile.display_name == "user_33KqZmNhY2tlZA"

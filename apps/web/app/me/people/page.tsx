@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { useCopy } from "@/components/i18n/LocaleProvider";
+import { ProposalQueue } from "@/components/manage/ProposalQueue";
+import { ReportQueue } from "@/components/manage/ReportQueue";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
@@ -14,8 +16,19 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/components/ui/toast";
 import { isApiError } from "@/lib/api/client";
-import type { AdminUser, Me, Person, ProposalQueueItem } from "@/lib/api/podcast";
+import type { AdminUser, Me, Person } from "@/lib/api/podcast";
 import { viewerApi } from "@/lib/auth";
+
+/**
+ * One page of personas.
+ *
+ * 🚨 The list used to be unbounded, and the owner named the ceiling before it
+ * arrived: "the people section will have multiple people there, so we should
+ * optimise it - you have 1000, I can't render 1000 people." It is also the
+ * source list for every "approve as" dropdown in the review queue, so an
+ * unbounded fetch here would be paid for once per queue row.
+ */
+const PEOPLE_PAGE = 50;
 
 /**
  * Curating personas and reviewing suggestions, without Django Admin.
@@ -43,25 +56,31 @@ export default function ManagePeoplePage() {
 
   const isStaff = me.data?.role === "admin" || me.data?.role === "moderator";
 
-  const people = useQuery({
-    queryKey: ["manage", "people"],
-    queryFn: () => viewerApi.get<Person[]>("/api/people", { cache: "no-store" }),
-    enabled: Boolean(isStaff),
-  });
+  const [term, setTerm] = useState("");
+  // How many pages have been asked for. A count rather than a cursor because
+  // the API pages by offset, and re-fetching from 0 on every "load more" keeps
+  // one query key holding one visible list - no client-side page stitching,
+  // and an approval that renames a persona cannot leave a stale earlier page
+  // on screen.
+  const [pages, setPages] = useState(1);
 
-  const queue = useQuery({
-    queryKey: ["manage", "proposals"],
+  const people = useQuery({
+    queryKey: ["manage", "people", term, pages],
     queryFn: () =>
-      viewerApi.get<ProposalQueueItem[]>(
-        "/api/moderation/participant-proposals",
-        { cache: "no-store" },
-      ),
+      viewerApi.get<Person[]>("/api/people", {
+        query: { limit: PEOPLE_PAGE * pages, ...(term.trim() ? { q: term.trim() } : {}) },
+        cache: "no-store",
+      }),
     enabled: Boolean(isStaff),
   });
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["manage"] });
   };
+
+  // A short page means the server had nothing more to give. No total is needed
+  // for that, which is why the endpoint still returns a plain array.
+  const hasMore = (people.data ?? []).length >= PEOPLE_PAGE * pages;
 
   if (!signedIn) return <SignedOutNotice />;
 
@@ -91,40 +110,55 @@ export default function ManagePeoplePage() {
 
       <PersonForm onDone={refresh} />
 
+      <input
+        value={term}
+        onChange={(event) => {
+          setTerm(event.target.value);
+          // Back to one page on a new search - otherwise a term typed after
+          // three "load more" clicks silently asks for 150 matches.
+          setPages(1);
+        }}
+        placeholder={copy.manage.peopleSearch}
+        className="mt-4 w-full max-w-[320px] rounded-pill border border-border bg-background px-3 py-2 text-small"
+      />
+
       {people.isLoading ? (
         <Skeleton className="mt-5 h-24 w-full" />
       ) : (people.data ?? []).length === 0 ? (
-        <EmptyState className="mt-5" title={copy.manage.title} body={copy.manage.peopleEmpty} />
+        term.trim() ? (
+          <p className="mt-3 text-small text-subtle-foreground">
+            {copy.manage.peopleNoMatch}
+          </p>
+        ) : (
+          <EmptyState className="mt-5" title={copy.manage.title} body={copy.manage.peopleEmpty} />
+        )
       ) : (
-        <ul className="mt-5 flex flex-col gap-2">
-          {(people.data ?? []).map((person) => (
-            <PersonRow
-              key={person.slug}
-              person={person}
-              canDelete={me.data?.role === "admin"}
-              onDone={refresh}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="mt-5 flex flex-col gap-2">
+            {(people.data ?? []).map((person) => (
+              <PersonRow
+                key={person.slug}
+                person={person}
+                canDelete={me.data?.role === "admin"}
+                onDone={refresh}
+              />
+            ))}
+          </ul>
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() => setPages((current) => current + 1)}
+              className="mt-3 rounded-pill border border-border px-3 py-1.5 text-[12.5px] text-subtle-foreground outline-none"
+            >
+              {copy.manage.peopleMore}
+            </button>
+          ) : null}
+        </>
       )}
 
-      <h2 className="mt-10 text-[15px] font-semibold">{copy.manage.queueTitle}</h2>
-      {queue.isLoading ? (
-        <Skeleton className="mt-3 h-20 w-full" />
-      ) : (queue.data ?? []).length === 0 ? (
-        <p className="mt-2 text-small text-subtle-foreground">{copy.manage.queueEmpty}</p>
-      ) : (
-        <ul className="mt-3 flex flex-col gap-2">
-          {(queue.data ?? []).map((proposal) => (
-            <ProposalRow
-              key={proposal.id}
-              proposal={proposal}
-              people={people.data ?? []}
-              onDone={refresh}
-            />
-          ))}
-        </ul>
-      )}
+      <ProposalQueue />
+
+      <ReportQueue />
 
       {/* 🔒 Admins only, and the API agrees. A moderator who could grant roles
           would promote themselves, which makes the two roles one role. */}
@@ -418,131 +452,6 @@ function PersonRow({
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
-      ) : null}
-    </li>
-  );
-}
-
-function ProposalRow({
-  proposal,
-  people,
-  onDone,
-}: {
-  proposal: ProposalQueueItem;
-  people: Person[];
-  onDone: () => void;
-}) {
-  const copy = useCopy();
-  // Pre-selected when the member picked an existing persona; empty when they
-  // typed a name, which is exactly when a decision is required.
-  const [slug, setSlug] = useState(proposal.person_slug ?? "");
-  const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const review = useMutation({
-    mutationFn: (action: "approve" | "reject") =>
-      viewerApi.post(
-        `/api/moderation/participant-proposals/${proposal.id}/${action}`,
-        action === "approve" ? { person_slug: slug, note } : { note },
-      ),
-    onSuccess: (_data, action) => {
-      notify.success(action === "approve" ? copy.manage.approved : copy.manage.rejected);
-      onDone();
-    },
-    onError: (caught) =>
-      setError(isApiError(caught) ? caught.userMessage : copy.errors.generic),
-  });
-
-  return (
-    <li className="rounded-lg border border-border bg-card px-3 py-2.5">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-small font-semibold">{proposal.display_name}</span>
-        {proposal.proposed_name ? (
-          <span className="text-[11.5px] text-subtle-foreground">
-            {copy.manage.queueTyped}
-          </span>
-        ) : null}
-        <span className="text-[11.5px] text-subtle-foreground">
-          {copy.episode.role(proposal.role)}
-        </span>
-        <span className="text-[11.5px] text-faint-foreground">
-          {proposal.episode_title}
-        </span>
-        {proposal.proposed_by ? (
-          <span className="text-[11.5px] text-faint-foreground">
-            {copy.manage.queueProposedBy} {proposal.proposed_by}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-end gap-2">
-        <label className="flex min-w-[190px] flex-1 flex-col gap-1">
-          <span className="text-[12px] text-subtle-foreground">
-            {copy.manage.queueApproveAs}
-          </span>
-          <select
-            value={slug}
-            onChange={(event) => setSlug(event.target.value)}
-            className="rounded-pill border border-border bg-background px-3 py-2 text-small"
-          >
-            <option value="">-</option>
-            {people.map((person) => (
-              <option key={person.slug} value={person.slug}>
-                {person.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex min-w-[170px] flex-1 flex-col gap-1">
-          <span className="text-[12px] text-subtle-foreground">
-            {copy.manage.queueRejectNote}
-          </span>
-          <input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            maxLength={280}
-            className="rounded-pill border border-border bg-background px-3 py-2 text-small"
-          />
-        </label>
-
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            disabled={review.isPending}
-            onClick={() => {
-              setError(null);
-              if (!slug) {
-                // The API refuses this too; saying so here saves a round trip
-                // and explains WHY nothing happened.
-                setError(copy.manage.queuePickPerson);
-                return;
-              }
-              review.mutate("approve");
-            }}
-          >
-            <Check className="h-4 w-4" />
-            {copy.manage.queueApprove}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={review.isPending}
-            onClick={() => {
-              setError(null);
-              review.mutate("reject");
-            }}
-          >
-            <X className="h-4 w-4" />
-            {copy.manage.queueReject}
-          </Button>
-        </div>
-      </div>
-
-      {error ? (
-        <p role="alert" className="mt-2 text-[12.5px] text-primary-text">
-          {error}
-        </p>
       ) : null}
     </li>
   );

@@ -160,3 +160,44 @@ class TestTheWholeOwnerWorkflow:
         assert EpisodeParticipant.objects.filter(
             episode=episode, person__slug=created["slug"]
         ).exists()
+
+
+@pytest.mark.django_db
+class TestPeoplePaging:
+    """🚨 `limit` alone is a CAP, not pagination.
+
+    Past it the remaining personas were simply unreachable, and every caller
+    rendered whichever slice it happened to receive as though it were the whole
+    catalogue. The owner named the ceiling before it arrived: "the people
+    section will have multiple people there ... you have 1000, I can't render
+    1000 people."
+    """
+
+    def test_offset_reaches_past_the_first_page(self, client):
+        for index in range(7):
+            Person.objects.create(name=f"Човек {index:02d}")
+
+        first = client.get("/api/people?limit=3").json()
+        second = client.get("/api/people?limit=3&offset=3").json()
+
+        assert len(first) == 3
+        assert len(second) == 3
+        # 🚨 Disjoint. An unstable sort under offset paging silently drops and
+        # duplicates rows between pages, which is why the ordering carries `id`
+        # as a final tiebreaker - every one of these personas has the same
+        # appearance count.
+        assert {row["slug"] for row in first}.isdisjoint({row["slug"] for row in second})
+
+    def test_search_narrows_the_list(self, client):
+        Person.objects.create(name="Иван Кирков")
+        Person.objects.create(name="Пепи Хикс")
+
+        results = client.get("/api/people", {"q": "Кирков"}).json()
+
+        assert [row["name"] for row in results] == ["Иван Кирков"]
+
+    def test_search_is_case_insensitive_in_cyrillic(self, client):
+        """🇧🇬 Verified with real Cyrillic, never with English test data."""
+        Person.objects.create(name="Пепи Хикс")
+
+        assert len(client.get("/api/people", {"q": "пепи"}).json()) == 1

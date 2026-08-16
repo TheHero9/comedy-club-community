@@ -58,10 +58,10 @@ def propose(
     user,
     person: Person | None = None,
     name: str = "",
-    role: str = EpisodeParticipant.Role.GUEST,
+    role: str = EpisodeParticipant.Role.REGULAR,
 ) -> ParticipantProposal:
     """Record a member's suggestion. Creates NO Person and NO participant."""
-    role = _checked_role(role, fallback=EpisodeParticipant.Role.GUEST)
+    role = _checked_role(role, fallback=EpisodeParticipant.Role.REGULAR)
     name = " ".join((name or "").split())
     if person is None and not name:
         raise ProposalError("Pick a person or type a name")

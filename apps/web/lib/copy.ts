@@ -375,33 +375,26 @@ const en = {
     descriptionLess: "less",
     descriptionToggle: "Description",
     cast: "Cast",
-    roleHost: "host",
-    roleCohost: "co-host",
-    roleRegular: "regular",
-    roleGuest: "guest",
-    roleOffcamera: "off-camera",
-    roleProducer: "producer",
     /**
      * `EpisodeParticipant.role` is a semantic key, which is the project rule:
      * data carries keys, the component layer maps them.
      *
-     * ⚠️ This used to be `key === "host" ? "host" : "guest"`, so a co-host and
-     * a producer both rendered as "guest". Harmless while no participant
-     * existed; wrong the moment the proposal form let members pick a role.
+     * 🚨 Three keys since 2026-08-16 - `host`, `cohost` and `producer` were
+     * removed from the model and REMAPPED in migration 0011 rather than left in
+     * the column, precisely because the fallback below would have rendered them
+     * as "regular": a wrong answer rather than a missing one. Django does not
+     * enforce `choices` in the database, so nothing but that migration stops an
+     * old value surviving.
      *
-     * 🚨 The `?? guest` fallback is why the API validates roles against the
-     * model's own choices on BOTH the propose and the approve path: anything
-     * it does not recognise silently reads as "guest" here, which is a wrong
-     * answer rather than a missing one.
+     * ⚠️ The fallback is `regular`, matching the API's own default, so the two
+     * cannot disagree about what an unrecognised role means.
      */
     role: (key: string): string =>
       ({
-        host: "host",
-        cohost: "co-host",
         regular: "regular",
+        guest: "guest",
         offcamera: "off-camera",
-        producer: "producer",
-      })[key] ?? "guest",
+      })[key] ?? "regular",
     moments: "Moments",
     momentsEmptyTitle: "Nothing labelled yet",
     momentsEmptyBody:
@@ -483,7 +476,6 @@ const en = {
     momentWhatPlaceholder: "What happens here?",
     momentSave: "Add",
     momentCancel: "Cancel",
-    momentMine: "Yours",
     momentDelete: "Delete",
     momentAdded: "Moment added",
     momentDeleted: "Moment deleted",
@@ -494,7 +486,8 @@ const en = {
     momentTimePastEnd: "That is past the end of this episode",
     /* --- Moments: sections and the optional time (2026-08-16) --- */
     momentTimeOptional: "optional",
-    momentTimeHint: "Leave blank for a note about the whole episode",
+    momentTimeHint:
+      "Type digits only - 13029 becomes 1:30:29. Leave it blank for a note about the whole episode.",
     momentsYours: "Your moments",
     momentsOthers: "From everyone else",
     momentNote: "Note",
@@ -544,11 +537,35 @@ const en = {
     appearances: (n: number) => `${n} episode${n === 1 ? "" : "s"}`,
     removeConfirm: (name: string) =>
       `Remove ${name}? They will be taken off every episode they are on.`,
+    peopleSearch: "Search people",
+    peopleMore: "Load more",
+    peopleNoMatch: "Nobody matches.",
     queueTitle: "Suggestions to review",
     queueEmpty: "Nothing waiting.",
     queueProposedBy: "suggested by",
+    /** One submission, not one row - see ProposalQueue for why they are grouped. */
+    queueBatch: (n: number) => `${n} suggestion${n === 1 ? "" : "s"}`,
+    queueApproveAll: "Approve all",
+    queueApproveAllHint: "Every suggestion needs a person picked first.",
+    historyTitle: "Recent decisions",
+    historyEmpty: "Nothing decided yet.",
+    historyApproved: "approved",
+    historyRejected: "rejected",
+    historyBy: (name: string) => `by ${name}`,
+    reportsTitle: "Reports",
+    reportsEmpty: "No reports waiting.",
+    reportsShowAll: "Show handled reports too",
+    reportsShowPending: "Show only what is waiting",
+    reportsFrom: (name: string) => `from ${name}`,
+    reportsNoteLabel: "Reply to the reporter",
+    reportsResolve: "Mark fixed",
+    reportsDismiss: "Close",
+    reportsOpenTarget: "Open the episode",
+    reportsResolved: "Report closed",
     queueTyped: "typed",
     queueApproveAs: "Approve as",
+    queuePersonFilter: "Filter the person list",
+    queuePersonCapped: "Showing the first 100 people. Type above to reach anyone else.",
     queueApprove: "Approve",
     queueReject: "Reject",
     queueRejectNote: "Why (they will see this)",
@@ -594,6 +611,11 @@ const en = {
     statusResolved: "Fixed",
     statusDismissed: "Closed",
     aboutTheSite: "About the site",
+    withdraw: "Withdraw",
+    openTarget: "Open what this is about",
+    withdrawn: "Report withdrawn",
+    decidedBy: (name: string) => `answered by ${name}`,
+    awaitingReply: "A moderator has not replied yet.",
   },
 
   rating: {
@@ -1089,20 +1111,12 @@ const bg: Copy = {
       "Етикетите с искра са предложени автоматично. Членовете могат да ги добавят и поправят.",
     topicAuto: "Предложен автоматично",
     cast: "Участници",
-    roleHost: "домакин",
-    roleCohost: "съводещ",
-    roleRegular: "редовен",
-    roleGuest: "гост",
-    roleOffcamera: "зад кадър",
-    roleProducer: "продуцент",
     role: (key: string): string =>
       ({
-        host: "домакин",
-        cohost: "съводещ",
         regular: "редовен",
+        guest: "гост",
         offcamera: "зад кадър",
-        producer: "продуцент",
-      })[key] ?? "гост",
+      })[key] ?? "редовен",
     moments: "Моменти",
     momentsEmptyTitle: "Още нищо не е отбелязано",
     momentsEmptyBody:
@@ -1171,7 +1185,6 @@ const bg: Copy = {
     momentWhatPlaceholder: "Какво се случва тук?",
     momentSave: "Добави",
     momentCancel: "Откажи",
-    momentMine: "Твой",
     momentDelete: "Изтрий",
     momentAdded: "Моментът е добавен",
     momentDeleted: "Моментът е изтрит",
@@ -1182,7 +1195,8 @@ const bg: Copy = {
     momentTimePastEnd: "Това е след края на епизода",
     /* --- Moments: sections and the optional time (2026-08-16) --- */
     momentTimeOptional: "по избор",
-    momentTimeHint: "Остави празно за бележка за целия епизод",
+    momentTimeHint:
+      "Пиши само цифри - 13029 става 1:30:29. Остави празно за бележка за целия епизод.",
     momentsYours: "Твоите моменти",
     momentsOthers: "От всички останали",
     momentNote: "Бележка",
@@ -1232,11 +1246,34 @@ const bg: Copy = {
     appearances: (n: number) => `${n} епизод${n === 1 ? "" : "а"}`,
     removeConfirm: (name: string) =>
       `Да премахна ли ${name}? Ще отпадне от всички епизоди, в които е.`,
+    peopleSearch: "Търси хора",
+    peopleMore: "Зареди още",
+    peopleNoMatch: "Няма съвпадения.",
     queueTitle: "Предложения за преглед",
     queueEmpty: "Няма нищо за преглед.",
     queueProposedBy: "предложено от",
+    queueBatch: (n: number) => `${n} предложени${n === 1 ? "е" : "я"}`,
+    queueApproveAll: "Одобри всички",
+    queueApproveAllHint: "За всяко предложение трябва да е избран човек.",
+    historyTitle: "Последни решения",
+    historyEmpty: "Още няма решения.",
+    historyApproved: "одобрено",
+    historyRejected: "отказано",
+    historyBy: (name: string) => `от ${name}`,
+    reportsTitle: "Сигнали",
+    reportsEmpty: "Няма чакащи сигнали.",
+    reportsShowAll: "Покажи и обработените",
+    reportsShowPending: "Покажи само чакащите",
+    reportsFrom: (name: string) => `от ${name}`,
+    reportsNoteLabel: "Отговор към подателя",
+    reportsResolve: "Отбележи като поправено",
+    reportsDismiss: "Затвори",
+    reportsOpenTarget: "Отвори епизода",
+    reportsResolved: "Сигналът е затворен",
     queueTyped: "написано",
     queueApproveAs: "Одобри като",
+    queuePersonFilter: "Филтрирай списъка с хора",
+    queuePersonCapped: "Показани са първите 100 души. Пиши горе, за да стигнеш до друг.",
     queueApprove: "Одобри",
     queueReject: "Откажи",
     queueRejectNote: "Защо (човекът ще го види)",
@@ -1282,6 +1319,11 @@ const bg: Copy = {
     statusResolved: "Поправено",
     statusDismissed: "Затворено",
     aboutTheSite: "За сайта",
+    withdraw: "Оттегли",
+    openTarget: "Отвори за какво се отнася",
+    withdrawn: "Сигналът е оттеглен",
+    decidedBy: (name: string) => `отговорено от ${name}`,
+    awaitingReply: "Още няма отговор от модератор.",
   },
 
   rating: {

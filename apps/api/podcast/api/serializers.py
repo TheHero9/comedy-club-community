@@ -238,6 +238,7 @@ def proposal_out(proposal, viewer=None) -> dict:
     """One participant proposal, in the shape both the episode page and the
     moderation queue read."""
     profile = getattr(proposal.proposed_by, "profile", None) if proposal.proposed_by else None
+    reviewer = getattr(proposal.verified_by, "profile", None) if proposal.verified_by else None
     viewer_id = getattr(viewer, "id", None)
     return {
         "id": proposal.id,
@@ -249,6 +250,10 @@ def proposal_out(proposal, viewer=None) -> dict:
         "proposed_by": (profile.display_name if profile else None),
         "note": proposal.note,
         "verified_at": proposal.verified_at,
+        # ⚠️ Reads the PROFILE name, never `user.get_username()` - for a
+        # Clerk-provisioned account that IS the raw `sub`, and this string is
+        # rendered to other people.
+        "reviewed_by": (reviewer.display_name if reviewer else None) or None,
         "is_mine": bool(viewer_id and proposal.proposed_by_id == viewer_id),
     }
 

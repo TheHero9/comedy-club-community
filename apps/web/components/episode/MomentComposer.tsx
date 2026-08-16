@@ -227,11 +227,13 @@ export function MomentOwnerControls({
     }
   }
 
+  // 🚨 NO "yours" CHIP. It shipped as a pill next to the delete button and the
+  // owner's read was "which is super useless - I don't know why I see it". They
+  // are right twice over: the row already names its author underneath the
+  // label, and a delete button only ever renders on a row you own, so the chip
+  // restated the one thing the control already proved.
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1.5">
-      <span className="rounded-pill border border-border px-2 py-0.5 text-[10.5px] text-subtle-foreground">
-        {copy.episode.momentMine}
-      </span>
       <button
         type="button"
         onClick={remove}

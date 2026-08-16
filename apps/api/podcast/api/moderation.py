@@ -87,7 +87,7 @@ def create_report(request, payload: ReportIn):
             category=category,
             reason=payload.reason.strip(),
         )
-        return _report_out(report)
+        return _report_out(report)  # no target, so no context to resolve
 
     model = REPORTABLE.get(payload.target_type.lower())
     if model is None:
@@ -108,7 +108,9 @@ def create_report(request, payload: ReportIn):
     if not created:
         raise HttpError(409, "You have already reported this item")
 
-    return _report_out(report)
+    # Context on a single row too, so a POST response is never a poorer version
+    # of the same report than the list that renders next to it.
+    return _report_out(report, _target_context([report]))
 
 
 @router.get("/reports", response=list[ReportOut])
@@ -120,10 +122,20 @@ def list_reports(
     """🔒 Moderators only."""
     require_moderator(request.auth)
 
-    queryset = Report.objects.select_related("content_type").order_by("-created_at")
+    queryset = Report.objects.select_related(
+        "content_type",
+        # Named in every row of the queue; without these it is one query per
+        # report just to print who filed it.
+        "reporter",
+        "reporter__profile",
+        "resolved_by",
+        "resolved_by__profile",
+    ).order_by("-created_at")
     if status != "all":
         queryset = queryset.filter(status=status)
-    return [_report_out(report) for report in queryset[:limit]]
+    reports = list(queryset[:limit])
+    context = _target_context(reports)
+    return [_report_out(report, context) for report in reports]
 
 
 @router.post("/reports/{report_id}/resolve", response=ReportOut)
@@ -140,7 +152,7 @@ def resolve_report(request, report_id: int, payload: ReportResolveIn):
     report.resolved_by = moderator.user
     report.resolved_at = timezone.now()
     report.save(update_fields=["status", "resolution_note", "resolved_by", "resolved_at"])
-    return _report_out(report)
+    return _report_out(report, _target_context([report]))
 
 
 @router.delete("/reports/{report_id}", response=MessageOut)
@@ -153,11 +165,16 @@ def withdraw_report(request, report_id: int):
     return {"detail": "Report withdrawn"}
 
 
-def _report_out(report: Report) -> dict:
+def _report_out(report: Report, context: dict | None = None) -> dict:
     # 🚨 content_type is NULLABLE now (a general "the site is broken" report
     # points at nothing), so it must not be dereferenced blind. This exact line
     # used to read `report.content_type.model` and would have 500'd on the first
     # general report ever filed.
+    label, youtube_id = (context or {}).get(
+        (report.content_type_id, report.object_id), ("", None)
+    )
+    reporter = getattr(report.reporter, "profile", None) if report.reporter_id else None
+    resolver = getattr(report.resolved_by, "profile", None) if report.resolved_by_id else None
     return {
         "id": report.id,
         "target_type": report.content_type.model if report.content_type_id else None,
@@ -168,7 +185,75 @@ def _report_out(report: Report) -> dict:
         "created_at": report.created_at,
         "resolution_note": report.resolution_note,
         "resolved_at": report.resolved_at,
+        "target_label": label,
+        "target_youtube_id": youtube_id,
+        # ⚠️ The PROFILE name on both. `user.get_username()` is the Clerk `sub`
+        # for anyone signed in with Google, and these strings are shown to a
+        # moderator and to the reporter respectively.
+        "reporter": (reporter.display_name if reporter else None) or None,
+        "resolved_by": (resolver.display_name if resolver else None) or None,
     }
+
+
+# How much of a comment or a reason is enough for a moderator to recognise it
+# without the queue turning into a wall of text.
+TARGET_LABEL_CHARS = 120
+
+
+def _target_context(reports: list[Report]) -> dict[tuple[int | None, int | None], tuple[str, str | None]]:
+    """Resolve every report's target to `(label, episode youtube id)` in bulk.
+
+    🚨 BULK, not `report.target` per row. A generic FK dereferenced in a loop is
+    one query per report, plus another to reach the episode behind a comment or
+    a moment - the same N+1 shape that produced a 102-query search fallback on
+    this project. This is at most two queries per distinct content type, and the
+    queue is capped at 200 rows.
+
+    A missing target resolves to an empty label rather than raising: the row it
+    pointed at may since have been deleted, which is frequently the very thing
+    the moderator did in response to the report.
+    """
+    by_type: dict[int, list[int]] = {}
+    for report in reports:
+        if report.content_type_id and report.object_id:
+            by_type.setdefault(report.content_type_id, []).append(report.object_id)
+
+    context: dict[tuple[int | None, int | None], tuple[str, str | None]] = {}
+    for content_type_id, object_ids in by_type.items():
+        model = ContentType.objects.get_for_id(content_type_id).model_class()
+        if model is None:
+            continue
+
+        # Every reportable model either IS an episode or points at one, so the
+        # link a moderator needs is always reachable in a single select_related.
+        related = () if model is Episode else ("episode",)
+        rows = model.objects.filter(id__in=object_ids)
+        if related:
+            rows = rows.select_related(*related)
+
+        for row in rows:
+            episode = row if model is Episode else getattr(row, "episode", None)
+            context[(content_type_id, row.id)] = (
+                _label_for(row, model)[:TARGET_LABEL_CHARS],
+                getattr(episode, "youtube_id", None),
+            )
+    return context
+
+
+def _label_for(row, model) -> str:
+    """The one line that tells a moderator what they are looking at."""
+    if model is Episode:
+        return row.title
+    if model is Comment:
+        return row.body
+    if model is Moment:
+        return row.label
+    if model is EpisodeTopic:
+        # The topic is the point; the episode is already carried separately.
+        return getattr(row.topic, "name", "") if row.topic_id else ""
+    if model is Rating:
+        return str(row.score)
+    return ""
 
 
 @router.get("/me/reports", response=list[ReportOut])
@@ -184,10 +269,14 @@ def list_my_reports(request, limit: int = Query(50, ge=1, le=200)):
     """
     queryset = (
         Report.objects.filter(reporter=request.auth)
-        .select_related("content_type")
+        .select_related(
+            "content_type", "reporter", "reporter__profile", "resolved_by", "resolved_by__profile"
+        )
         .order_by("-created_at")
     )
-    return [_report_out(report) for report in queryset[:limit]]
+    reports = list(queryset[:limit])
+    context = _target_context(reports)
+    return [_report_out(report, context) for report in reports]
 
 
 # ---------------------------------------------------------------------------

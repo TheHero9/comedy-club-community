@@ -341,7 +341,7 @@ class Command(BaseCommand):
             if (episode.pk, host.pk) not in existing:
                 rows.append(
                     EpisodeParticipant(
-                        episode=episode, person=host, role="host", added_by=users[0]
+                        episode=episode, person=host, role="regular", added_by=users[0]
                     )
                 )
             if random.random() < 0.35:

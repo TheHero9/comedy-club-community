@@ -371,14 +371,61 @@ def list_proposals(
     status: str = Query("pending"),
     limit: int = Query(50, ge=1, le=200),
 ):
-    """🔒 Moderators only. The review queue."""
+    """🔒 Moderators only. The review queue, and the record of what was decided.
+
+    `status` also drives the ORDER, because the two questions are different.
+    Pending is a work list - oldest submission first would be fairer, but newest
+    first matches how the queue is actually read. Anything already reviewed is a
+    HISTORY, and a history is ordered by when the DECISION happened, not by when
+    the suggestion arrived: sorting a month of approvals by `created_at` puts a
+    proposal decided this morning below one filed yesterday and decided never.
+    """
     require_moderator(request.auth)
 
     queryset = ParticipantProposal.objects.select_related(
-        "episode", "person", "proposed_by", "proposed_by__profile"
-    ).order_by("-created_at")
-    if status != "all":
-        queryset = queryset.filter(status=status)
+        "episode",
+        "person",
+        "proposed_by",
+        "proposed_by__profile",
+        # Without this the history view is one query per row to name the
+        # moderator - the exact N+1 shape that cost this project a 102-query
+        # search fallback.
+        "verified_by",
+        "verified_by__profile",
+    )
+    if status == "all":
+        queryset = queryset.order_by("-created_at")
+    elif status == ParticipantProposal.Status.PENDING:
+        queryset = queryset.filter(status=status).order_by("-created_at")
+    else:
+        queryset = queryset.filter(status=status).order_by(
+            F("verified_at").desc(nulls_last=True), "-created_at"
+        )
+    return [proposal_queue_out(proposal) for proposal in queryset[:limit]]
+
+
+@router.get("/moderation/participant-proposals/reviewed", response=list[ProposalQueueOut])
+def list_reviewed_proposals(request, limit: int = Query(30, ge=1, le=200)):
+    """🔒 Moderators only. Approved AND rejected in one list, newest decision first.
+
+    A separate endpoint rather than `?status=approved|rejected` twice: the
+    history is one timeline, and merging two client-side pages of thirty would
+    interleave them wrongly at the boundary.
+    """
+    require_moderator(request.auth)
+
+    queryset = (
+        ParticipantProposal.objects.exclude(status=ParticipantProposal.Status.PENDING)
+        .select_related(
+            "episode",
+            "person",
+            "proposed_by",
+            "proposed_by__profile",
+            "verified_by",
+            "verified_by__profile",
+        )
+        .order_by(F("verified_at").desc(nulls_last=True), "-created_at")
+    )
     return [proposal_queue_out(proposal) for proposal in queryset[:limit]]
 
 

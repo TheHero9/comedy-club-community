@@ -141,6 +141,17 @@ def update_me(request, payload: ProfileIn):
         if value is not None:
             setattr(profile, field, value)
 
+    if payload.display_name is not None:
+        # 🚨 THIS FLAG IS WHAT MAKES THE SAVE STICK. `provision_user` refreshes
+        # display_name from Clerk on every authenticated request, so without it
+        # the row below is reverted before the member gets back to the profile
+        # page. See UserProfile.display_name_is_custom.
+        #
+        # Clearing the field un-sets it, so "" means "go back to my Google name"
+        # rather than "leave me permanently nameless" - a member who wipes the
+        # box by accident gets their name back instead of a dead end.
+        profile.display_name_is_custom = bool(payload.display_name.strip())
+
     if payload.handle is not None:
         try:
             handle = clean_handle(payload.handle)

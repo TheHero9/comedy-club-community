@@ -184,7 +184,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List People */
+        /**
+         * List People
+         * @description The persona catalogue, searchable and paged.
+         *
+         *     🚨 It used to take `limit` alone, which is a cap and not pagination - past
+         *     100 personas the rest were simply unreachable, and every caller rendered
+         *     whichever slice it happened to get as if it were the whole list. The owner
+         *     named the ceiling before it arrived: "the people section will have multiple
+         *     people there, you can't render 1000 people."
+         *
+         *     Ordered by appearance count so the personas a moderator actually reaches for
+         *     are on the first page, with `name` breaking ties - a stable second key
+         *     matters here, because an unstable sort under offset paging silently drops
+         *     and duplicates rows between pages.
+         */
         get: operations["podcast_api_public_list_people"];
         put?: never;
         post?: never;
@@ -871,9 +885,40 @@ export interface paths {
         };
         /**
          * List Proposals
-         * @description 🔒 Moderators only. The review queue.
+         * @description 🔒 Moderators only. The review queue, and the record of what was decided.
+         *
+         *     `status` also drives the ORDER, because the two questions are different.
+         *     Pending is a work list - oldest submission first would be fairer, but newest
+         *     first matches how the queue is actually read. Anything already reviewed is a
+         *     HISTORY, and a history is ordered by when the DECISION happened, not by when
+         *     the suggestion arrived: sorting a month of approvals by `created_at` puts a
+         *     proposal decided this morning below one filed yesterday and decided never.
          */
         get: operations["podcast_api_community_list_proposals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/participant-proposals/reviewed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reviewed Proposals
+         * @description 🔒 Moderators only. Approved AND rejected in one list, newest decision first.
+         *
+         *     A separate endpoint rather than `?status=approved|rejected` twice: the
+         *     history is one timeline, and merging two client-side pages of thirty would
+         *     interleave them wrongly at the boundary.
+         */
+        get: operations["podcast_api_community_list_reviewed_proposals"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2118,6 +2163,8 @@ export interface components {
             note: string;
             /** Verified At */
             verified_at?: string | null;
+            /** Reviewed By */
+            reviewed_by?: string | null;
             /**
              * Is Mine
              * @default false
@@ -2169,6 +2216,8 @@ export interface components {
             note: string;
             /** Verified At */
             verified_at?: string | null;
+            /** Reviewed By */
+            reviewed_by?: string | null;
             /**
              * Is Mine
              * @default false
@@ -2247,6 +2296,17 @@ export interface components {
             resolution_note: string;
             /** Resolved At */
             resolved_at?: string | null;
+            /**
+             * Target Label
+             * @default
+             */
+            target_label: string;
+            /** Target Youtube Id */
+            target_youtube_id?: string | null;
+            /** Reporter */
+            reporter?: string | null;
+            /** Resolved By */
+            resolved_by?: string | null;
         };
         /**
          * ReportIn
@@ -2542,7 +2602,10 @@ export interface operations {
     podcast_api_public_list_people: {
         parameters: {
             query?: {
+                /** @description Filter by name */
+                q?: string;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -3545,6 +3608,28 @@ export interface operations {
         parameters: {
             query?: {
                 status?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalQueueOut"][];
+                };
+            };
+        };
+    };
+    podcast_api_community_list_reviewed_proposals: {
+        parameters: {
+            query?: {
                 limit?: number;
             };
             header?: never;

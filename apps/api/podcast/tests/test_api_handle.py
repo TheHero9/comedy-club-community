@@ -166,3 +166,64 @@ class TestNoEmailLeak:
             **auth_header("alice"),
         )
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestDisplayNameOwnership:
+    """Saving a name has to CLAIM the field, not just write it once.
+
+    See test_auth_identity.py for the other half: `provision_user` runs on every
+    authenticated request and used to overwrite whatever was written here.
+    """
+
+    def test_saving_a_name_marks_it_as_the_members_own(self, client, alice):
+        response = client.patch(
+            "/api/me",
+            data={"display_name": "Митко"},
+            content_type="application/json",
+            **auth_header("alice"),
+        )
+        assert response.status_code == 200
+        assert response.json()["display_name"] == "Митко"
+
+        profile = UserProfile.objects.get(user=alice)
+        assert profile.display_name_is_custom is True
+
+    def test_clearing_the_name_hands_the_field_back(self, client, alice):
+        """"" means "use my provider name again", not "leave me nameless".
+
+        A member who empties the box by accident would otherwise be stuck with a
+        blank profile forever, because nothing would ever be allowed to fill it.
+        """
+        client.patch(
+            "/api/me",
+            data={"display_name": "Митко"},
+            content_type="application/json",
+            **auth_header("alice"),
+        )
+        client.patch(
+            "/api/me",
+            data={"display_name": ""},
+            content_type="application/json",
+            **auth_header("alice"),
+        )
+
+        profile = UserProfile.objects.get(user=alice)
+        assert profile.display_name_is_custom is False
+
+    def test_editing_only_the_handle_does_not_claim_the_name(self, client, alice):
+        """The flag tracks the name, not "this member has used the form".
+
+        Claiming it on any PATCH would freeze the display name of everyone who
+        ever set a handle, which is a different and much wider promise.
+        """
+        response = client.patch(
+            "/api/me",
+            data={"handle": "mitko"},
+            content_type="application/json",
+            **auth_header("alice"),
+        )
+        assert response.status_code == 200
+
+        profile = UserProfile.objects.get(user=alice)
+        assert profile.display_name_is_custom is False

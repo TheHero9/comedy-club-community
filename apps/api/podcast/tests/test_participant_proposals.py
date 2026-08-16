@@ -34,7 +34,7 @@ class TestRoles:
     """The role vocabulary, and the fact that only it reaches the column."""
 
     @pytest.mark.parametrize(
-        "role", ["host", "cohost", "regular", "guest", "offcamera", "producer"]
+        "role", ["regular", "guest", "offcamera"]
     )
     def test_every_role_is_accepted_end_to_end(
         self, client, episode, alice, as_alice, moderator, kirkov, role
@@ -82,7 +82,7 @@ class TestProposing:
     def test_a_member_can_propose_an_existing_person(self, client, episode, alice, as_alice, kirkov):
         response = client.post(
             f"/api/episodes/{episode.youtube_id}/participants",
-            data={"person_slug": kirkov.slug, "role": "host"},
+            data={"person_slug": kirkov.slug, "role": "regular"},
             content_type="application/json",
             **as_alice,
         )
@@ -132,7 +132,7 @@ class TestProposing:
     def test_the_same_member_cannot_propose_the_same_person_twice(
         self, client, episode, alice, as_alice, kirkov
     ):
-        payload = {"person_slug": kirkov.slug, "role": "host"}
+        payload = {"person_slug": kirkov.slug, "role": "regular"}
         first = client.post(
             f"/api/episodes/{episode.youtube_id}/participants",
             data=payload,
@@ -162,7 +162,7 @@ class TestReview:
         self, client, episode, alice, as_alice, kirkov
     ):
         proposal = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         response = client.post(
             f"/api/moderation/participant-proposals/{proposal.id}/approve",
@@ -176,7 +176,7 @@ class TestReview:
         self, client, episode, alice, moderator, as_moderator, kirkov
     ):
         proposal = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         response = client.post(
             f"/api/moderation/participant-proposals/{proposal.id}/approve",
@@ -240,10 +240,10 @@ class TestReview:
         self, client, episode, alice, bob, moderator, kirkov
     ):
         first = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         second = participant_service.propose(
-            episode=episode, user=bob, person=kirkov, role="host"
+            episode=episode, user=bob, person=kirkov, role="regular"
         )
         participant_service.approve(proposal=first, moderator=moderator)
         participant_service.approve(proposal=second, moderator=moderator)
@@ -254,7 +254,7 @@ class TestReview:
         self, client, episode, alice, moderator, as_moderator, kirkov
     ):
         proposal = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         response = client.post(
             f"/api/moderation/participant-proposals/{proposal.id}/reject",
@@ -272,18 +272,18 @@ class TestReview:
     def test_a_rejected_proposal_can_be_proposed_again(self, episode, alice, moderator, kirkov):
         """The pending-scoped unique constraint must not lock a member out forever."""
         first = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         participant_service.reject(proposal=first, moderator=moderator, note="no")
 
         again = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         assert again.pk != first.pk
 
     def test_a_proposal_cannot_be_reviewed_twice(self, episode, alice, moderator, kirkov):
         proposal = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         participant_service.approve(proposal=proposal, moderator=moderator)
         with pytest.raises(participant_service.ProposalError):
@@ -300,7 +300,7 @@ class TestPendingNeverLeaks:
         self, client, episode, alice, kirkov
     ):
         participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
 
         # 1. The Meilisearch document is built from EpisodeParticipant only.
@@ -320,7 +320,7 @@ class TestPendingNeverLeaks:
 
     def test_approving_makes_it_visible_everywhere(self, client, episode, alice, moderator, kirkov):
         proposal = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         participant_service.approve(proposal=proposal, moderator=moderator)
 
@@ -335,7 +335,7 @@ class TestPendingNeverLeaks:
         self, client, episode, alice, moderator, kirkov, tonkata
     ):
         approved = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         participant_service.approve(proposal=approved, moderator=moderator)
         participant_service.propose(episode=episode, user=alice, person=tonkata, role="guest")
@@ -350,7 +350,7 @@ class TestWithdraw:
         self, client, episode, alice, as_alice, kirkov
     ):
         proposal = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         response = client.delete(f"/api/participant-proposals/{proposal.id}", **as_alice)
         assert response.status_code == 200
@@ -360,8 +360,108 @@ class TestWithdraw:
         self, client, episode, alice, as_bob, bob, kirkov
     ):
         proposal = participant_service.propose(
-            episode=episode, user=alice, person=kirkov, role="host"
+            episode=episode, user=alice, person=kirkov, role="regular"
         )
         response = client.delete(f"/api/participant-proposals/{proposal.id}", **as_bob)
         assert response.status_code == 403
         assert ParticipantProposal.objects.filter(id=proposal.id).exists()
+
+
+@pytest.mark.django_db
+class TestTheRoleSet:
+    """🚨 EXACTLY THREE roles (owner ruling, 2026-08-16).
+
+    `host`, `cohost` and `producer` were removed. Django does NOT enforce
+    `choices` in the database, so nothing but the API's own validation and
+    migration 0011 stops a removed key surviving - and an unrecognised key
+    renders through the web's `?? regular` fallback, which is a wrong answer
+    rather than a missing one.
+    """
+
+    @pytest.mark.parametrize("role", ["host", "cohost", "producer"])
+    def test_a_removed_role_is_refused(self, client, episode, kirkov, alice, as_alice, role):
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants",
+            data={"person_slug": kirkov.slug, "role": role},
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 422, response.content
+
+    def test_the_default_is_regular(self, episode, kirkov, alice):
+        """Not `guest`. A member of the show is not a visitor to it, and this
+        is the value every proposal that does not name a role ends up with."""
+        proposal = participant_service.propose(
+            episode=episode, user=alice, person=kirkov, name=""
+        )
+        assert proposal.role == EpisodeParticipant.Role.REGULAR
+
+    def test_approving_a_removed_role_is_refused_too(
+        self, client, episode, kirkov, alice, moderator, as_moderator
+    ):
+        """The privileged path validates as well as the public one.
+
+        This is the gap found on 2026-08-16: `propose` checked the role and
+        `approve` did not, so the UNVALIDATED path was the one a moderator
+        drives.
+        """
+        proposal = participant_service.propose(
+            episode=episode, user=alice, person=kirkov, name=""
+        )
+        response = client.post(
+            f"/api/moderation/participant-proposals/{proposal.id}/approve",
+            data={"person_slug": kirkov.slug, "role": "producer"},
+            content_type="application/json",
+            **as_moderator,
+        )
+        assert response.status_code == 422, response.content
+
+
+@pytest.mark.django_db
+class TestDecisionHistory:
+    """"I click approve, it's approved - and I should have some history of what
+    was approved, but I see no history at all." (owner, 2026-08-16)
+
+    An approval used to leave the pending queue and appear nowhere, so the only
+    evidence a decision had been made was the absence of the row.
+    """
+
+    def test_reviewed_proposals_are_listed_with_who_decided(
+        self, client, episode, kirkov, alice, moderator, as_moderator
+    ):
+        proposal = participant_service.propose(
+            episode=episode, user=alice, person=kirkov, name=""
+        )
+        client.post(
+            f"/api/moderation/participant-proposals/{proposal.id}/approve",
+            data={"person_slug": kirkov.slug},
+            content_type="application/json",
+            **as_moderator,
+        )
+
+        response = client.get(
+            "/api/moderation/participant-proposals/reviewed", **as_moderator
+        )
+        assert response.status_code == 200, response.content
+        row = response.json()[0]
+        assert row["status"] == "approved"
+        assert row["reviewed_by"]
+        assert row["verified_at"]
+
+    def test_pending_proposals_are_not_history(
+        self, client, episode, kirkov, alice, moderator, as_moderator
+    ):
+        participant_service.propose(
+            episode=episode, user=alice, person=kirkov, name=""
+        )
+        response = client.get(
+            "/api/moderation/participant-proposals/reviewed", **as_moderator
+        )
+        assert response.json() == []
+
+    def test_a_plain_member_cannot_read_the_history(self, client, alice, as_alice):
+        """🔒 It names moderators and every member who ever suggested anyone."""
+        response = client.get(
+            "/api/moderation/participant-proposals/reviewed", **as_alice
+        )
+        assert response.status_code == 403, response.content

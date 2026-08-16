@@ -313,3 +313,121 @@ class TestReporting:
             **as_alice,
         )
         assert response.status_code == 422
+
+
+class TestReportTargetContext:
+    """A moderator has to be able to see WHAT was reported.
+
+    🚨 Until `target_label` existed the queue could only have said
+    "comment 41", which cannot be acted on without leaving the page - and that
+    is a large part of why `GET /api/reports` sat implemented with no caller
+    for a whole wave. A content type and a row id are not a report.
+    """
+
+    def test_an_episode_report_carries_its_title_and_a_link(
+        self, client, episode, alice, as_alice, moderator, as_moderator
+    ):
+        client.post(
+            "/api/reports",
+            data={
+                "target_type": "episode",
+                "target_id": episode.id,
+                "category": "not_an_episode",
+                "reason": "promo clip",
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+
+        response = client.get("/api/reports", **as_moderator)
+        assert response.status_code == 200, response.content
+        row = response.json()[0]
+        assert row["target_label"] == episode.title
+        assert row["target_youtube_id"] == episode.youtube_id
+        assert row["reporter"]
+
+    def test_a_moment_report_links_to_the_episode_behind_it(
+        self, client, episode, alice, as_alice, moderator, as_moderator
+    ):
+        """The label comes from the moment; the link comes from its episode.
+
+        These are two different rows, and a queue that could only reach one of
+        them would either be unactionable or mislabelled.
+        """
+        moment = Moment.objects.create(
+            episode=episode, user=alice, timestamp_sec=61, label="кучето лае"
+        )
+
+        client.post(
+            "/api/reports",
+            data={
+                "target_type": "moment",
+                "target_id": moment.id,
+                "category": "wrong_info",
+                "reason": "wrong timestamp",
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+
+        row = client.get("/api/reports", **as_moderator).json()[0]
+        assert row["target_label"] == "кучето лае"
+        assert row["target_youtube_id"] == episode.youtube_id
+
+    def test_a_deleted_target_degrades_instead_of_raising(
+        self, client, episode, alice, as_alice, moderator, as_moderator
+    ):
+        """Deleting the reported row is frequently the RESPONSE to the report.
+
+        So the queue must survive its own outcome: a dangling generic FK
+        resolves to an empty label rather than 500ing the whole page.
+        """
+        moment = Moment.objects.create(
+            episode=episode, user=alice, timestamp_sec=61, label="ще го изтрия"
+        )
+        client.post(
+            "/api/reports",
+            data={
+                "target_type": "moment",
+                "target_id": moment.id,
+                "category": "wrong_info",
+                "reason": "nonsense",
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+        moment.delete()
+
+        response = client.get("/api/reports", **as_moderator)
+        assert response.status_code == 200, response.content
+        row = response.json()[0]
+        assert row["target_label"] == ""
+        assert row["target_youtube_id"] is None
+
+    def test_the_reporter_is_told_who_answered(
+        self, client, episode, alice, as_alice, moderator, as_moderator
+    ):
+        """🔁 The feedback loop, end to end: a note AND a name behind it."""
+        report_id = client.post(
+            "/api/reports",
+            data={
+                "target_type": "episode",
+                "target_id": episode.id,
+                "category": "wrong_info",
+                "reason": "wrong date",
+            },
+            content_type="application/json",
+            **as_alice,
+        ).json()["id"]
+
+        client.post(
+            f"/api/reports/{report_id}/resolve",
+            data={"status": "resolved", "resolution_note": "Fixed, thanks"},
+            content_type="application/json",
+            **as_moderator,
+        )
+
+        mine = client.get("/api/me/reports", **as_alice).json()[0]
+        assert mine["status"] == "resolved"
+        assert mine["resolution_note"] == "Fixed, thanks"
+        assert mine["resolved_by"]

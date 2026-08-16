@@ -548,6 +548,12 @@ class ProposalOut(Schema):
     # feedback loop the report queue gives.
     note: str = ""
     verified_at: datetime | None = None
+    # 🚨 WHO decided, which is what turns a reviewed proposal into a HISTORY
+    # rather than a row that merely stopped being pending. The owner's report:
+    # "I click approve, it's approved, and I should have some more history -
+    # what was approved, when - but I see no history at all." `verified_at`
+    # already answered "when"; nothing answered "by whom".
+    reviewed_by: str | None = None
     is_mine: bool = False
 
 
@@ -605,6 +611,15 @@ class ReportOut(Schema):
     created_at: datetime
     resolution_note: str = ""
     resolved_at: datetime | None = None
+
+    # 🚨 A CONTENT TYPE AND A ROW ID ARE NOT A REPORT. Until these existed the
+    # queue could only have said "comment 41", which no moderator can act on
+    # without going and looking it up - so nothing could be built on top of it,
+    # which is why the endpoint sat there with no UI at all.
+    target_label: str = ""
+    target_youtube_id: str | None = None
+    reporter: str | None = None
+    resolved_by: str | None = None
 
 
 class ReportResolveIn(Schema):

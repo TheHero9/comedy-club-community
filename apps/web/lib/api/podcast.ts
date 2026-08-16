@@ -46,6 +46,28 @@ export type AdminUser = Schema<"UserAdminOut">;
  */
 const PUBLIC_CACHE = { next: { revalidate: 60 } } as const;
 
+/**
+ * Reads a member can CHANGE FROM THE PAGE THEY ARE LOOKING AT.
+ *
+ * 🚨 These must not sit in the fetch cache, and the reason is a bug report, not
+ * a preference. 2026-08-16: "I'm pretty sure I added something - why is it
+ * gone? ... now it appears apparently, which was super strange." A moment was
+ * added, the client list updated correctly, the member navigated away and came
+ * back - and the server re-rendered from a cached response captured BEFORE the
+ * write. Their own contribution was missing for up to a minute and then
+ * returned on its own, which reads as the site losing data.
+ *
+ * ⚠️ `router.refresh()` does not fix this: it explicitly does not invalidate
+ * the server-side fetch cache. Nor can a write hook - the writes go from the
+ * browser straight to Django, so Next never learns about them.
+ *
+ * The cost is one uncached API call per episode render, measured in tens of
+ * milliseconds against endpoints that answer in single digits. The payload is
+ * unchanged, so the perf budgets are unaffected - caching is not what those
+ * measure.
+ */
+const LIVE_CACHE = { cache: "no-store" } as const;
+
 /** Leaderboard kinds the API accepts. Anything else is a 404 by design. */
 export const LEADERBOARD_KINDS = {
   top: "top_rated",
@@ -84,7 +106,7 @@ export function getEpisode(youtubeId: string) {
 export function listMoments(youtubeId: string) {
   return api.get<Moment[]>(
     `/api/episodes/${encodeURIComponent(youtubeId)}/moments`,
-    PUBLIC_CACHE,
+    LIVE_CACHE,
   );
 }
 
@@ -98,14 +120,14 @@ export function listMoments(youtubeId: string) {
 export function listCast(youtubeId: string) {
   return api.get<EpisodeCast>(
     `/api/episodes/${encodeURIComponent(youtubeId)}/participants`,
-    PUBLIC_CACHE,
+    LIVE_CACHE,
   );
 }
 
 export function listComments(youtubeId: string, params: QueryParams = {}) {
   return api.get<CommentList>(
     `/api/episodes/${encodeURIComponent(youtubeId)}/comments`,
-    { query: params, ...PUBLIC_CACHE },
+    { query: params, ...LIVE_CACHE },
   );
 }
 

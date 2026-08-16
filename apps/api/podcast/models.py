@@ -409,22 +409,36 @@ class EpisodeParticipant(models.Model):
     """Who took part in an episode, and in what role."""
 
     class Role(models.TextChoices):
-        HOST = "host", "Host"
-        COHOST = "cohost", "Co-host"
-        # A recurring member of the show who is NOT a guest. Owner's words:
-        # "for the people that participate that are part of the community - we
-        # won't allow for guests". Calling a regular a guest every episode is
-        # wrong in the one place the label is supposed to carry meaning.
+        """🚨 EXACTLY THREE, and `host`, `cohost` and `producer` are GONE
+        (owner ruling, 2026-08-16: "we don't need host and co-host, just remove
+        them - only regular, guest, off-camera, and the default to be regular").
+
+        The set is not a job description, it is *how present this person is in
+        this episode*. `host` and `cohost` were a hierarchy among the people who
+        are simply on the show every week, and this catalogue has no use for
+        that ranking - `regular` says the thing that matters. `producer` was a
+        credit rather than a presence, which is why it never fitted next to the
+        others.
+
+        ⚠️ Migration 0010 remaps the three removed keys rather than leaving them
+        in the column. Django does not enforce `choices` at the database level,
+        so a leftover value would survive happily and render through
+        `copy.episode.role()`'s `?? guest` fallback - a WRONG answer, not a
+        missing one.
+        """
+
+        # The default. A recurring member of the show. Owner's words: "for the
+        # people that participate that are part of the community - we won't
+        # allow for guests". Calling a regular a guest every week is wrong in
+        # the one place the label is supposed to carry meaning.
         REGULAR = "regular", "Regular"
         GUEST = "guest", "Guest"
-        # The voice off-camera: heard, never seen. Distinct from PRODUCER,
-        # which is a job rather than a presence in the episode.
+        # The voice off-camera: heard, never seen.
         OFFCAMERA = "offcamera", "Off-camera"
-        PRODUCER = "producer", "Producer"
 
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="participants")
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="appearances")
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.GUEST)
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.REGULAR)
     added_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
@@ -484,7 +498,7 @@ class ParticipantProposal(models.Model):
     role = models.CharField(
         max_length=20,
         choices=EpisodeParticipant.Role.choices,
-        default=EpisodeParticipant.Role.GUEST,
+        default=EpisodeParticipant.Role.REGULAR,
     )
 
     proposed_by = models.ForeignKey(
@@ -564,6 +578,25 @@ class UserProfile(models.Model):
     )
 
     display_name = models.CharField(max_length=100, blank=True)
+
+    # --- Deviation 16: who owns the display name -----------------------------
+    # 🚨 WITHOUT THIS FLAG A SAVED NAME SURVIVES ABOUT ONE SECOND. `display_name`
+    # has two writers - the member via `PATCH /api/me`, and `provision_user` on
+    # EVERY authenticated request, refreshing "mutable fields the identity
+    # provider owns". Google supplies a real name through Clerk, so the refresh
+    # always had something to write, and it silently reverted the member's own
+    # edit before they could navigate back to the page. Reported 2026-08-16:
+    # "I edit my display name, I click save, I get 'profile saved', then I go
+    # back and it's the same one as before."
+    #
+    # ✅ Set True the moment a member types a name; the provider refresh then
+    # skips this row permanently. Clearing the field (sending "") sets it back
+    # to False, which is what makes "" mean "use my Google name again" rather
+    # than "leave me nameless forever" - the same sentinel `handle` already uses.
+    display_name_is_custom = models.BooleanField(
+        default=False,
+        help_text="The member typed this name themselves; never overwrite it from Clerk.",
+    )
 
     # --- Deviation 13: the public handle -------------------------------------
     # 🚨 This is NOT the Django username, which for a Clerk-provisioned account

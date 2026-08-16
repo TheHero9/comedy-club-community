@@ -64,6 +64,14 @@ import { cn } from "@/lib/utils";
 const SIMILAR_LIMIT = 8;
 const COMMENT_LIMIT = 6;
 
+/**
+ * Wire values from `EpisodeParticipant.Role`, so they stay at module scope and
+ * never move with the language. See the note in `loadSimilar` for what happens
+ * when a role key is compared against a translated label instead.
+ */
+const GUEST_ROLE = "guest";
+const REGULAR_ROLE = "regular";
+
 export async function generateMetadata({
   params,
 }: PageProps<"/e/[youtubeId]">): Promise<Metadata> {
@@ -98,9 +106,15 @@ async function loadSimilar(episode: Episode): Promise<{
 }> {
   const copy = await getCopy();
   const topic = episode.topics[0];
-  const guest = episode.participants.find(
-    (person) => person.role !== copy.episode.roleHost,
-  );
+  // 🚨 A WIRE VALUE, compared against a wire value. This read
+  // `person.role !== copy.episode.roleHost`, which compares the API's key
+  // ("guest") against a TRANSLATED LABEL ("guest" / "гост") - so it happened to
+  // work in English and matched the first person in the list in Bulgarian. The
+  // rail is about who is *visiting*, so a guest is the interesting link;
+  // regulars appear on everything and would make every episode "similar".
+  const guest =
+    episode.participants.find((person) => person.role === GUEST_ROLE) ??
+    episode.participants.find((person) => person.role !== REGULAR_ROLE);
 
   if (topic) {
     const list = await listEpisodes({ topic: topic.slug, limit: SIMILAR_LIMIT + 1 });
