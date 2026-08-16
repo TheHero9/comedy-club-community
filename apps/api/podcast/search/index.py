@@ -31,6 +31,7 @@ from .client import (
     wait_for_task,
 )
 from .documents import build_document, build_documents, episode_index_queryset
+from .querying import LOOSE, STOP_WORDS
 
 logger = logging.getLogger(__name__)
 
@@ -123,90 +124,11 @@ TYPO_TOLERANCE: dict[str, Any] = {
     "disableOnAttributes": ["youtube_id", "slug", "topic_slugs", "participant_slugs"],
 }
 
-# 🇧🇬 High-frequency Bulgarian function words. Removed from both documents and
-# queries, so "епизодът за политиката" matches on the nouns and not on "за".
-# Deliberately conservative: anything that can carry meaning stays out of here.
-STOP_WORDS: list[str] = [
-    "а",
-    "ако",
-    "ама",
-    "б",
-    "без",
-    "би",
-    "бъде",
-    "в",
-    "върху",
-    "г",
-    "го",
-    "д",
-    "да",
-    "де",
-    "докато",
-    "е",
-    "един",
-    "една",
-    "едно",
-    "за",
-    "и",
-    "или",
-    "им",
-    "ими",
-    "иска",
-    "й",
-    "каза",
-    "как",
-    "какво",
-    "като",
-    "кога",
-    "който",
-    "която",
-    "което",
-    "които",
-    "ли",
-    "ме",
-    "между",
-    "ми",
-    "мога",
-    "му",
-    "на",
-    "над",
-    "най",
-    "не",
-    "него",
-    "нея",
-    "ни",
-    "ние",
-    "но",
-    "от",
-    "още",
-    "по",
-    "при",
-    "с",
-    "са",
-    "само",
-    "се",
-    "си",
-    "сме",
-    "според",
-    "сте",
-    "съм",
-    "със",
-    "също",
-    "т",
-    "те",
-    "тези",
-    "този",
-    "той",
-    "то",
-    "това",
-    "тук",
-    "ти",
-    "у",
-    "че",
-    "ще",
-    "щом",
-    "я",
-]
+# 🇧🇬 STOP_WORDS now lives in querying.py and is re-exported here so the index
+# settings below read the same way they always did. It moved because the API
+# layer has to strip the SAME words when it counts how many words a query really
+# has - a token the index threw away can never match, so counting it would make
+# every ordinary query look like a partial match.
 
 # 🇧🇬 Query-side rewrites. Bulgarians routinely type Latin for a Cyrillic word
 # (and the reverse), and the shorthands below are what people actually type.
@@ -585,11 +507,87 @@ def empty_result(query: str, limit: int, offset: int, *, available: bool = True)
         "query": query,
         "hits": [],
         "estimated_total_hits": 0,
+        "total_hits": 0,
         "limit": limit,
         "offset": offset,
         "processing_time_ms": 0,
         "facet_distribution": {},
         "available": available,
+    }
+
+
+def build_search_params(
+    *,
+    filters: str | Sequence[Any] | None = None,
+    limit: int = 20,
+    offset: int = 0,
+    sort: Sequence[str] | None = None,
+    facets: Sequence[str] | None = None,
+    highlight: bool = False,
+    attributes: Sequence[str] | None = None,
+    matching_strategy: str = LOOSE,
+    count_only: bool = False,
+) -> dict[str, Any]:
+    """The Meilisearch parameter dict for one episodes search.
+
+    Split out from `search` so the API layer can hand several of these to
+    `client.multi_search` and pay one round trip for the page, the exact total
+    and the exact full-match count.
+
+    🚨 `count_only` switches from `limit`/`offset` to `page`/`hitsPerPage`, and
+    that is a CORRECTNESS switch, not a pagination style. In offset mode
+    Meilisearch answers with `estimatedTotalHits`, which is what its name says -
+    it over-counted `царичи` as 17 distinct episodes when the true answer is 13.
+    In page mode it counts exhaustively and returns `totalHits`, which is exact.
+    Measured 0-6ms on this corpus, so the accuracy is effectively free; it is
+    only avoided for the hit-fetch itself because that needs arbitrary offsets.
+    """
+    params: dict[str, Any] = {"matchingStrategy": matching_strategy}
+    if count_only:
+        # One hit, exhaustively counted. `hitsPerPage: 0` is legal but makes some
+        # client versions omit the block entirely, so ask for one and ignore it.
+        params["hitsPerPage"] = 1
+        params["page"] = 1
+        params["attributesToRetrieve"] = ["id"]
+    else:
+        params["limit"] = limit
+        params["offset"] = offset
+        if attributes:
+            params["attributesToRetrieve"] = list(attributes)
+    if filters:
+        params["filter"] = filters
+    if sort:
+        params["sort"] = list(sort)
+    if facets:
+        params["facets"] = list(facets)
+    if highlight and not count_only:
+        params["attributesToHighlight"] = DEFAULT_HIGHLIGHT_ATTRIBUTES
+        params["highlightPreTag"] = "<mark>"
+        params["highlightPostTag"] = "</mark>"
+    return params
+
+
+def normalize_result(
+    raw: dict[str, Any], query: str, limit: int, offset: int
+) -> dict[str, Any]:
+    """Turn one raw Meilisearch response into this package's snake_case shape.
+
+    🚨 `total_hits` is present and EXACT only for a `count_only` search; for an
+    offset search it is None and `estimated_total_hits` is all there is. Callers
+    that print a number to a user must prefer `total_hits` - reading the raw
+    camelCase key here is what once reported a page size as the total.
+    """
+    hits = raw.get("hits", [])
+    return {
+        "query": raw.get("query", query),
+        "hits": hits,
+        "estimated_total_hits": raw.get("estimatedTotalHits", len(hits)),
+        "total_hits": raw.get("totalHits"),
+        "limit": raw.get("limit", limit),
+        "offset": raw.get("offset", offset),
+        "processing_time_ms": raw.get("processingTimeMs", 0),
+        "facet_distribution": raw.get("facetDistribution", {}),
+        "available": True,
     }
 
 
@@ -603,6 +601,8 @@ def search(
     facets: Sequence[str] | None = None,
     highlight: bool = False,
     attributes: Sequence[str] | None = None,
+    matching_strategy: str = LOOSE,
+    count_only: bool = False,
 ) -> dict[str, Any]:
     """Search the episodes index.
 
@@ -615,20 +615,23 @@ def search(
     reads exactly three of them, so leaving this unset ships up to 50 KB per query
     across the wire to be thrown away. Pass the fields you actually read.
     Leave it None to retrieve everything (what `highlight=True` callers want).
+
+    🇧🇬 `matching_strategy` defaults to LOOSE (`frequency`), NOT Meilisearch's own
+    default of `last`. See podcast/search/querying.py for why - in short, `last`
+    throws away the last word typed, which in Bulgarian is usually the noun that
+    carries the meaning.
     """
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
-    if filters:
-        params["filter"] = filters
-    if attributes:
-        params["attributesToRetrieve"] = list(attributes)
-    if sort:
-        params["sort"] = list(sort)
-    if facets:
-        params["facets"] = list(facets)
-    if highlight:
-        params["attributesToHighlight"] = DEFAULT_HIGHLIGHT_ATTRIBUTES
-        params["highlightPreTag"] = "<mark>"
-        params["highlightPostTag"] = "</mark>"
+    params = build_search_params(
+        filters=filters,
+        limit=limit,
+        offset=offset,
+        sort=sort,
+        facets=facets,
+        highlight=highlight,
+        attributes=attributes,
+        matching_strategy=matching_strategy,
+        count_only=count_only,
+    )
 
     try:
         raw = get_index().search(query, params)
@@ -636,16 +639,7 @@ def search(
         logger.warning("Meilisearch search failed for %r: %s", query, exc)
         return empty_result(query, limit, offset, available=False)
 
-    return {
-        "query": raw.get("query", query),
-        "hits": raw.get("hits", []),
-        "estimated_total_hits": raw.get("estimatedTotalHits", len(raw.get("hits", []))),
-        "limit": raw.get("limit", limit),
-        "offset": raw.get("offset", offset),
-        "processing_time_ms": raw.get("processingTimeMs", 0),
-        "facet_distribution": raw.get("facetDistribution", {}),
-        "available": True,
-    }
+    return normalize_result(raw, query, limit, offset)
 
 
 def stats() -> dict[str, Any] | None:
@@ -656,14 +650,18 @@ def stats() -> dict[str, Any] | None:
 
 
 __all__ = [
+    "EPISODES_INDEX",
     "FILTERABLE_ATTRIBUTES",
     "INDEX_SETTINGS",
     "RANKING_RULES",
     "SEARCHABLE_ATTRIBUTES",
     "SORTABLE_ATTRIBUTES",
+    "STOP_WORDS",
     "build_documents",
     "build_filter",
+    "build_search_params",
     "drop_index",
+    "normalize_result",
     "ensure_index",
     "escape_filter_value",
     "index_episode",

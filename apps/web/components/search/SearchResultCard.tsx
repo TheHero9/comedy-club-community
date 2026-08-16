@@ -5,6 +5,7 @@ import { Thumbnail } from "@/components/shared/Thumbnail";
 import type { SearchHit, TranscriptMatch } from "@/lib/api/podcast";
 import { getCopy } from "@/lib/locale";
 import { formatDate, formatTimestamp, youtubeMomentUrl } from "@/lib/format";
+import { highlightRuns } from "@/lib/search-tokens";
 
 /**
  * Passages shown per card, by what the card has to explain.
@@ -189,25 +190,32 @@ function Marked({ text }: { text: string }) {
 }
 
 /**
- * Highlights the query inside a matched label.
+ * Highlights the query's WORDS inside a matched label.
  *
- * Search is typo tolerant, so the matched text often does NOT contain the query
- * literally. When there is no exact hit the text renders plain rather than
- * highlighting something arbitrary - a highlight on the wrong word is worse
- * than none, because it claims a match that did not happen.
+ * 🚨 Word by word. This used to look for the whole query string, which for a
+ * multi-word Bulgarian query is never present verbatim - so on exactly the
+ * queries this feature exists for, nothing was ever highlighted. The logic
+ * lives in `lib/search-tokens.ts` so the page's title split and this share one
+ * definition of "a word that counts".
+ *
+ * When nothing matches the text renders plain rather than highlighting
+ * something arbitrary: search is typo tolerant, and a highlight on the wrong
+ * word is worse than none because it claims a match that did not happen.
  */
 function Highlight({ text, term }: { text: string; term: string }) {
-  const needle = term.trim();
-  if (needle.length === 0) return <>{text}</>;
-
-  const at = text.toLocaleLowerCase("bg").indexOf(needle.toLocaleLowerCase("bg"));
-  if (at === -1) return <>{text}</>;
+  if (term.trim().length === 0) return <>{text}</>;
 
   return (
     <>
-      {text.slice(0, at)}
-      <span className="font-bold text-gold">{text.slice(at, at + needle.length)}</span>
-      {text.slice(at + needle.length)}
+      {highlightRuns(text, term).map((run, index) =>
+        run.hit ? (
+          <span key={index} className="font-bold text-gold">
+            {run.text}
+          </span>
+        ) : (
+          <span key={index}>{run.text}</span>
+        ),
+      )}
     </>
   );
 }

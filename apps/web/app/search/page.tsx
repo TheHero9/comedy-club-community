@@ -8,17 +8,19 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { LinkPending } from "@/components/shared/LinkPending";
 import { Page } from "@/components/shell/Page";
 import { buttonVariants, LinkButton } from "@/components/ui/button";
-import type { SearchHit, TranscriptMatch } from "@/lib/api/podcast";
+import type { SearchHit, TranscriptHit, TranscriptMatch } from "@/lib/api/podcast";
 import { listTopics, search, searchTranscripts } from "@/lib/api/podcast";
 import { getCopy } from "@/lib/locale";
 import {
   API_SEARCH_MAX_LIMIT,
+  API_TRANSCRIPT_MAX_LIMIT,
   RESULT_LIMIT,
   SEARCH_MAX_RESULTS,
-  SPOKEN_EPISODE_LIMIT,
-  TRANSCRIPT_SEGMENT_LIMIT,
+  SPOKEN_LIMIT,
+  SPOKEN_MAX_RESULTS,
 } from "@/lib/search-limits";
 import { stripControlCharacters } from "@/lib/sanitize";
+import { queryTokens, titleMatchesQuery } from "@/lib/search-tokens";
 import { cn } from "@/lib/utils";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -35,76 +37,66 @@ export const dynamic = "force-dynamic";
 const POPULAR_TOPIC_LIMIT = 8;
 
 /**
- * How many results this render should reach, read off `?n=`.
+ * How many results this render should reach, read off a query parameter.
  *
  * 🚨 Clamped and floored. `Number("2.5")` is finite and positive, and a float
  * against an `int` query parameter is a 422 from the API - the same trap that
  * made the eleventh "load more" on /episodes serve a 500.
  */
-function readWanted(value: string | string[] | undefined): number {
+function readWanted(
+  value: string | string[] | undefined,
+  first: number,
+  max: number,
+): number {
   const raw = Array.isArray(value) ? value[0] : value;
   const parsed = Math.floor(Number(raw));
-  if (!Number.isFinite(parsed) || parsed <= RESULT_LIMIT) return RESULT_LIMIT;
-  return Math.min(parsed, SEARCH_MAX_RESULTS);
+  if (!Number.isFinite(parsed) || parsed <= first) return first;
+  return Math.min(parsed, max);
 }
 
 /**
- * Fetch up to `wanted` label matches, in parallel offset pages.
+ * Fetch up to `wanted` results in parallel offset pages.
  *
- * The API caps one request at 50 (`MAX_LIMIT` in `podcast/api/search.py`), so
- * anything past that is a second page rather than a bigger ask. Pages are
- * fetched together because they are independent: sequential awaits would make
- * "load more" cost one round trip per 50 results.
+ * The API caps one request at 50, so anything past that is a second page rather
+ * than a bigger ask. Pages are fetched together because they are independent:
+ * sequential awaits would make "load more" cost one round trip per page.
  */
+function pageOffsets(wanted: number, pageSize: number) {
+  return Array.from({ length: Math.ceil(wanted / pageSize) }, (_unused, index) => ({
+    limit: Math.min(pageSize, wanted - index * pageSize),
+    offset: index * pageSize,
+  }));
+}
+
 async function searchUpTo(query: string, wanted: number) {
-  const pages = Math.ceil(wanted / API_SEARCH_MAX_LIMIT);
   const chunks = await Promise.all(
-    Array.from({ length: pages }, (_unused, index) =>
-      search({
-        q: query,
-        limit: Math.min(API_SEARCH_MAX_LIMIT, wanted - index * API_SEARCH_MAX_LIMIT),
-        offset: index * API_SEARCH_MAX_LIMIT,
-      }),
+    pageOffsets(wanted, API_SEARCH_MAX_LIMIT).map((page) =>
+      search({ q: query, ...page }),
     ),
   );
 
   return {
-    // `total` is the same on every page; the first is as good as any.
+    // The totals are the same on every page; the first is as good as any.
     total: chunks[0].total,
+    totalFull: chunks[0].total_full,
     hits: chunks.flatMap((chunk) => chunk.hits),
   };
 }
 
-/**
- * Split label matches into "the words are in the TITLE" and everything else.
- *
- * 🚨 Title first, because that is how people search. A title hit ranked below
- * three topic matches reads as "not found" even when the episode is right
- * there, and the owner hit exactly that.
- *
- * Token overlap, not a substring test: a multi-word Bulgarian query almost
- * never appears verbatim in a title, so `includes(query)` would put nearly
- * everything in the second bucket and the split would do nothing. Tokens of one
- * or two characters are dropped - they are prepositions and would match any
- * title at all.
- */
-const MIN_TOKEN_LENGTH = 3;
+async function searchSpokenUpTo(query: string, wanted: number) {
+  const chunks = await Promise.all(
+    pageOffsets(wanted, API_TRANSCRIPT_MAX_LIMIT).map((page) =>
+      searchTranscripts({ q: query, ...page }),
+    ),
+  );
 
-function titleMatches(title: string, query: string): boolean {
-  const haystack = title.toLocaleLowerCase("bg");
-  const tokens = query
-    .toLocaleLowerCase("bg")
-    .split(/\s+/)
-    .filter((token) => token.length >= MIN_TOKEN_LENGTH);
-
-  if (tokens.length === 0) {
-    // A query made entirely of short words: fall back to the whole string, so
-    // the section is never empty for a reason the reader cannot see.
-    return haystack.includes(query.toLocaleLowerCase("bg"));
-  }
-  return tokens.some((token) => haystack.includes(token));
+  return {
+    totalEpisodes: chunks[0].total_episodes,
+    totalSegments: chunks[0].total_segments,
+    available: chunks[0].available,
+    hits: chunks.flatMap((chunk) => chunk.hits),
+  };
 }
-
 
 /**
  * 🚨 Control characters are stripped before the query goes anywhere.
@@ -123,7 +115,8 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
   const copy = await getCopy();
   const params = await searchParams;
   const query = readQuery(params.q);
-  const wanted = readWanted(params.n);
+  const wanted = readWanted(params.n, RESULT_LIMIT, SEARCH_MAX_RESULTS);
+  const spokenWanted = readWanted(params.s, SPOKEN_LIMIT, SPOKEN_MAX_RESULTS);
 
   if (query.length === 0) {
     const topics = await listTopics({ limit: POPULAR_TOPIC_LIMIT });
@@ -190,8 +183,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
    *
    * These are independent questions answered by two indexes ("which episodes are
    * ABOUT this" and "where was this SAID"), so awaiting them in sequence would
-   * have doubled the page's server time for no reason. Meilisearch answers each
-   * in ~1-13ms; the round trip dominates, and there is now only one of those.
+   * have doubled the page's server time for no reason.
    *
    * 🚨 The transcript half is allowed to fail without taking the page with it.
    * Label matches are still a useful answer, and a 4xx/5xx thrown inside a
@@ -201,18 +193,12 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
    */
   const [results, spoken] = await Promise.all([
     searchUpTo(query, wanted),
-    searchTranscripts({ q: query, limit: TRANSCRIPT_SEGMENT_LIMIT }).catch(() => null),
+    searchSpokenUpTo(query, spokenWanted).catch(() => null),
   ]);
 
   /**
    * Passages keyed by episode, so a label match and a spoken match for the same
    * episode land on ONE card instead of two competing ones.
-   *
-   * ℹ️ Passed whole. The card slices to what it renders, and because it is a
-   * Server Component its props never cross the wire - only its OUTPUT does, so
-   * slicing here changes the response by zero bytes (verified: byte-identical).
-   * What the page costs is the passages it actually RENDERS; that is tuned with
-   * MAX_PASSAGES and SPOKEN_EPISODE_LIMIT, not here.
    */
   const passagesByEpisode = new Map<string, TranscriptMatch[]>(
     (spoken?.hits ?? []).map((hit) => [hit.episode.youtube_id, hit.matches]),
@@ -222,12 +208,26 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
   const labelledIds = new Set(labelled.map((hit) => hit.episode.youtube_id));
 
   /**
-   * Two buckets out of one result set, in rank order within each. The API's
-   * relevance ordering is preserved - this only decides which heading a hit
-   * sits under, never how hits are sorted.
+   * Three buckets out of one result set, in rank order within each.
+   *
+   * 🚨 The API's own ordering is preserved inside every bucket - this only
+   * decides which heading a hit sits under. Two independent splits are applied,
+   * and they mean different things:
+   *
+   *   - `match_kind` comes from the API and is a fact about the QUERY: did this
+   *     episode match every word, or only some? A partial match is a real
+   *     answer (a remembered phrase is rarely verbatim) but it is a weaker one,
+   *     so it must never be interleaved with the full matches.
+   *   - the title split is a fact about WHERE the words landed. People search
+   *     for a title far more often than for a label, and a title hit ranked
+   *     below three topic matches reads as "not found".
    */
-  const inTitle = labelled.filter((hit) => titleMatches(hit.episode.title, query));
-  const elsewhere = labelled.filter((hit) => !titleMatches(hit.episode.title, query));
+  const fullMatches = labelled.filter((hit) => hit.match_kind !== "partial");
+  const partialMatches = labelled.filter((hit) => hit.match_kind === "partial");
+  const inTitle = fullMatches.filter((hit) => titleMatchesQuery(hit.episode.title, query));
+  const elsewhere = fullMatches.filter(
+    (hit) => !titleMatchesQuery(hit.episode.title, query),
+  );
 
   /** More label matches exist than this render asked for. */
   const canLoadMore = labelled.length < results.total;
@@ -241,34 +241,47 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
    *
    * They are shaped into a SearchHit with no label reasons because that is
    * exactly what they are: a match with no label behind it.
+   *
+   * 🚨 NOT sliced. The slice used to live here, hard-capped at six, and it is
+   * what made the page render six cards under a line advertising thirteen
+   * episodes. The cap is now a page SIZE that the fetch above honours and that
+   * "load more" below can grow.
    */
-  const spokenOnly: SearchHit[] = (spoken?.hits ?? [])
-    .filter((hit) => !labelledIds.has(hit.episode.youtube_id))
-    .slice(0, SPOKEN_EPISODE_LIMIT)
-    .map((hit) => ({
-      episode: hit.episode,
-      matched_topics: [],
-      matched_moments: [],
-    }));
-
-  const spokenSegmentCount = (spoken?.hits ?? []).reduce(
-    (sum, hit) => sum + hit.matches.length,
-    0,
+  const spokenHits: TranscriptHit[] = (spoken?.hits ?? []).filter(
+    (hit) => !labelledIds.has(hit.episode.youtube_id),
   );
-  const transcriptsDown = spoken != null && !spoken.available;
-  const nothingAtAll = results.total === 0 && spokenOnly.length === 0;
+  const spokenOnly: SearchHit[] = spokenHits.map((hit) => ({
+    episode: hit.episode,
+    matched_topics: [],
+    matched_moments: [],
+    match_kind: hit.match_kind,
+  }));
 
-  // 🚨 Only claimed when it is actually true. "The word appears in no title" is
-  // the strongest line on the page, and printing it above a result whose title
-  // contains the word would discredit every other claim the site makes.
-  const inNoTitle =
-    labelled.length > 0 &&
-    labelled.every(
-      (hit) =>
-        !hit.episode.title
-          .toLocaleLowerCase("bg")
-          .includes(query.toLocaleLowerCase("bg")),
-    );
+  /**
+   * ⚠️ Measured against the FETCHED episode count, not the rendered one.
+   * Episodes that also matched a label are folded into the cards above, so the
+   * rendered count is legitimately smaller - reading it here would hide the
+   * "load more" while unfetched episodes still existed.
+   */
+  const fetchedSpoken = spoken?.hits.length ?? 0;
+  const canLoadMoreSpoken =
+    spoken != null && fetchedSpoken < spoken.totalEpisodes && spokenWanted < SPOKEN_MAX_RESULTS;
+  const nextSpokenWanted = Math.min(spokenWanted + SPOKEN_LIMIT, SPOKEN_MAX_RESULTS);
+
+  const transcriptsDown = spoken != null && !spoken.available;
+  const nothingAtAll = results.total === 0 && (spoken?.totalEpisodes ?? 0) === 0;
+
+  /** A one-word query cannot have partial matches, so the wording never implies it. */
+  const multiWord = queryTokens(query).length >= 2;
+
+  const searchHref = (next: { n?: number; s?: number }) => {
+    const url = new URLSearchParams({ q: query });
+    const n = next.n ?? wanted;
+    const s = next.s ?? spokenWanted;
+    if (n !== RESULT_LIMIT) url.set("n", String(n));
+    if (s !== SPOKEN_LIMIT) url.set("s", String(s));
+    return `/search?${url.toString()}`;
+  };
 
   return (
     <Page>
@@ -294,48 +307,59 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
         />
       ) : (
         <>
-          {/* 🚨 The "found in N ms" readout used to live here and is gone
-              (owner call, 2026-08-15). It answered a question nobody asked, and
-              on a page whose headline number is the RESULT count, a second
-              number in the same row competed with it. */}
-          <div className="mt-5 flex flex-wrap items-baseline gap-2.5">
-            <h1 className="text-h2">
-              {copy.search.resultsFor(copy.search.resultCount(results.total), query)}
-            </h1>
+          {/*
+            🚨 The heading carries NO number, and that is the fix.
+
+            It used to read "N episodes for <query>" where N was the label-match
+            total alone - so a query with 2 label matches and 13 spoken ones
+            printed "2 episodes" above 8 cards. There is no honest single number
+            available either: the two halves are counted by two indexes and
+            their overlap across the full result set is unknown, so any combined
+            figure would be a guess presented as a fact.
+
+            The two numbers that ARE exact go below, each next to the thing it
+            counts and next to the section that renders it.
+          */}
+          <div className="mt-5">
+            <h1 className="text-h2">{copy.search.resultsFor(query)}</h1>
+            <div className="mt-2 flex flex-col gap-1">
+              {results.total > 0 ? (
+                <p className="text-small text-subtle-foreground">
+                  {multiWord && results.totalFull < results.total
+                    ? copy.search.summaryLabelledSplit(
+                        results.totalFull,
+                        results.total - results.totalFull,
+                      )
+                    : copy.search.summaryLabelled(results.total)}
+                </p>
+              ) : null}
+              {spoken != null && spoken.totalEpisodes > 0 ? (
+                <p className="text-small text-subtle-foreground">
+                  {copy.search.summarySpoken(
+                    spoken.totalEpisodes,
+                    spoken.totalSegments,
+                  )}
+                </p>
+              ) : null}
+              {transcriptsDown ? (
+                <p className="text-small text-subtle-foreground">
+                  {copy.search.spokenUnavailable}
+                </p>
+              ) : null}
+            </div>
           </div>
 
-          {inNoTitle ? (
-            <p className="mt-2 text-small text-subtle-foreground">
-              {copy.search.notInAnyTitle}
-            </p>
-          ) : null}
-
-          {spokenSegmentCount > 0 ? (
-            <p className="mt-1 text-small text-subtle-foreground">
-              {copy.search.spokenInCount(
-                spoken?.total_segments ?? spokenSegmentCount,
-                (spoken?.hits ?? []).length,
-              )}
-            </p>
-          ) : null}
-
-          {transcriptsDown ? (
-            <p className="mt-2 text-small text-subtle-foreground">
-              {copy.search.spokenUnavailable}
-            </p>
-          ) : null}
-
           {/*
-            The two regions are addressable separately because they answer to
-            two different endpoints. The e2e suite asserts each against the API
-            that produced it; one merged list would only be checkable loosely.
+            The regions are addressable separately because they answer to two
+            different endpoints. The e2e suite asserts each against the API that
+            produced it; one merged list would only be checkable loosely.
           */}
           {inTitle.length > 0 ? (
             <>
-              {/* The heading only appears when BOTH sections have something to
-                  show. One labelled section with a heading above it and nothing
-                  to contrast against is just a label on the whole page. */}
-              {elsewhere.length > 0 ? (
+              {/* The heading only appears when another section has something to
+                  contrast against. One labelled section with a heading above it
+                  and nothing to compare to is just a label on the whole page. */}
+              {elsewhere.length > 0 || partialMatches.length > 0 ? (
                 <div className="mt-6">
                   <h2 className="text-h3">{copy.search.inTitleHeading}</h2>
                   <p className="mt-1.5 text-small text-subtle-foreground">
@@ -380,13 +404,42 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
           ) : null}
 
           {/*
-            🚨 The header quotes `results.total`, so a page that renders fewer
-            than that MUST offer a way to reach the rest. It did not: the owner
-            saw "38 episodes" above 21 cards and read it as a bug in search.
+            🎯 Matched SOME of the words. Kept, because requiring every word is
+            how a search box answers "nothing matches" to a question that has
+            hundreds of real answers - "счупен хладилник" matches zero episodes
+            with both words and 128 with one. Kept SEPARATE and labelled,
+            because a one-of-three-words hit shown as an equal is how a search
+            box loses the user's trust in the results above it.
+          */}
+          {partialMatches.length > 0 ? (
+            <>
+              <div className="mt-7 border-t border-border pt-5">
+                <h2 className="text-h3">{copy.search.partialHeading}</h2>
+                <p className="mt-1.5 text-small text-subtle-foreground">
+                  {copy.search.partialSubtitle}
+                </p>
+              </div>
+              <div data-testid="results-partial" className="mt-4 flex flex-col gap-3">
+                {partialMatches.map((hit) => (
+                  <SearchResultCard
+                    key={hit.episode.youtube_id}
+                    hit={hit}
+                    query={query}
+                    passages={passagesByEpisode.get(hit.episode.youtube_id)}
+                  />
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {/*
+            🚨 The summary quotes exact totals, so a page that renders fewer than
+            that MUST offer a way to reach the rest. It did not: the owner saw
+            "38 episodes" above 21 cards and read it as a bug in search.
           */}
           {canLoadMore ? (
             <LinkButton
-              href={`/search?q=${encodeURIComponent(query)}&n=${nextWanted}`}
+              href={searchHref({ n: nextWanted })}
               prefetch={false}
               variant="outline"
               size="lg"
@@ -417,6 +470,23 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
                   />
                 ))}
               </div>
+
+              {/* 🚨 The spoken section never had one of these, which is the
+                  other half of why "13 episodes" over six cards read as broken:
+                  there was literally no way to see the other seven. */}
+              {canLoadMoreSpoken ? (
+                <LinkButton
+                  href={searchHref({ s: nextSpokenWanted })}
+                  prefetch={false}
+                  variant="outline"
+                  size="lg"
+                  block
+                  className="mt-5"
+                >
+                  {copy.search.spokenLoadMore}
+                  <LinkPending />
+                </LinkButton>
+              ) : null}
             </>
           ) : null}
 
@@ -426,7 +496,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             from 99% on one channel to 0% on another, so "not in the results" is
             not evidence of "never said".
           */}
-          {spokenSegmentCount > 0 ? (
+          {spoken != null && spoken.totalEpisodes > 0 ? (
             <p className="mt-5 text-small text-faint-foreground">
               {copy.search.spokenPartial}
             </p>

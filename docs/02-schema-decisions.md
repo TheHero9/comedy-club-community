@@ -329,6 +329,98 @@ raw Clerk id would have been published site-wide under every comment.
 
 ---
 
+## Deviation 14: `ChannelMembership.renewal_day` (added 2026-08-16)
+
+`PositiveSmallIntegerField(null=True, blank=True)`, validated 1-31.
+
+Users manage their own memberships now, and what they can actually tell us is
+what YouTube shows them: **"70 months, and it renews on the 6th."** Neither of
+those was storable.
+
+### 🚨 The month count is NOT a column, and that is the decision
+
+The obvious schema is `months = IntegerField()`. It is wrong within 24 hours:
+
+- it is stale the morning after it is typed
+- keeping it fresh needs a nightly job over every membership row
+- that job failing silently leaves everyone's badge wrong, with nothing to
+  detect it against
+- that job running twice double-counts, with no way to tell it already ran
+
+So the two inputs collapse into **one anchor**: `member_since`, the date the
+membership must have started for the user's number to be true today. Everything
+else is computed in `podcast/services/memberships.py` on read:
+
+```
+months_held(member_since, renewal_day, today)
+    = full calendar months elapsed, + 1     # day one is month ONE
+next_renewal(renewal_day, today)            # strictly after today
+```
+
+Worked from the owner's own example: on 2026-08-16, "70 months, renews on the
+6th" → `member_since = 2020-11-06`. On 2026-09-06 the same row reads 71, with
+nothing having run in between.
+
+`test_memberships.py` proves this as a **round trip** across all 31 renewal days
+and six reference dates, rather than against hardcoded dates.
+
+### ⚠️ Why `renewal_day` is separate from `member_since.day`
+
+They are the same number 28 days out of 31. A membership renewing on the **31st**
+has a `member_since` clamped to the 30th in a 30-day month, so deriving the day
+back from the stored date would move that user's renewal to the 30th
+permanently. The user said 31; 31 is kept. (`date(2026, 2, 31)` is also a
+`ValueError`, so every function clamps - see `clamp_day`.)
+
+### 🚨 What a row here does and does not grant
+
+A `ChannelMembership` is a **claim**. Owner ruling, 2026-08-16: *"for now badges,
+the elite will be soon added as condition, I will think about it."*
+
+| | Self-added | Admin-verified |
+| --- | --- | --- |
+| Member badge on the profile | ✅ | ✅ |
+| Profile icons unlocked | ✅ | ✅ |
+| Ratings feed the channel's **Elite score** | ❌ | ✅ |
+
+`is_verified` remains the only input to elite scoring, so flipping this later is
+a change to one condition, not a migration. `claim_membership` deliberately does
+**not** touch `is_verified` - restating a month count must not cost someone
+their standing, and only a new screenshot (fresh, unreviewed evidence) resets it.
+
+---
+
+## Deviation 15: `UserProfile.avatar_key` (added 2026-08-16)
+
+`CharField(max_length=64, blank=True)`.
+
+Profile icons are earned by membership length per channel. The artwork does not
+exist yet (owner, 2026-08-16), so what shipped is the machinery.
+
+**A key, not a URL.** The thing worth storing is *which* icon was picked; where
+its image lives, what it is called and what it costs to unlock are catalogue
+data in `podcast/data/avatar_icons.py`, editable without a migration or a
+backfill. Adding the real icons is an append to one tuple.
+
+Two rules the code enforces and a reader would otherwise get wrong:
+
+- 🚨 **The unlock is re-checked on every read, not trusted from the write.** A
+  membership can lapse after an icon was chosen; a profile still displaying an
+  icon it no longer qualifies for makes the whole ladder meaningless.
+- 🚨 **A re-locked key is NOT erased.** It stops rendering, and renewing next
+  month restores it. Deleting it would silently throw away something the user
+  earned, with no way to explain where it went.
+
+Also: **months do not pool across channels.** 17 months on one channel unlocks
+nothing on another - that is the entire point - so the unlock check is keyed by
+channel slug and never summed.
+
+`key` is the stored value, so renaming one silently un-picks it for everyone who
+chose it. Retire an icon by removing it and burning its key; never re-point an
+old key at new artwork.
+
+---
+
 ## Deferred
 
 | Idea | Why not now |

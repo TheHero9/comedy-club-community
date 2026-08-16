@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { AvatarPicker } from "@/components/profile/AvatarPicker";
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -122,6 +123,15 @@ export function ProfileEditor({
           {copy.profile.handleHint}
         </span>
       </label>
+
+      {/* 🚨 Saves on click, not with the button below. Picking an icon is its
+          own endpoint (`PUT /api/me/avatar`, which re-checks the unlock server
+          side), and folding it into this form's PATCH would mean a locked icon
+          could ride along with a name change. */}
+      <div className="mt-4">
+        <span className="text-eyebrow">{copy.profile.iconLabel}</span>
+        <AvatarPicker />
+      </div>
 
       {error ? (
         <p role="alert" className="mt-3 text-small text-primary-text">

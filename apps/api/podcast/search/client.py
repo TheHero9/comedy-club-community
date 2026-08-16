@@ -128,6 +128,26 @@ def wait_for_task(task: Any, timeout_ms: int) -> None:
     get_client().wait_for_task(uid, timeout_in_ms=timeout_ms)
 
 
+def multi_search(queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Run several searches in ONE HTTP round trip, in order.
+
+    ⚡ Why this exists: answering a search honestly now takes three questions of
+    Meilisearch (the page of hits, the exact total, and the exact number of hits
+    that matched every word) and the transcript half takes three more. Each one
+    costs Meilisearch 0-6ms and the round trip ~25ms on this box, so issuing them
+    separately would spend ~150ms of wall clock on ~20ms of work.
+
+    Each query is a plain dict and MUST carry `indexUid`. The result list is
+    positional - result[i] answers queries[i] - so callers index into it rather
+    than matching on the index name, which is not unique across the batch.
+
+    Raises on failure like every other read in this package; the API layer
+    catches and falls back to Postgres.
+    """
+    raw = get_client().multi_search(queries)
+    return list(raw.get("results", []))
+
+
 def graceful(
     *, default: Any = None, default_factory: Callable[[], Any] | None = None
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:

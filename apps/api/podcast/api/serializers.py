@@ -229,7 +229,31 @@ def person_out(person) -> dict:
     }
 
 
-def membership_out(membership) -> dict:
+def membership_out(membership, *, today=None) -> dict:
+    """One membership, with its month count computed rather than read.
+
+    🚨 `months` is derived here on every call and is deliberately not a column -
+    see podcast/services/memberships.py. `today` is injectable so tests can pin
+    a date without freezing the clock globally.
+
+    Rows claimed before `renewal_day` existed have no anchor to count from, so
+    `months` and `next_renewal` are null rather than guessed. The UI prompts
+    those users to fill it in instead of showing them a number we made up.
+    """
+    from datetime import date as _date
+
+    from podcast.services import memberships as membership_math
+
+    today = today or _date.today()
+
+    months = None
+    next_renewal = None
+    if membership.renewal_day and membership.member_since:
+        months = membership_math.months_held(
+            membership.member_since, membership.renewal_day, today
+        )
+        next_renewal = membership_math.next_renewal(membership.renewal_day, today)
+
     return {
         "id": membership.id,
         "channel_id": membership.channel_id,
@@ -237,6 +261,9 @@ def membership_out(membership) -> dict:
         "channel_slug": membership.channel.slug,
         "tier": membership.tier,
         "member_since": membership.member_since,
+        "renewal_day": membership.renewal_day,
+        "months": months,
+        "next_renewal": next_renewal,
         "is_verified": membership.is_verified,
         # 🔒 Only whether a screenshot exists, NEVER its URL. It is private proof
         # of a paid membership and is admin-only.

@@ -37,18 +37,6 @@ import { useCopy } from "@/components/i18n/LocaleProvider";
 export default function ProfilePage() {
   const copy = useCopy();
   const [editing, setEditing] = useState(false);
-  // `key` indexes into the /api/me payload, so it is typed against Me rather
-  // than left as a widened string - otherwise `me[link.key]` is an implicit any.
-  const LINKS: ReadonlyArray<{
-    href: string;
-    label: string;
-    key: "rating_count" | "watched_count" | "favorite_count" | null;
-  }> = [
-    { href: "/me/ratings", label: copy.profile.linkRatings, key: "rating_count" },
-    { href: "/me/history", label: copy.profile.linkHistory, key: "watched_count" },
-    { href: "/me/favorites", label: copy.profile.linkFavorites, key: "favorite_count" },
-    { href: "/me/tags", label: copy.profile.linkTags, key: null },
-  ];
   const { signedIn, canSignIn, signOut } = useViewerAuth();
   const profile = useQuery({
     queryKey: ["me"],
@@ -85,6 +73,36 @@ export default function ProfilePage() {
   }
 
   const me = profile.data;
+
+  /**
+   * The profile's navigation rows.
+   *
+   * 🚨 Built inside the component, never at module scope: the labels come from
+   * the dictionary, and a module-level table freezes whichever locale loaded
+   * first and never follows a language change.
+   *
+   * `key` indexes into the /api/me payload, so it is typed against Me rather
+   * than left as a widened string - otherwise `me[link.key]` is an implicit any.
+   * `value` is the escape hatch for a row whose number is not one of those
+   * tallies; memberships are counted from the array itself.
+   */
+  const LINKS: ReadonlyArray<{
+    href: string;
+    label: string;
+    key: "rating_count" | "watched_count" | "favorite_count" | null;
+    value?: string;
+  }> = [
+    { href: "/me/ratings", label: copy.profile.linkRatings, key: "rating_count" },
+    { href: "/me/history", label: copy.profile.linkHistory, key: "watched_count" },
+    { href: "/me/favorites", label: copy.profile.linkFavorites, key: "favorite_count" },
+    { href: "/me/tags", label: copy.profile.linkTags, key: null },
+    {
+      href: "/me/memberships",
+      label: copy.profile.linkMemberships,
+      key: null,
+      value: me ? String(me.memberships.length) : "",
+    },
+  ];
 
   return (
     <Page>
@@ -126,7 +144,15 @@ export default function ProfilePage() {
                   >
                     {me.handle ? `@${me.handle}` : copy.profile.noHandle}
                   </button>
-                  {me.memberships.some((membership) => membership.is_verified) ? (
+                  {/*
+                    🚨 ANY membership earns the badge, verified or not (owner
+                    ruling, 2026-08-16: "for now badges"). Verification is a
+                    separate, stronger thing and it is the ONLY thing that lets
+                    a rating count toward a channel's Elite score - so the badge
+                    is social and the vote is earned, and conflating them here
+                    would quietly let anyone into the elite average.
+                  */}
+                  {me.memberships.length > 0 ? (
                     <span className="inline-flex h-[22px] items-center rounded-pill bg-elevated px-2 text-[11px] font-semibold text-gold">
                       {copy.profile.memberBadge}
                     </span>
@@ -160,7 +186,7 @@ export default function ProfilePage() {
               >
                 <span className="flex-1 text-[14.5px]">{link.label}</span>
                 <span className="font-mono text-[12.5px] text-subtle-foreground tabular">
-                  {me && link.key ? me[link.key] : ""}
+                  {link.value ?? (me && link.key ? me[link.key] : "")}
                 </span>
                 <ChevronRight
                   className="size-4 text-faint-foreground"

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { EpisodeRow } from "@/components/episode/EpisodeCard";
-import { GridFitToggle } from "@/components/grid/GridFitToggle";
+import { GridFullscreen } from "@/components/grid/GridFullscreen";
 import { RatingsGrid } from "@/components/grid/RatingsGrid";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { MetaLine, Page, SectionHeading, StatTile } from "@/components/shell/Page";
@@ -203,12 +203,20 @@ export default async function ChannelPage({
           {copy.channel.hintDesktop}
         </p>
 
-        {/* 🚨 Wrapped, not replaced. "Fit to screen" is a CSS scale over the
-            grid the server already sent - the flagship channel is ~2,024 cells
-            and re-rendering it at a second size would undo the payload work. */}
-        <GridFitToggle>
-          <RatingsGrid grid={grid} />
-        </GridFitToggle>
+        {/* 🚨 "Fit to screen" is GONE (owner call, 2026-08-16). It was a
+            `transform: scale()` over the inline grid, which shrank the grid but
+            not the box holding it, so the page grew a vertical scrollbar over a
+            mostly-empty area - the layout got worse in exactly the way "fit to
+            screen" promises it will not.
+
+            Its replacement is a fullscreen overlay that transposes the grid
+            (years across, episodes down) so a whole channel fits one frame and
+            can be screenshotted. It fetches the grid itself on first open
+            rather than taking it as a prop: it is a Client Component, and this
+            channel's grid is 322 KB of JSON that would otherwise ship in the
+            RSC flight payload on every load, opened or not. */}
+        <GridFullscreen slug={slug} channelName={channel.name} score={score} />
+        <RatingsGrid grid={grid} />
       </section>
 
       {episodes.items.length > 0 ? (

@@ -480,6 +480,26 @@ class UserProfile(models.Model):
     )
 
     avatar_url = models.URLField(blank=True)
+
+    # --- Deviation 15: the chosen profile icon -------------------------------
+    # 🚨 A KEY, not a URL, and the distinction is the whole design. Icons are
+    # unlocked by how long someone has been a member of a given channel, so the
+    # thing worth storing is WHICH icon they picked; where its image lives, what
+    # it is called, and what it costs to unlock are catalogue data that must be
+    # editable without a migration or a backfill. See podcast/data/avatar_icons.py.
+    #
+    # ⚠️ An unknown key resolves to nothing rather than 404ing a profile - a
+    # retired icon must degrade to the default avatar, never break the page.
+    # Likewise a key whose unlock condition the user no longer meets: the API
+    # reports it as locked and the UI falls back, but the choice is not erased,
+    # because a lapsed membership renewed next month should restore the icon
+    # rather than having silently thrown it away.
+    avatar_key = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Key into the avatar-icon catalogue. Not a URL.",
+    )
+
     bio = models.TextField(blank=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.MEMBER)
 
@@ -494,7 +514,19 @@ class UserProfile(models.Model):
 
 
 class ChannelMembership(models.Model):
-    """A user's membership of a channel, verified by screenshot review.
+    """A user's membership of a channel, self-reported and optionally verified.
+
+    🚨 THE MONTH COUNT IS NOT A COLUMN. Users tell us "70 months, renews on the
+    6th"; `podcast/services/memberships.py` turns that into `member_since` +
+    `renewal_day`, and the count is computed on every read. Storing 70 would be
+    wrong the next morning and would need a nightly job to stay honest - a job
+    whose failure or double-run would corrupt the value silently. See
+    docs/02-schema-decisions.md, deviation 14.
+
+    🚨 A row here is a CLAIM, not proof. `is_verified` is the only thing that
+    feeds the elite score, and it is set by an admin. A self-added membership
+    shows the badge and unlocks profile icons; it does not vote. (Owner ruling,
+    2026-08-16: "for now badges, the elite will be added as a condition later.")
 
     🔒 verification_screenshot is PRIVATE. It is proof of a paid membership from a
     real person: admin-only, served via short-lived signed URLs, never a public URL.
@@ -502,7 +534,21 @@ class ChannelMembership(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="channel_memberships")
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, related_name="memberships")
-    member_since = models.DateField(null=True, blank=True)  # claimed join date
+    member_since = models.DateField(null=True, blank=True)  # derived join date
+
+    # --- Deviation 14: the renewal anchor -----------------------------------
+    # ⚠️ Stored SEPARATELY from member_since.day, and the difference only shows
+    # on the calendar's edges: a membership renewing on the 31st has a
+    # member_since clamped to the 30th in a 30-day month, so deriving the day
+    # back from it would move the renewal to the 30th permanently. The user said
+    # 31, so 31 is kept. NULL on rows that predate this field.
+    renewal_day = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(31)],
+        help_text="Day of the month the membership renews (1-31).",
+    )
+
     tier = models.CharField(max_length=100, blank=True)
 
     is_verified = models.BooleanField(default=False, db_index=True)

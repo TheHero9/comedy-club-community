@@ -20,11 +20,7 @@
 import type { Schema } from "@ccc/api-types";
 import { MAX_API_LIMIT } from "@/components/browse/filter-model";
 import { copy } from "@/lib/copy";
-import {
-  RESULT_LIMIT,
-  SPOKEN_EPISODE_LIMIT,
-  TRANSCRIPT_SEGMENT_LIMIT,
-} from "@/lib/search-limits";
+import { RESULT_LIMIT, SPOKEN_LIMIT } from "@/lib/search-limits";
 
 import { apiJson, expect, expectSingleVisibleH1, test } from "./fixtures";
 
@@ -240,28 +236,37 @@ test.describe("15. search edge cases", () => {
       ),
       apiJson<TranscriptSearchResult>(
         page,
-        `/api/search/transcripts?q=${encodeURIComponent(query)}&limit=${TRANSCRIPT_SEGMENT_LIMIT}`,
+        `/api/search/transcripts?q=${encodeURIComponent(query)}&limit=${SPOKEN_LIMIT}`,
       ),
     ]);
     expect(labels.hits.length).toBeGreaterThan(0);
 
     await page.goto(`/search?q=${encodeURIComponent(query)}`);
 
+    // ⚠️ Three label regions since 2026-08-16: full matches split title-first,
+    // then partial matches (some of the query's words, not all). Together they
+    // are exactly what `/api/search` returned.
     await expect(
       page
         .getByTestId("results-title")
         .locator('a[href^="/e/"]')
-        .or(page.getByTestId("results-elsewhere").locator('a[href^="/e/"]')),
+        .or(page.getByTestId("results-elsewhere").locator('a[href^="/e/"]'))
+        .or(page.getByTestId("results-partial").locator('a[href^="/e/"]')),
     ).toHaveCount(labels.hits.length);
 
     // The spoken region holds exactly the transcript episodes the label search
-    // did NOT already return, capped at the page's own limit.
+    // did NOT already return.
+    //
+    // 🚨 No `Math.min` against a cap any more, and that is the point: the cap
+    // is now the page SIZE the API was asked for, so the region renders every
+    // episode that came back. It used to be a second, smaller ceiling applied
+    // after the fetch, which is how the page advertised 13 episodes and drew 6.
     const labelIds = new Set(labels.hits.map((hit) => hit.episode.youtube_id));
     const expectedSpoken = spoken.hits
       .map((hit) => hit.episode.youtube_id)
       .filter((id) => !labelIds.has(id));
     const spokenRegion = page.getByTestId("results-spoken").locator('a[href^="/e/"]');
-    await expect(spokenRegion).toHaveCount(Math.min(expectedSpoken.length, SPOKEN_EPISODE_LIMIT));
+    await expect(spokenRegion).toHaveCount(expectedSpoken.length);
 
     // And no episode is shown twice across the two regions.
     const shownTwice = (

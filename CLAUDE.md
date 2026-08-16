@@ -209,6 +209,23 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 - 💊 Almost every interactive surface is a pill (radius 99). That is the signature; a squared corner is the exception.
 - 🚨 **Band colours NEVER transition.** A colour that moves reads as a value that changed. Skeletons pulse opacity only - a gradient sweeping 20 cards reads as the page loading 20 times.
 
+### Memberships and profile icons (2026-08-16)
+
+> 🔬 Full write-up in [`specs/12-search-and-memberships/02-memberships-and-icons.md`](specs/12-search-and-memberships/02-memberships-and-icons.md).
+
+- 🚨 **THE MONTH COUNT IS DERIVED, NEVER STORED.** A user types "70 months, renews on the 6th" once; `podcast/services/memberships.py` turns that into the one `member_since` it implies and counts forward on every read. A stored `months` column would be stale the next morning and would need a nightly job whose failure or double-run corrupts every badge silently. Adding one is the single most tempting wrong move in this area.
+- ⚠️ **`renewal_day` is stored SEPARATELY from `member_since.day`.** They agree 28 days out of 31. A membership renewing on the **31st** has a `member_since` clamped to the 30th in a 30-day month, so deriving the day back would move that user's renewal permanently. `date(2026, 2, 31)` is also a `ValueError` - everything goes through `clamp_day`.
+- 🚨 **Day one is month ONE.** That is what a YouTube badge means. An off-by-one is invisible in testing and wrong on every profile.
+- 🚨 **`POST /me/memberships` is an UPSERT.** A bare `get_or_create` made a second POST a silent no-op that returned the OLD row, so a user fixing a typo got their wrong number back with a `200`. Claiming also must NOT clear an existing `is_verified` - restating a month count is not new evidence; only a new screenshot resets it.
+- 🚨 **Profile-icon months do NOT pool across channels**, the unlock is re-checked on every read (a lapsed membership must stop rendering the icon), and a re-locked `avatar_key` is **kept, not erased** so renewing restores it. Icons are a `key` into `podcast/data/avatar_icons.py`, never a URL - adding artwork is a data change with no migration. 🔒 The unlock is enforced in `PUT /api/me/avatar`, not by the disabled button.
+
+### The channel "Full view" grid
+
+- 🚨 **`GridFitToggle` is gone.** It scaled the inline grid with `transform: scale()` without shrinking its container, so the page grew a vertical scrollbar over empty space - the opposite of what "fit to screen" promises.
+- 🚨 **`GridFullscreen` FETCHES the grid; never pass it as a prop.** It is a Client Component, so a prop is serialized into the RSC flight payload on every page load whether the dialog opens or not - and the flagship channel's grid is 322 KB of JSON on a page already at 916 KB.
+- 🚨 **NEVER size those cells with a pixel constant. It was got wrong twice, the same way both times** - a number standing in for a layout the browser was going to compute anyway. `(100dvh - CHROME) / rowCount` first ignored the 1px inter-cell gap (**184px** of unaccounted height on 184 rows, so the tallest years ran off the bottom), and then its `CHROME` constant - measured at 1280px, where the legend is one line - overflowed the SMALL channel by 22px at 390px, where the legend wraps to three. It is flex-sized now (`flex-1 min-h-0` all the way down) so nothing is measured. `e2e 3.13b` fails on more than 1px of overflow on the flagship channel.
+- ⚠️ Every column renders `grid.rows.length` children - a short year renders **spacers**, not fewer cells. That is what keeps the years aligned; give a spacer a different size and the grid shears.
+
 ### Next.js specifics
 
 - 🚨 **`prefetch={false}` on every link to `/search?q=...`.** `/search` is `force-dynamic`, so each prefetch is a real Meilisearch round trip on the server; a dozen fired on paint and the RSC prefetches never settled, so the page never reached network idle.
@@ -246,6 +263,7 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
   - **Public score** = `Avg(score)` over all ratings.
   - **Elite score** = `Avg(score)` over ratings by users with a **verified** `ChannelMembership` for **that episode's channel**.
 - ✅ When a user gets verified, their existing ratings automatically start counting toward elite. Never backfill or duplicate rows to make this work.
+- 🚨 **Users add their OWN memberships now (2026-08-16), and a self-added one earns the BADGE, never the vote.** Owner ruling: *"for now badges, the elite will be soon added as condition."* `is_verified` is admin-set and remains the only input to elite scoring, so a `ChannelMembership` row is a claim and nothing more. Turning it on later is a change to one condition, not a migration. The profile badge deliberately shows for ANY membership; the elite average deliberately does not.
 - ❌ **NEVER** call `episode.public_score()` / `elite_score()` in a loop. Those are convenience methods only. For list pages, **annotate the queryset** or read the denormalized columns.
 - ✅ Denormalize `public_score`, `elite_score`, `rating_count`, `elite_rating_count` onto `Episode` and recompute them on rating write plus a periodic Celery sweep. Ask before adding those columns (schema deviation, see above).
 - 🚨 **`podcast/services/scoring.py` has TWO writers and they must never diverge.** `recompute_episode` is the per-write path; `recompute_many` is the set-based path for backfills and seeding (two aggregates + one `bulk_update`, and `reindex=False` so a bulk load does not queue one Celery task per episode). `test_scoring_bulk.py` compares the two **against each other**, never against hardcoded numbers, so tuning one alone fails the suite. Nothing else may write those four columns.
@@ -355,6 +373,20 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
 
 ### Search
 
+> 🔬 Reworked 2026-08-16. Full write-up in
+> [`specs/12-search-and-memberships/01-search-counts-and-matching.md`](specs/12-search-and-memberships/01-search-counts-and-matching.md).
+
+- 🚨 **EVERY COUNT MUST BE EXACT AND MUST COUNT THE THING IT IS NAMED AFTER.** This is the rule that three separate bugs broke at once on `царичи`, and the owner read the result as "the text is misleading":
+  - The heading printed the LABEL-match total (`2 episodes`) above **eight** cards, because spoken-only episodes come from the other endpoint and were never counted. There is also **no honest combined number** - two indexes, unknown overlap - so the heading now carries no count and the two exact numbers sit in labelled summary lines instead.
+  - "13 episodes" was an artefact of a **segment** page size: the endpoint paged over passages and grouped them afterwards, so `hits.length` meant "episodes the first 60 passages happened to touch".
+  - The spoken section was then capped at 6 with **no "load more"**, so it advertised 13 and drew 6.
+- 🚨 **Use `page`/`hitsPerPage` (`totalHits`) for any number shown to a user, NEVER `estimatedTotalHits`.** The estimate is not a rounding error: under `distinct` it reported **3,852 distinct episodes** for a query on a catalogue of 1,961. Exhaustive counting measured 0-6ms here, so accuracy is free. `build_search_params(count_only=True)` is the switch.
+- 🚨 **`/api/search/transcripts` pages over EPISODES, not passages** (via Meilisearch `distinct: episode_id`). `episode_id` must stay in `FILTERABLE_ATTRIBUTES` or `distinct` silently stops grouping.
+- 🇧🇬 **Matching is LOOSE by default (`matchingStrategy: "frequency"`), never Meilisearch's `last`.** `last` drops the LAST word typed, which in Bulgarian is usually the noun carrying the meaning: `извънземни в царичина` returned 288 passages under `last` (it kept "в" and threw away "царичина") and 16 under `frequency`. Requiring every word is worse still - `счупен хладилник` matches 0 episodes with both words and 128 with one.
+- 🚨 **Loose matching is only safe because it is LABELLED.** Every hit carries `match_kind`, and partial matches render in their own section below the full ones. The boundary is exact, not a heuristic: `words` is the first ranking rule, so it sorts by "how many query words matched" and the loose list is always partitioned - the count of strict (`all`) matches is precisely where full matches stop (`partition_index`). Never re-derive it by testing id membership; that needs the whole strict set fetched to be correct across pagination.
+- ⚡ **Both endpoints batch their queries into ONE `multi_search`.** Each question costs Meilisearch 0-6ms but ~25ms of round trip on this box, so the network dominates. `/api/search` is 1 round trip; `/api/search/transcripts` is 2 (the passage fetch cannot be issued until the page's episode ids are known).
+- 🇧🇬 **Stop words live in `podcast/search/querying.py` and are shared by the indexes AND the API's word counting.** They have to be the same list: a token the index erased can never match, so counting it as a word would make every ordinary query look partial.
+- 🚨 **Never match a multi-word query as one literal substring.** `ILIKE '%историята с колата%'` requires those words adjacent and in order, so with Meilisearch down the Postgres fallback answered "nothing matches" to queries with hundreds of real hits. AND across words, OR across fields. Same trap bit `Highlight` in the UI: it looked for the whole query with `indexOf`, so on exactly the multi-word Bulgarian queries this app exists for, nothing was ever highlighted. Tokenising lives in `apps/web/lib/search-tokens.ts`.
 - 🚨 **`minWordSizeForTypos` is measured in BYTES, not characters.** Cyrillic is 2 bytes/char, so every Bulgarian word crosses the threshold at HALF the word length you would assume. The episodes index sat at `{4, 8}` believing those were characters; they meant **2 and 4 characters**, and the query `пица` returned 100 hits of which **95 were false** (`пича`, `пичаги`, `пичове`). Proven by sweep 2026-08-09: false matches persisted to 8 and stopped dead at 9, the byte length of `пица`. Always write thresholds as `N * BYTES_PER_CYRILLIC_CHAR`.
 - 🚨 **`/search` MUST query BOTH indexes. Two indexes, two questions, one page.** `apps/web/app/search/page.tsx` fires `/api/search` and `/api/search/transcripts` in a single `Promise.all`. Calling only the first is not a smaller feature, it is a broken one: for 8 months the page did exactly that, and **`баница` - an example query printed on the page itself - showed "Нищо не съвпада" while 173 passages said the word out loud**. Community labelling has barely started, so titles alone answer very little.
   - ✅ Episodes matching both collapse onto ONE card (keyed by `youtube_id`); transcript-only episodes render in the `results-spoken` region below.
@@ -725,7 +757,15 @@ YYYYMMDD-feature-name        e.g. 20260808-p1-ingestion
 
 ## 🧪 Testing
 
-**753 automated tests.** ⚡ **Most of them run in CI on every push and PR**
+**2,086 automated tests** (1,485 pytest + 210 Vitest + 391 Playwright, as of
+2026-08-16). ⚠️ The backend number is inflated by one parametrized matrix:
+`test_memberships.py` round-trips the month maths across all 31 renewal days x 5
+month counts x 6 reference dates, which is 930 cases on its own. That is
+deliberate - the calendar edges (the 29th, 30th and 31st, and a leap February)
+are exactly where derived-date arithmetic breaks - but do not read the total as
+930 distinct behaviours.
+
+⚡ **Most of them run in CI on every push and PR**
 (`.github/workflows/ci.yml`): typecheck, lint, ruff, migration-drift, Vitest, pytest.
 **Push instead of re-running those locally.** Only Playwright and the perf budgets have
 to run on your machine, because they need the real ingested corpus - and those should be
@@ -736,10 +776,10 @@ npm run test                 # everything: Vitest + Playwright + pytest
 npm run test:web             # turbo test -> Vitest then Playwright
 npm run test:api             # pytest only
 
-cd apps/web && npx vitest run           # 137 unit + contract tests
-cd apps/web && npx playwright test      # 259 E2E (desktop 1280x800 + mobile 390x844)
+cd apps/web && npx vitest run           # 210 unit + contract + perf-budget tests
+cd apps/web && npx playwright test      # 391 E2E (desktop 1280x800 + mobile 390x844)
 cd apps/web && npx playwright test --ui # debug interactively
-cd apps/api && uv run pytest -q         # 357 backend tests
+cd apps/api && uv run pytest -q         # 1,485 backend tests
 ```
 
 | Layer | Tool | Location |

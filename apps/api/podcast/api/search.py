@@ -1,12 +1,29 @@
-"""Search endpoint.
+"""Search endpoints.
 
 🎯 This is the reason the app exists: YouTube's own search across these channels is
-bad, and with no transcripts and near-empty descriptions, community topics and
-moments are what make episodes findable.
+bad, and with near-empty descriptions, community topics, moments and the free
+auto-captions are what make episodes findable.
 
-Two backends behind ONE endpoint:
-  - meilisearch: typo-tolerant, Cyrillic-aware, ranks across topics and moments
-  - postgres:    always available fallback (ILIKE across the same joined text)
+Two indexes, two questions, one page:
+  - `episodes`            - "which episodes are ABOUT this"
+  - `transcript_segments` - "where was this SAID"
+
+Both endpoints share three rules, and all three exist because breaking any one of
+them makes search *look* like it works while lying:
+
+ 1. 🇧🇬 **Matching is LOOSE by default** (`frequency`, see
+    `podcast/search/querying.py`). A three-word memory of something heard in a
+    podcast almost never appears verbatim, so requiring every word returns
+    nothing far too often.
+ 2. 🚨 **Loose matches are LABELLED, not hidden.** Every hit carries
+    `match_kind`, and `total_full` says exactly where the full matches stop, so
+    the UI can rank a two-of-three-words hit below a perfect one instead of
+    passing it off as the same thing.
+ 3. 🚨 **Every count is EXACT and is a count of the thing it is named after.**
+    `total` counts episodes; `total_episodes` counts episodes; `total_segments`
+    counts passages. They come from exhaustive `page`/`hitsPerPage` searches
+    rather than `estimatedTotalHits`, which over-reported one query's 13
+    episodes as 17 and another's as 3,852 out of a 1,961-episode catalogue.
 
 The response says which backend answered, so a degraded search is visible rather
 than silently worse.
@@ -20,6 +37,14 @@ from django.db.models import Prefetch, Q
 from ninja import Query, Router
 
 from podcast.models import Episode, EpisodeTopic
+from podcast.search.querying import (
+    FULL,
+    LOOSE,
+    STRICT,
+    content_tokens,
+    partition_index,
+    wants_partial_split,
+)
 
 from .schemas import SearchOut, TranscriptSearchOut
 from .serializers import episode_brief, episode_list_queryset
@@ -30,9 +55,11 @@ router = Router(tags=["search"], auth=None)
 
 MAX_LIMIT = 50
 
-# Segment-level page size. Higher than MAX_LIMIT because several segments
-# routinely collapse into one episode after grouping.
-MAX_TRANSCRIPT_LIMIT = 100
+# ⚠️ EPISODES, not segments. This changed on 2026-08-16 along with the endpoint's
+# whole pagination model - see `search_transcripts`. It is lower than it looks
+# because each episode on a page also costs up to MAX_MATCHES_PER_EPISODE
+# passages in the follow-up fetch.
+MAX_TRANSCRIPT_LIMIT = 50
 
 # Timestamps shown per episode before the UI would need a "show more".
 MAX_MATCHES_PER_EPISODE = 5
@@ -41,6 +68,9 @@ MAX_MATCHES_PER_EPISODE = 5
 # actually renders is re-read from Postgres (the source of truth) by
 # `episode_list_queryset`, so pulling the rest of the document is dead weight.
 MEILI_HIT_FIELDS = ("id", "topics", "moments")
+
+# The only fields the transcript passage fetch reads off a segment document.
+MEILI_SEGMENT_FIELDS = ("episode_id", "youtube_id", "start_sec", "end_sec", "text")
 
 # `matched_topics` / `matched_moments` are capped at this in the response.
 MAX_MATCHED_LABELS = 5
@@ -67,6 +97,21 @@ def _meilisearch_available() -> bool:
         # The search package may not be wired yet, or Meilisearch may be down.
         # Neither is a reason to 500 a user's search.
         return False
+
+
+def _exact_total(result: dict, fallback_key: str = "estimated_total_hits") -> int:
+    """Read the exhaustive count, falling back to the estimate.
+
+    A `count_only` search always carries `total_hits`. The fallback covers a
+    mocked client in the test suite and any future caller that forgets.
+    """
+    total = result.get("total_hits")
+    return int(total) if total is not None else int(result.get(fallback_key) or 0)
+
+
+# ---------------------------------------------------------------------------
+# /search - which episodes are ABOUT this
+# ---------------------------------------------------------------------------
 
 
 @router.get("/search", response=SearchOut)
@@ -99,6 +144,8 @@ def search(
             "query": query,
             "hits": [],
             "total": 0,
+            "total_full": 0,
+            "word_count": 0,
             "limit": limit,
             "offset": offset,
             "backend": "postgres",
@@ -131,8 +178,8 @@ def search(
 
 
 def _meilisearch_search(query, channel, kind, members_only, limit, offset) -> dict:
-    from podcast.search.index import build_filter
-    from podcast.search.index import search as meili_search
+    from podcast.search.client import EPISODES_INDEX, multi_search
+    from podcast.search.index import build_filter, build_search_params, normalize_result
 
     # 🔒 Filters are built from query-string input. build_filter escapes values, so
     # never hand-interpolate a slug into a filter expression.
@@ -140,31 +187,69 @@ def _meilisearch_search(query, channel, kind, members_only, limit, offset) -> di
         channel_slug=channel or None,
         content_kind=kind or None,
         members_only=members_only,
-    )
+    ) or None
 
-    # ⚡ Only the three fields this function actually reads. Meilisearch documents
-    # carry 31 fields (including a description of up to 5,000 chars) and Postgres
-    # is re-read below for everything the response renders, so retrieving the full
+    split = wants_partial_split(query)
+
+    # ⚡ One round trip for up to three questions. Each costs Meilisearch 0-6ms
+    # but ~25ms of network on this box, so batching is most of the wall clock.
+    #
+    # ⚡ Only three fields are retrieved for the page. Meilisearch documents carry
+    # 31 fields (including a description of up to 5,000 chars) and Postgres is
+    # re-read below for everything the response renders, so pulling the full
     # document was pure waste: 50,378B -> 1,126B for "подкаст" at limit=24.
-    result = meili_search(
-        query,
-        filters=filters or None,
-        limit=limit,
-        offset=offset,
-        attributes=MEILI_HIT_FIELDS,
+    queries = [
+        {
+            "indexUid": EPISODES_INDEX,
+            "q": query,
+            **build_search_params(
+                filters=filters,
+                limit=limit,
+                offset=offset,
+                attributes=MEILI_HIT_FIELDS,
+                matching_strategy=LOOSE,
+            ),
+        },
+        {
+            "indexUid": EPISODES_INDEX,
+            "q": query,
+            **build_search_params(
+                filters=filters, matching_strategy=LOOSE, count_only=True
+            ),
+        },
+    ]
+    if split:
+        queries.append(
+            {
+                "indexUid": EPISODES_INDEX,
+                "q": query,
+                **build_search_params(
+                    filters=filters, matching_strategy=STRICT, count_only=True
+                ),
+            }
+        )
+
+    raw_results = multi_search(queries)
+    if len(raw_results) < len(queries):
+        raise RuntimeError("Meilisearch multi-search returned fewer results than queries")
+
+    page = normalize_result(raw_results[0], query, limit, offset)
+    total = _exact_total(normalize_result(raw_results[1], query, 1, 0))
+    # A single-content-word query cannot have a partial match, so every hit is
+    # full. Saying `total_full = total` rather than 0 is what keeps the UI from
+    # inventing a "partial matches" heading over an ordinary one-word search.
+    total_full = (
+        _exact_total(normalize_result(raw_results[2], query, 1, 0)) if split else total
     )
 
-    if not result.get("available", True):
-        raise RuntimeError("Meilisearch reported itself unavailable")
-
-    hit_ids = [int(hit["id"]) for hit in result.get("hits", [])]
+    hit_ids = [int(hit["id"]) for hit in page.get("hits", [])]
     episodes = {
         episode.id: episode
         for episode in episode_list_queryset().filter(id__in=hit_ids)
     }
 
     hits = []
-    for hit in result.get("hits", []):
+    for position, hit in enumerate(page.get("hits", [])):
         episode = episodes.get(int(hit["id"]))
         if not episode:
             # Indexed but since deleted. Skip rather than 500.
@@ -174,19 +259,23 @@ def _meilisearch_search(query, channel, kind, members_only, limit, offset) -> di
                 "episode": episode_brief(episode),
                 "matched_topics": hit.get("topics", [])[:MAX_MATCHED_LABELS],
                 "matched_moments": hit.get("moments", [])[:MAX_MATCHED_LABELS],
+                # 🚨 From the ABSOLUTE rank, not from this page's index. See
+                # `partition_index` - a hit's kind must not change when the same
+                # episode is reached via a different offset.
+                "match_kind": partition_index(total_full, offset, position),
             }
         )
 
     return {
         "query": query,
         "hits": hits,
-        # ⚠️ snake_case. Reading the raw Meilisearch camelCase key here silently fell
-        # back to len(hits), which reported the page size as the total (2026-08-08).
-        "total": result.get("estimated_total_hits", len(hits)),
+        "total": total,
+        "total_full": total_full,
+        "word_count": len(content_tokens(query)),
         "limit": limit,
         "offset": offset,
         "backend": "meilisearch",
-        "processing_ms": result.get("processing_time_ms"),
+        "processing_ms": page.get("processing_time_ms"),
     }
 
 
@@ -195,10 +284,33 @@ def _postgres_search(query, channel, kind, members_only, limit, offset) -> dict:
 
     🇧🇬 `icontains` maps to ILIKE, which is Unicode-safe in a UTF-8 database, so
     Cyrillic works. It is NOT typo-tolerant - that is what Meilisearch adds.
+
+    🚨 Multi-word queries are matched WORD BY WORD, not as one literal substring.
+    A single `ILIKE '%историята с колата%'` requires those words to appear
+    adjacent and in that order, which for a remembered phrase is almost never
+    true - so with Meilisearch down the fallback answered "nothing matches" for
+    queries that have hundreds of real hits. Each word must appear SOMEWHERE in
+    the joined text (an AND across words, an OR across fields), which is the
+    closest Postgres gets to the strict half of what Meilisearch does.
     """
     import time
 
     started = time.monotonic()
+
+    def _any_field(term: str) -> Q:
+        return (
+            Q(title__icontains=term)
+            | Q(description__icontains=term)
+            | Q(topics__topic__name__icontains=term)
+            | Q(moments__label__icontains=term)
+            | Q(participants__person__name__icontains=term)
+            | Q(channel__name__icontains=term)
+        )
+
+    # Stop words are stripped so the query means the same thing it means to
+    # Meilisearch. If a query is nothing BUT stop words, fall back to the raw
+    # string rather than matching everything.
+    terms = content_tokens(query) or [query]
 
     queryset = (
         episode_list_queryset()
@@ -210,16 +322,10 @@ def _postgres_search(query, channel, kind, members_only, limit, offset) -> dict:
             Prefetch("topics", queryset=EpisodeTopic.objects.select_related("topic")),
             "moments",
         )
-        .filter(
-            Q(title__icontains=query)
-            | Q(description__icontains=query)
-            | Q(topics__topic__name__icontains=query)
-            | Q(moments__label__icontains=query)
-            | Q(participants__person__name__icontains=query)
-            | Q(channel__name__icontains=query)
-        )
-        .distinct()
     )
+    for term in terms:
+        queryset = queryset.filter(_any_field(term))
+    queryset = queryset.distinct()
 
     if channel:
         queryset = queryset.filter(channel__slug=channel)
@@ -234,7 +340,12 @@ def _postgres_search(query, channel, kind, members_only, limit, offset) -> dict:
     page = list(queryset[offset : offset + limit])
 
     # Show WHY each episode matched, so a topic-driven hit does not look arbitrary.
-    lowered = query.lower()
+    lowered = [term.lower() for term in terms]
+
+    def _matches_any(text: str) -> bool:
+        low = text.lower()
+        return any(term in low for term in lowered)
+
     hits = []
     for episode in page:
         hits.append(
@@ -246,13 +357,15 @@ def _postgres_search(query, channel, kind, members_only, limit, offset) -> dict:
                 "matched_topics": [
                     et.topic.name
                     for et in episode.topics.all()
-                    if lowered in et.topic.name.lower()
+                    if _matches_any(et.topic.name)
                 ][:MAX_MATCHED_LABELS],
                 "matched_moments": [
                     moment.label
                     for moment in episode.moments.all()
-                    if lowered in moment.label.lower()
+                    if _matches_any(moment.label)
                 ][:MAX_MATCHED_LABELS],
+                # Every word was required, so every Postgres hit is a full match.
+                "match_kind": FULL,
             }
         )
 
@@ -260,11 +373,18 @@ def _postgres_search(query, channel, kind, members_only, limit, offset) -> dict:
         "query": query,
         "hits": hits,
         "total": total,
+        "total_full": total,
+        "word_count": len(content_tokens(query)),
         "limit": limit,
         "offset": offset,
         "backend": "postgres",
         "processing_ms": int((time.monotonic() - started) * 1000),
     }
+
+
+# ---------------------------------------------------------------------------
+# /search/transcripts - where a phrase was SAID
+# ---------------------------------------------------------------------------
 
 
 @router.get("/search/transcripts", response=TranscriptSearchOut)
@@ -274,13 +394,27 @@ def search_transcripts(
     channel: str | None = Query(None, description="Channel slug"),
     episode: int | None = Query(None, description="Restrict to one episode id"),
     members_only: bool | None = Query(None),
-    limit: int = Query(20, ge=1, le=MAX_TRANSCRIPT_LIMIT),
+    limit: int = Query(20, ge=1, le=MAX_TRANSCRIPT_LIMIT, description="EPISODES per page"),
     offset: int = Query(0, ge=0),
 ):
     """Find where a phrase was SPOKEN, with a timestamp.
 
     🎯 The half of search community labels cannot cover. Labels answer "which
     episodes are about X"; this answers "X was said at 45:12 in these episodes".
+
+    🚨 **`limit`/`offset` page over EPISODES**, and did not always. Until
+    2026-08-16 they paged over PASSAGES, which were then grouped for display - so
+    the number of episodes in a response was an accident of how many passages
+    happened to land on that page, and `hits` was not a page of anything. The
+    page above it advertised "21 passages in 13 episodes" and rendered six cards
+    with no way to reach the rest. Meilisearch's `distinct` does the grouping
+    inside the engine instead, which makes the page size mean what it says and
+    makes `total_episodes` exact.
+
+    Two round trips, deliberately: the first batch cannot know which episodes are
+    on the page, so the passages that fill each card have to be fetched once
+    those ids are known. Each episode carries its best-ranked passage from the
+    first batch as a floor, so a card can never render empty.
 
     ⚠️ Coverage is PARTIAL and date-dependent - roughly the newer part of the
     catalogue has captions, and members-only episodes have none. An episode
@@ -292,6 +426,9 @@ def search_transcripts(
         "query": query,
         "hits": [],
         "total_segments": 0,
+        "total_episodes": 0,
+        "total_full_episodes": 0,
+        "word_count": len(content_tokens(query)),
         "limit": limit,
         "offset": offset,
         "available": True,
@@ -302,7 +439,13 @@ def search_transcripts(
     if not has_searchable_text(query):
         return empty
 
-    from podcast.search.transcript_index import build_filter
+    from podcast.search.client import TRANSCRIPTS_INDEX, multi_search
+    from podcast.search.index import normalize_result
+    from podcast.search.transcript_index import (
+        DISTINCT_EPISODE,
+        build_filter,
+        build_search_params,
+    )
     from podcast.search.transcript_index import search as transcript_search
 
     # 🔒 Escaped by build_filter. Never hand-interpolate a slug into a filter.
@@ -310,20 +453,87 @@ def search_transcripts(
         episode_id=episode,
         channel_slug=channel or None,
         members_only=members_only,
-    )
+    ) or None
 
-    result = transcript_search(
-        query, filters=filters or None, limit=limit, offset=offset, highlight=True
-    )
-    if not result.get("available", True):
-        # Meilisearch is down. Say so rather than silently returning "no matches",
-        # which would read as "this was never said".
+    split = wants_partial_split(query)
+
+    def _query(**kwargs) -> dict:
+        return {
+            "indexUid": TRANSCRIPTS_INDEX,
+            "q": query,
+            **build_search_params(filters=filters, **kwargs),
+        }
+
+    queries = [
+        # 1. The page: one best passage per episode, in relevance order.
+        _query(
+            limit=limit,
+            offset=offset,
+            distinct=DISTINCT_EPISODE,
+            attributes=MEILI_SEGMENT_FIELDS,
+            matching_strategy=LOOSE,
+        ),
+        # 2. Exactly how many EPISODES contain the words.
+        _query(distinct=DISTINCT_EPISODE, matching_strategy=LOOSE, count_only=True),
+        # 3. Exactly how many PASSAGES do. A different question, printed as a
+        #    different number - conflating the two is the original bug.
+        _query(matching_strategy=LOOSE, count_only=True),
+    ]
+    if split:
+        # 4. How many of those episodes contain EVERY word.
+        queries.append(
+            _query(distinct=DISTINCT_EPISODE, matching_strategy=STRICT, count_only=True)
+        )
+
+    try:
+        raw_results = multi_search(queries)
+    except Exception:
+        logger.warning("Transcript multi-search failed for %r", query, exc_info=True)
         return {**empty, "available": False}
 
-    raw_hits = result.get("hits", [])
-    episode_ids = list(dict.fromkeys(int(hit["episode_id"]) for hit in raw_hits))
-    if not episode_ids:
-        return {**empty, "processing_ms": result.get("processing_time_ms")}
+    if len(raw_results) < len(queries):
+        return {**empty, "available": False}
+
+    page = normalize_result(raw_results[0], query, limit, offset)
+    total_episodes = _exact_total(normalize_result(raw_results[1], query, 1, 0))
+    total_segments = _exact_total(normalize_result(raw_results[2], query, 1, 0))
+    total_full_episodes = (
+        _exact_total(normalize_result(raw_results[3], query, 1, 0))
+        if split
+        else total_episodes
+    )
+
+    # `distinct` gives one representative segment per episode, in rank order.
+    # This dict is the page's episode ORDER as well as its floor of passages.
+    representative: dict[int, dict] = {}
+    for hit in page.get("hits", []):
+        episode_id = int(hit["episode_id"])
+        representative.setdefault(episode_id, hit)
+
+    if not representative:
+        return {
+            **empty,
+            "total_segments": total_segments,
+            "total_episodes": total_episodes,
+            "total_full_episodes": total_full_episodes,
+            "processing_ms": page.get("processing_time_ms"),
+        }
+
+    episode_ids = list(representative)
+
+    # Round trip two: every passage for the episodes on this page, so a card can
+    # show several timestamps rather than one. Scoped by an `IN` filter, so its
+    # cost is bounded by the page size and not by how common the word is.
+    #
+    # ⚠️ Not `distinct`: the whole point is to get MULTIPLE passages per episode.
+    id_filter = f"episode_id IN [{', '.join(str(i) for i in episode_ids)}]"
+    extra = transcript_search(
+        query,
+        filters=id_filter,
+        limit=len(episode_ids) * MAX_MATCHES_PER_EPISODE,
+        attributes=MEILI_SEGMENT_FIELDS,
+        matching_strategy=LOOSE,
+    )
 
     # Postgres is the source of truth for everything rendered, so the documents
     # deliberately carry no title/thumbnail/score to re-read here.
@@ -331,43 +541,66 @@ def search_transcripts(
         row.id: row for row in episode_list_queryset().filter(id__in=episode_ids)
     }
 
+    def _passage(hit: dict) -> dict:
+        formatted = hit.get("_formatted") or {}
+        return {
+            "start_sec": hit["start_sec"],
+            "end_sec": hit["end_sec"],
+            # `_formatted` carries the cropped, <mark>-wrapped passage.
+            "text": formatted.get("text") or hit.get("text", ""),
+            "deep_link": (
+                f"https://www.youtube.com/watch?v={hit['youtube_id']}&t={hit['start_sec']}"
+            ),
+        }
+
     grouped: dict[int, list[dict]] = {}
-    for hit in raw_hits:
+    seen_starts: dict[int, set[int]] = {}
+    for hit in extra.get("hits", []) if extra.get("available", True) else []:
         episode_id = int(hit["episode_id"])
-        if episode_id not in episodes:
+        if episode_id not in representative:
+            continue
+        starts = seen_starts.setdefault(episode_id, set())
+        if hit["start_sec"] in starts:
+            continue
+        starts.add(hit["start_sec"])
+        grouped.setdefault(episode_id, []).append(_passage(hit))
+
+    hits = []
+    # Iterate `representative`, not `grouped`: dicts preserve insertion order, so
+    # this keeps the page in the relevance order the distinct search decided,
+    # and guarantees an entry for every episode even if the follow-up fetch
+    # returned nothing for it.
+    for position, episode_id in enumerate(representative):
+        row = episodes.get(episode_id)
+        if row is None:
             # Indexed but since deleted. Skip rather than 500.
             continue
-        formatted = hit.get("_formatted") or {}
-        grouped.setdefault(episode_id, []).append(
+        matches = grouped.get(episode_id) or [_passage(representative[episode_id])]
+        hits.append(
             {
-                "start_sec": hit["start_sec"],
-                "end_sec": hit["end_sec"],
-                # `_formatted` carries the cropped, <mark>-wrapped passage.
-                "text": formatted.get("text") or hit.get("text", ""),
-                "deep_link": (
-                    f"https://www.youtube.com/watch?v={hit['youtube_id']}&t={hit['start_sec']}"
-                ),
+                "episode": episode_brief(row),
+                "matches": matches[:MAX_MATCHES_PER_EPISODE],
+                "match_kind": partition_index(total_full_episodes, offset, position),
             }
         )
-
-    hits = [
-        {
-            "episode": episode_brief(episodes[episode_id]),
-            "matches": matches[:MAX_MATCHES_PER_EPISODE],
-        }
-        # dict preserves insertion order, so episodes stay in relevance order.
-        for episode_id, matches in grouped.items()
-    ]
 
     return {
         "query": query,
         "hits": hits,
-        "total_segments": result.get("estimated_total_hits", len(raw_hits)),
+        "total_segments": total_segments,
+        "total_episodes": total_episodes,
+        "total_full_episodes": total_full_episodes,
+        "word_count": len(content_tokens(query)),
         "limit": limit,
         "offset": offset,
         "available": True,
-        "processing_ms": result.get("processing_time_ms"),
+        "processing_ms": page.get("processing_time_ms"),
     }
+
+
+# ---------------------------------------------------------------------------
+# /search/suggest
+# ---------------------------------------------------------------------------
 
 
 @router.get("/search/suggest", response=list[str])
@@ -406,10 +639,13 @@ def suggest(request, q: str = Query(""), limit: int = Query(8, ge=1, le=20)):
             if titles:
                 return titles
 
+    # 🚨 Word by word, for the same reason as `_postgres_search`: a two-word
+    # query is never one literal substring of a title.
+    queryset = Episode.objects.all()
+    for term in content_tokens(query) or [query]:
+        queryset = queryset.filter(title__icontains=term)
     return list(
-        Episode.objects.filter(title__icontains=query)
-        .order_by("-upload_date")
-        .values_list("title", flat=True)[:limit]
+        queryset.order_by("-upload_date").values_list("title", flat=True)[:limit]
     )
 
 

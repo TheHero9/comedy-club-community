@@ -1,6 +1,6 @@
 # 📊 STATUS
 
-**Updated:** 2026-08-15
+**Updated:** 2026-08-16
 **Overall:** 🚀 **LIVE IN PRODUCTION at https://comedycommunity.club** (2026-08-15). Web on Vercel, API + Celery + Postgres + Redis + Meilisearch on Railway, Clerk production auth, 7 channels / **1,862** episodes / 579 transcripts served (100 non-podcast clips removed 08-15). Launch smoke test 13/13. Full topology and the six deployment gotchas: [`specs/10-deployment/`](../specs/10-deployment/01-production-setup.md).
 
 > ⚠️ Still deferred before the membership-verification flow is used by real users:
@@ -34,8 +34,52 @@
 | 13 | People, moderation, leaderboards | ✅ | |
 | 14 | **Visual redesign** | ✅ | Whole frontend rebuilt from `Designs/design_handoff_podcast_index/`. All 10 routes, dark + light, Bulgarian copy, transposed mobile ratings grid. See [`specs/07-visual-redesign/`](../specs/07-visual-redesign/01-implementation.md). |
 | 15 | **Post-launch UX pass** | ✅ | **2026-08-15.** The owner's first full walkthrough of the live site, turned into 31 tracked items and all 31 built - including EN/BG i18n with **English as the new default**, a curated channel order, a title-first search split with working pagination, and the Clerk identity bug that showed a raw `user_...` id as both name and handle. See [`specs/11-ux-feedback/`](../specs/11-ux-feedback/01-backlog.md). |
+| 16 | **Search honesty + memberships + full-view grid** | ✅ | **2026-08-16.** Three lying counts on `/search` fixed and multi-word matching made loose-but-labelled; self-managed channel memberships whose month count is **derived, never stored**; the profile-icon ladder (machinery only, artwork pending); the fullscreen channel grid replacing "Fit to screen". See [`specs/12-search-and-memberships/`](../specs/12-search-and-memberships/01-search-counts-and-matching.md). |
 
 Legend: ⬜ not started · 🔵 in progress · 🟡 partial/blocked · ✅ done
+
+---
+
+## 🆕 2026-08-16
+
+**Search: every number on the page is now exact and named.** The owner searched
+`царичи`, got a heading saying "2 episodes" over eight cards and a line
+advertising 13 spoken episodes above six of them. Three independent defects:
+the heading counted only the label half; "13 episodes" was an artefact of a
+**segment** page size rather than an episode count; and the spoken section was
+capped at six with no "load more". `/api/search/transcripts` now pages over
+episodes (Meilisearch `distinct`), all counts come from exhaustive
+`page`/`hitsPerPage` rather than `estimatedTotalHits` (which reported 3,852
+distinct episodes on a 1,961-episode catalogue), and both halves paginate.
+
+**Search: loose matching, labelled.** `matchingStrategy: "frequency"` replaces
+Meilisearch's `last`, which threw away the last word typed - in Bulgarian
+usually the noun. Hits that matched only some words are kept but rendered in
+their own "Partial matches" section, with the boundary computed exactly from the
+strict match count rather than guessed.
+
+**Memberships are self-managed.** `/me/memberships`: pick a channel, enter your
+month count and renewal day once. 🚨 The count is **derived from a single
+`member_since` anchor on every read**, so it ticks over on renewal day with no
+nightly job to fail. A claim earns the badge and the profile icons; only an
+admin-verified membership feeds the Elite score.
+
+**Profile icons: machinery shipped, artwork pending.** Catalogue +
+unlock-by-months-per-channel + picker + server-side enforcement are all live
+against `podcast/data/avatar_icons.py`, which currently holds one placeholder.
+Adding the real icons is an append to that tuple - no migration, no code.
+
+**The channel grid gained a fullscreen "Full view"** (years as columns, episodes
+down, nothing scrolls) and lost "Fit to screen", which scaled the grid without
+shrinking its container and so added a page scrollbar over empty space.
+
+Migration `0007` adds two nullable/blank columns
+(`ChannelMembership.renewal_day`, `UserProfile.avatar_key`).
+
+Gates: **1,485 pytest + 210 Vitest + 391 Playwright green**, ruff clean, no
+migration drift, and all 35 perf budgets pass - `web:search-broad` came back
+inside budget at 170.6 KB (was a waived 193.1 KB against 180 KB), so its waiver
+was deleted per the ratchet rule.
 
 ---
 

@@ -102,13 +102,6 @@
     }
   },
   "waivers": {
-    "web:search-broad": {
-      "why": "Known breach, measured 2026-08-15 (launch day): 193.1 KB against the 180 KB budget. Not a code regression - proven by rerunning the measurement on the pre-Clerk tree with an identical result. The budget's own note says card COUNT dominates and is capped at 26, but the 2026-08-09 measurement predates the transcript backfill: coverage went from 3 episodes to 579, so a broad query's cards now nearly all carry a transcript passage crop where almost none did before, plus the roster grew 2 -> 7 channels with longer channel names per card. Ratchet: may not get any worse, and once the route is back inside 180 KB this waiver must be deleted (STALE WAIVER enforces it). The fix lever when it is picked up: passages are already cropped to 20 words, so the next cut is structural - fewer passage-bearing cards or a lazy second page - not a bigger budget.",
-      "observedKb": 193.1,
-      "observedMs": 143.6,
-      "maxKb": 200,
-      "maxMs": 300
-    },
     "api:channel-grid:комеди-клуб-подкаст-comedy-club-podcast": {
       "why": "Known breach, measured 2026-08-09: 1044.8 KB against a 200 KB budget and 261 ms against 150 ms. Waived so the suite is not permanently red while the payload is being reduced, but ratcheted: it may not get any worse, and once it is inside budget this waiver must be deleted (the test fails with STALE WAIVER until it is). Re-measured 2026-08-10 at 322.3 KB / 55.6 ms. 🚨 The 2026-08-09 figure was taken when this channel had ZERO ratings, so every one of its 1318 cells was a null hole; it now has 1043 rated cells each carrying a score, band and count, and the payload still went UP by only 2.3 KB. That is the honest worst case to hold against, and it means the remaining bulk is the empty holes, not the data. At full community coverage expect roughly 400 KB, which is why the ceiling stays at 600 rather than being tightened to the current reading.",
       "observedKb": 323.0,

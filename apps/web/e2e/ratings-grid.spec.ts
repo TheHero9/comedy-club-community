@@ -455,3 +455,147 @@ test.describe("3.10 the transpose keeps its promises at 390px", () => {
     await page.waitForURL((url) => url.pathname === href);
   });
 });
+
+/**
+ * The fullscreen "Full view" overlay (2026-08-16).
+ *
+ * 🚨 It replaces "Fit to screen", which scaled the inline grid with a CSS
+ * transform but left its container at full height - so the page grew a vertical
+ * scrollbar over mostly-empty space, the exact opposite of what the button
+ * promised. The replacement transposes the grid (years across, episodes down)
+ * so a whole channel fits one frame and can be screenshotted.
+ *
+ * The two properties worth pinning are the two that would silently regress:
+ * the whole channel is present, and the page underneath does not scroll.
+ */
+test.describe("fullscreen grid", () => {
+  test("3.12 the overlay renders every episode of the channel", async ({ page }) => {
+    const api = await apiJson<Grid>(page, GRID_API);
+    const expected = api.seasons.reduce(
+      (total, _season, index) =>
+        total + api.rows.filter((row) => row.cells[index] != null).length,
+      0,
+    );
+    expect(expected, "the fixture channel must have episodes").toBeGreaterThan(0);
+
+    await page.goto(CHANNEL_PATH);
+    await page.getByTestId("grid-fullscreen-open").click();
+
+    const overlay = page.getByTestId("grid-fullscreen");
+    await expect(overlay).toBeVisible();
+
+    // 🚨 Every episode, not a page of them. The whole point is "the entire
+    // channel in one frame", so a cap creeping in here is the regression.
+    await expect(overlay.locator("a[data-cell]")).toHaveCount(expected);
+
+    // One column per year, in the same order the API returned them.
+    for (const season of api.seasons) {
+      await expect(overlay.getByText(season.label, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("3.13 the page behind the overlay does not scroll", async ({ page }) => {
+    await page.goto(CHANNEL_PATH);
+    await page.getByTestId("grid-fullscreen-open").click();
+    await expect(page.getByTestId("grid-fullscreen")).toBeVisible();
+
+    // 🚨 The literal complaint that produced this feature: "it makes the whole
+    // page have a vertical scroll bar which is awful". A fixed overlay does not
+    // stop a wheel event reaching the document, so the body has to be locked -
+    // otherwise closing the overlay leaves the reader somewhere they never
+    // navigated to.
+    expect(
+      await page.evaluate(() => getComputedStyle(document.body).overflow),
+    ).toBe("hidden");
+    expect(await hasHorizontalOverflow(page)).toBe(false);
+  });
+
+  /**
+   * 🚨 The regression that cost two rounds of this feature.
+   *
+   * Sized by arithmetic, the overlay overflowed twice, and both times the
+   * failure was a NUMBER standing in for a layout the browser was going to
+   * compute anyway:
+   *
+   *   1. `(100dvh - chrome) / rowCount` ignored the 1px gap between cells. On
+   *      the flagship channel's 184 rows that is 184px, so the tallest years
+   *      ran off the bottom.
+   *   2. the `chrome` constant was measured at 1280px wide, where the legend
+   *      is one line. At 390px it wraps to three and the SMALL channel
+   *      overflowed by 22px.
+   *
+   * It is now flex-sized, so nothing is measured. This runs against the biggest
+   * channel in the corpus (1,225 episodes, 11 years) at BOTH viewports, which
+   * is what would have caught either bug.
+   */
+  test("3.13b the biggest channel fits with no inner scroll", async ({ page }) => {
+    const slug = "комеди-клуб-подкаст-comedy-club-podcast";
+    const grid = await apiJson<Grid>(
+      page,
+      `/api/channels/${encodeURIComponent(slug)}/grid`,
+    );
+    const expected = grid.seasons.reduce(
+      (total, _season, index) =>
+        total + grid.rows.filter((row) => row.cells[index] != null).length,
+      0,
+    );
+    expect(expected, "the flagship channel must be the big one").toBeGreaterThan(500);
+
+    await page.goto(`/channels/${encodeURIComponent(slug)}`);
+    await page.getByTestId("grid-fullscreen-open").click();
+    await expect(page.getByTestId("grid-fullscreen")).toBeVisible();
+
+    const overlay = page.getByTestId("grid-fullscreen");
+    // Every episode is present...
+    await expect(overlay.locator("a[data-cell]")).toHaveCount(expected);
+
+    // ...and the scroll container has nothing to scroll.
+    const overflow = await page.evaluate(() => {
+      const scroller = document.querySelector(
+        '[data-testid="grid-fullscreen"] .overflow-auto',
+      );
+      if (!scroller) return null;
+      return scroller.scrollHeight - scroller.clientHeight;
+    });
+    expect(overflow, "the fullscreen scroll container was not found").not.toBeNull();
+    // One pixel of slack for sub-pixel row heights; 184px would be the bug.
+    expect(overflow ?? 0).toBeLessThanOrEqual(1);
+  });
+
+  test("3.14 closing the overlay restores the page", async ({ page }) => {
+    await page.goto(CHANNEL_PATH);
+    await page.getByTestId("grid-fullscreen-open").click();
+    await expect(page.getByTestId("grid-fullscreen")).toBeVisible();
+
+    await page.getByTestId("grid-fullscreen-close").click();
+    await expect(page.getByTestId("grid-fullscreen")).toHaveCount(0);
+
+    // The scroll lock must be released, or the page is left frozen.
+    expect(
+      await page.evaluate(() => getComputedStyle(document.body).overflow),
+    ).not.toBe("hidden");
+
+    // ...and Escape does the same thing.
+    await page.getByTestId("grid-fullscreen-open").click();
+    await expect(page.getByTestId("grid-fullscreen")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("grid-fullscreen")).toHaveCount(0);
+  });
+
+  test("3.15 a cell in the overlay links to its episode", async ({ page }) => {
+    await page.goto(CHANNEL_PATH);
+    await page.getByTestId("grid-fullscreen-open").click();
+
+    const cell = page.getByTestId("grid-fullscreen").locator("a[data-cell]").first();
+    const href = await cell.getAttribute("href");
+    expect(href).toMatch(/^\/e\//);
+
+    // The accessible name has to carry the episode: at a few pixels tall the
+    // cell has no visible text, so this is the only thing identifying it.
+    const label = await cell.getAttribute("aria-label");
+    expect(label?.length ?? 0).toBeGreaterThan(3);
+
+    await cell.click();
+    await page.waitForURL((url) => url.pathname === href);
+  });
+});

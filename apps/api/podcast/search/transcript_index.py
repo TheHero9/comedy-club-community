@@ -51,7 +51,9 @@ from .index import (
     STOP_WORDS,
     SYNONYMS,
     escape_filter_value,
+    normalize_result,
 )
+from .querying import LOOSE
 from .transcript_documents import (
     build_segment_document,
     build_segment_documents,
@@ -411,28 +413,53 @@ def build_filter(
     return filters
 
 
-def search(
-    query: str,
+#: Meilisearch's `distinct` attribute for "one hit per EPISODE, best passage first".
+#:
+#: 🚨 This is what lets the transcript endpoint paginate by episode instead of by
+#: passage, and it fixes a real lie in the UI. The page used to fetch 60 segments,
+#: group them, and print "in N episodes" where N was however many episodes those
+#: 60 segments happened to touch - a number with no relationship to how many
+#: episodes actually contain the phrase, and one the page then truncated to six
+#: cards anyway. `episode_id` must stay in FILTERABLE_ATTRIBUTES for this to work.
+DISTINCT_EPISODE = "episode_id"
+
+
+def build_search_params(
     *,
     filters: str | Sequence[Any] | None = None,
     limit: int = 40,
     offset: int = 0,
     highlight: bool = True,
     attributes: Sequence[str] | None = None,
+    matching_strategy: str = LOOSE,
+    distinct: str | None = None,
+    count_only: bool = False,
 ) -> dict[str, Any]:
-    """Search spoken text. Never raises.
+    """The Meilisearch parameter dict for one transcript search.
 
-    Returns `available: False` when Meilisearch is down, which is the API
-    layer's signal to omit the transcript section rather than fail the request.
-    There is deliberately NO Postgres fallback: an ILIKE over 115k segments is a
-    sequential scan of every transcript in the catalogue.
+    Split out so the API layer can batch several into one `multi_search`.
+
+    🚨 `count_only` uses `page`/`hitsPerPage` so Meilisearch counts exhaustively
+    and answers with `totalHits`. With `distinct` set, the offset-mode
+    `estimatedTotalHits` is not merely approximate but badly wrong at scale - it
+    reported 3,852 distinct episodes for a query on a catalogue that only holds
+    1,961 episodes in total. Never print that number.
     """
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    params: dict[str, Any] = {"matchingStrategy": matching_strategy}
+    if distinct:
+        params["distinct"] = distinct
+    if count_only:
+        params["hitsPerPage"] = 1
+        params["page"] = 1
+        params["attributesToRetrieve"] = ["episode_id"]
+    else:
+        params["limit"] = limit
+        params["offset"] = offset
+        if attributes:
+            params["attributesToRetrieve"] = list(attributes)
     if filters:
         params["filter"] = filters
-    if attributes:
-        params["attributesToRetrieve"] = list(attributes)
-    if highlight:
+    if highlight and not count_only:
         params["attributesToHighlight"] = HIGHLIGHT_ATTRIBUTES
         params["highlightPreTag"] = "<mark>"
         params["highlightPostTag"] = "</mark>"
@@ -448,30 +475,63 @@ def search(
         # it is the real answer to "where was this said".
         params["attributesToCrop"] = HIGHLIGHT_ATTRIBUTES
         params["cropLength"] = 20
+    return params
+
+
+def empty_result(query: str, limit: int, offset: int, *, available: bool = True) -> dict[str, Any]:
+    return {
+        "query": query,
+        "hits": [],
+        "estimated_total_hits": 0,
+        "total_hits": 0,
+        "limit": limit,
+        "offset": offset,
+        "processing_time_ms": 0,
+        "available": available,
+    }
+
+
+def search(
+    query: str,
+    *,
+    filters: str | Sequence[Any] | None = None,
+    limit: int = 40,
+    offset: int = 0,
+    highlight: bool = True,
+    attributes: Sequence[str] | None = None,
+    matching_strategy: str = LOOSE,
+    distinct: str | None = None,
+    count_only: bool = False,
+) -> dict[str, Any]:
+    """Search spoken text. Never raises.
+
+    Returns `available: False` when Meilisearch is down, which is the API
+    layer's signal to omit the transcript section rather than fail the request.
+    There is deliberately NO Postgres fallback: an ILIKE over 115k segments is a
+    sequential scan of every transcript in the catalogue.
+    """
+    params = build_search_params(
+        filters=filters,
+        limit=limit,
+        offset=offset,
+        highlight=highlight,
+        attributes=attributes,
+        matching_strategy=matching_strategy,
+        distinct=distinct,
+        count_only=count_only,
+    )
 
     try:
         raw = _index().search(query, params)
     except SEARCH_ERRORS as exc:
         logger.warning("Transcript search failed for %r: %s", query, exc)
-        return {
-            "query": query,
-            "hits": [],
-            "estimated_total_hits": 0,
-            "limit": limit,
-            "offset": offset,
-            "processing_time_ms": 0,
-            "available": False,
-        }
+        return empty_result(query, limit, offset, available=False)
 
-    return {
-        "query": raw.get("query", query),
-        "hits": raw.get("hits", []),
-        "estimated_total_hits": raw.get("estimatedTotalHits", len(raw.get("hits", []))),
-        "limit": raw.get("limit", limit),
-        "offset": raw.get("offset", offset),
-        "processing_time_ms": raw.get("processingTimeMs", 0),
-        "available": True,
-    }
+    result = normalize_result(raw, query, limit, offset)
+    # The transcript index is never faceted; dropping the key keeps this
+    # response the shape its callers assert against.
+    result.pop("facet_distribution", None)
+    return result
 
 
 def stats() -> dict[str, Any] | None:
@@ -482,8 +542,11 @@ def stats() -> dict[str, Any] | None:
 
 __all__ = [
     "DEFAULT_BATCH_SIZE",
+    "DISTINCT_EPISODE",
     "INDEX_SETTINGS",
+    "TRANSCRIPTS_INDEX",
     "build_filter",
+    "build_search_params",
     "drop_index",
     "ensure_index",
     "index_segments",

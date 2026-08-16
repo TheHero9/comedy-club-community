@@ -79,6 +79,22 @@ const MONTHS_EN: Months = [
   "December",
 ];
 
+/**
+ * "6th", "21st", "3rd" - English only, and used only by the membership preview.
+ *
+ * 🚨 Deliberately NOT shared with the Bulgarian dictionary. Bulgarian ordinals
+ * inflect for gender and do not suffix a numeral this way, so the Bulgarian
+ * string says "на 6-о число" instead and never calls this. A "translated"
+ * ordinal helper would be a fake abstraction over two unrelated grammars.
+ */
+function ordinal(day: number): string {
+  // 11th, 12th, 13th are the exceptions the last-digit rule gets wrong.
+  const teens = day % 100;
+  if (teens >= 11 && teens <= 13) return `${day}th`;
+  const suffix = { 1: "st", 2: "nd", 3: "rd" }[day % 10] ?? "th";
+  return `${day}${suffix}`;
+}
+
 // Identical in both dictionaries. The bands carry meaning and are styled by
 // name; the design shows them in Latin and they are not translated.
 const BANDS = {
@@ -179,9 +195,36 @@ const en = {
     submit: "Search",
     close: "Close",
     clear: "Clear",
-    resultCount: (n: number) => (n === 1 ? "1 episode" : `${n} episodes`),
-    resultsFor: (count: string, query: string) => `${count} for "${query}"`,
-    notInAnyTitle: "The word does not appear in any title.",
+    /**
+     * 🚨 The heading carries NO count, and that is deliberate.
+     *
+     * It used to be `<count> for "<query>"` where the count was the LABEL match
+     * total alone - so a query with 2 label matches and 13 spoken ones printed
+     * "2 episodes" above eight cards. There is no honest combined number to put
+     * here either: the two halves are counted by two separate indexes and their
+     * overlap is unknown, so any single figure would be a guess dressed as a
+     * fact. The exact numbers live in the two summary lines below instead, each
+     * one next to the section that renders what it counts.
+     */
+    resultsFor: (query: string) => `Results for "${query}"`,
+    /** Every hit matched every word. */
+    summaryLabelled: (n: number) =>
+      n === 1
+        ? "1 episode matches by title, topic or guest"
+        : `${n} episodes match by title, topic or guest`,
+    /** Some hits matched only part of the query. Both numbers are exact. */
+    summaryLabelledSplit: (full: number, partial: number) =>
+      `${full === 1 ? "1 episode matches" : `${full} episodes match`} all your words, ${partial} more match some`,
+    /**
+     * 🚨 Two numbers, two nouns, and they must never be collapsed into one.
+     * "21 passages in 13 episodes" was accurate and still read as misleading,
+     * because the page then rendered six cards - so this line is only ever
+     * printed next to a section that can actually reach all of them.
+     */
+    summarySpoken: (episodes: number, segments: number) =>
+      `Spoken in ${episodes === 1 ? "1 episode" : `${episodes} episodes`} (${
+        segments === 1 ? "1 passage" : `${segments} passages`
+      })`,
     zeroTitle: "Nothing matches",
     zeroBody:
       "Typos are already forgiven, so the word most likely has not been labelled yet.",
@@ -215,6 +258,18 @@ const en = {
     elsewhereHeading: "Everywhere else",
     elsewhereSubtitle:
       "Matched on a topic, a moment, a guest or the channel rather than the title.",
+    /**
+     * 🎯 Matched SOME of the words, not all of them.
+     *
+     * Kept, because requiring every word makes search answer "nothing matches"
+     * to questions that have hundreds of real answers - people search for a
+     * half-remembered phrase, not a quotation. Kept SEPARATE and named, because
+     * a one-of-three-words hit presented as an equal is how the results above
+     * it stop being believed.
+     */
+    partialHeading: "Partial matches",
+    partialSubtitle:
+      "These matched some of your words but not all of them, so they may be less relevant.",
     /** Sets expectations before anyone types. Coverage is real but partial. */
     scopeNote:
       "Search runs over titles, topics, moments and guests - and over the spoken words in most episodes, though not all of them.",
@@ -227,12 +282,10 @@ const en = {
     spokenHeading: "Said in the episode",
     spokenSubtitle:
       "These episodes do not mention the word in a title or topic, but it is audible in the recording.",
-    spokenInCount: (segments: number, episodes: number) =>
-      `${segments === 1 ? "1 passage" : `${segments} passages`} in ${
-        episodes === 1 ? "1 episode" : `${episodes} episodes`
-      }`,
     /** More matches inside one episode than the card shows. */
     spokenMore: (n: number) => `+ ${n} more`,
+    /** The spoken section pages independently of the label sections. */
+    spokenLoadMore: "More spoken matches",
     /**
      * 🚨 Never dropped. Only ~30% of the catalogue has captions and coverage is
      * wildly channel-dependent (BFF 99%, Клюки 1%, Sport 0%), so a missing
@@ -262,8 +315,16 @@ const en = {
 
   channel: {
     gridTitle: "Ratings grid",
-    expand: "Fit to screen",
-    collapseGrid: "Back to normal size",
+    /**
+     * 🚨 Replaces "Fit to screen" (owner call, 2026-08-16), which scaled the
+     * inline grid down without shrinking its container and so added a page
+     * scrollbar over empty space. This opens a fullscreen, transposed view
+     * where the whole channel fits one frame.
+     */
+    fullView: "Full view",
+    fullViewLabel: (channel: string) => `Every episode of ${channel}`,
+    fullViewHint: "Every episode, one column per year. Click any cell to open it.",
+    fullViewFailed: "The grid could not be loaded. Close this and try again.",
     hintMobile: "Rows are episodes, columns are years.",
     hintDesktop: "Rows are years, columns are the position within the year.",
     publicScore: "Public",
@@ -488,6 +549,7 @@ const en = {
     linkHistory: "Watch history",
     linkFavorites: "Favourites",
     linkTags: "My labels",
+    linkMemberships: "My memberships",
     historyTitle: "Watch history",
     ratingsEmptyTitle: "No ratings yet",
     ratingsEmptyBody:
@@ -508,6 +570,54 @@ const en = {
     cancel: "Cancel",
     savedToast: "Profile saved",
     handleTakenToast: "That handle is already taken",
+    iconLabel: "Profile icon",
+    /** The catalogue is empty until the artwork lands. Say so rather than showing a void. */
+    iconsComingSoon:
+      "Profile icons are on the way. They unlock with the months you have on each channel.",
+    iconLocked: (label: string, months: number) =>
+      `${label} - unlocks at ${months} months`,
+  },
+
+  /**
+   * 🚨 A membership here is a CLAIM the user makes about themselves, and the
+   * copy has to keep that separate from verification. Adding one earns the
+   * badge and the profile icons; only an admin-verified membership makes a
+   * rating count toward a channel's Elite score. Wording that blurs the two
+   * would quietly promise people a vote they do not have.
+   */
+  memberships: {
+    title: "My memberships",
+    intro:
+      "Add a membership for each channel you support. Your month count updates by itself on every renewal, so you only enter it once.",
+    emptyTitle: "No memberships yet",
+    emptyBody:
+      "Add the channels you are a member of to show your badge and unlock profile icons.",
+    add: "Add membership",
+    addTitle: "Add membership",
+    editTitle: "Edit membership",
+    edit: "Edit",
+    remove: "Remove",
+    verified: "Verified by a moderator",
+    channelLabel: "Channel",
+    channelLocked: "To move a membership to another channel, remove it and add it again.",
+    monthsLabel: "Months so far",
+    monthsPlaceholder: "70",
+    monthsHint: "The number shown on your membership badge right now.",
+    renewalLabel: "Renews on day",
+    renewalPlaceholder: "6",
+    renewalHint: "The day of the month you get charged. Between 1 and 31.",
+    /**
+     * The consequence of the two numbers, before saving. It is the one place a
+     * typo is catchable: "71 from the 6th" is obviously wrong to someone who
+     * meant 17, in a way that "17" sitting in a box is not.
+     */
+    preview: (months: number, next: number, day: number) =>
+      `You have ${months} months now, and ${next} from the ${ordinal(day)} of next month.`,
+    monthsAndRenewal: (months: number, renews: string) =>
+      `${months === 1 ? "1 month" : `${months} months`} - renews ${renews}`,
+    needsDetails: "Add your month count",
+    savedToast: "Membership saved",
+    removedToast: "Membership removed",
   },
 
   leaderboard: {
@@ -693,9 +803,17 @@ const bg: Copy = {
     submit: "Търси",
     close: "Затвори",
     clear: "Изчисти",
-    resultCount: (n: number) => (n === 1 ? "1 епизод" : `${n} епизода`),
-    resultsFor: (count: string, query: string) => `${count} за „${query}“`,
-    notInAnyTitle: "Думата не се среща в нито едно заглавие.",
+    resultsFor: (query: string) => `Резултати за „${query}“`,
+    summaryLabelled: (n: number) =>
+      n === 1
+        ? "1 епизод съвпада по заглавие, тема или гост"
+        : `${n} епизода съвпадат по заглавие, тема или гост`,
+    summaryLabelledSplit: (full: number, partial: number) =>
+      `${full === 1 ? "1 епизод съвпада" : `${full} епизода съвпадат`} с всички твои думи, още ${partial} съвпадат с част от тях`,
+    summarySpoken: (episodes: number, segments: number) =>
+      `Казано в ${episodes === 1 ? "1 епизод" : `${episodes} епизода`} (${
+        segments === 1 ? "1 реплика" : `${segments} реплики`
+      })`,
     zeroTitle: "Нищо не съвпада",
     zeroBody:
       "Правописните грешки вече се прощават, така че думата най-вероятно още не е отбелязана.",
@@ -718,6 +836,9 @@ const bg: Copy = {
     elsewhereHeading: "Навсякъде другаде",
     elsewhereSubtitle:
       "Съвпадение по тема, момент, гост или канал, а не по заглавие.",
+    partialHeading: "Частични съвпадения",
+    partialSubtitle:
+      "Тези съвпадат с част от думите ти, но не с всички - възможно е да са по-малко подходящи.",
     scopeNote:
       "Търсенето минава през заглавия, теми, моменти и гости - и през казаното в повечето епизоди, макар и не във всички.",
     popularTopicsToggle: "Популярни теми",
@@ -726,11 +847,8 @@ const bg: Copy = {
     spokenHeading: "Казано в епизода",
     spokenSubtitle:
       "Тези епизоди не споменават думата в заглавие или тема - но тя се чува в записа.",
-    spokenInCount: (segments: number, episodes: number) =>
-      `${segments === 1 ? "1 реплика" : `${segments} реплики`} в ${
-        episodes === 1 ? "1 епизод" : `${episodes} епизода`
-      }`,
     spokenMore: (n: number) => `+ още ${n}`,
+    spokenLoadMore: "Още съвпадения в записа",
     spokenPartial:
       "Търсенето в записа покрива около една трета от епизодите, така че липсващ епизод не е изключен.",
     spokenUnavailable:
@@ -753,8 +871,11 @@ const bg: Copy = {
 
   channel: {
     gridTitle: "Решетка на оценките",
-    expand: "Побери на екрана",
-    collapseGrid: "Обратно към нормален размер",
+    fullView: "Целия канал",
+    fullViewLabel: (channel: string) => `Всички епизоди на ${channel}`,
+    fullViewHint:
+      "Всички епизоди, по една колона на година. Натисни клетка, за да я отвориш.",
+    fullViewFailed: "Решетката не можа да се зареди. Затвори и опитай отново.",
     hintMobile: "Редовете са епизоди, колоните са години.",
     hintDesktop: "Редовете са години, колоните са позицията в годината.",
     publicScore: "Public",
@@ -968,6 +1089,7 @@ const bg: Copy = {
     linkHistory: "История на гледане",
     linkFavorites: "Любими",
     linkTags: "Моите етикети",
+    linkMemberships: "Моите членства",
     historyTitle: "История на гледане",
     ratingsEmptyTitle: "Още няма оценки",
     ratingsEmptyBody:
@@ -987,6 +1109,44 @@ const bg: Copy = {
     cancel: "Отказ",
     savedToast: "Профилът е запазен",
     handleTakenToast: "Този handle вече е зает",
+    iconLabel: "Икона на профила",
+    iconsComingSoon:
+      "Иконите за профил идват скоро. Отключват се според месеците, които имаш във всеки канал.",
+    iconLocked: (label: string, months: number) =>
+      `${label} - отключва се на ${months} месеца`,
+  },
+
+  memberships: {
+    title: "Моите членства",
+    intro:
+      "Добави членство за всеки канал, който подкрепяш. Броят месеци се обновява сам при всяко подновяване, така че го въвеждаш само веднъж.",
+    emptyTitle: "Още няма членства",
+    emptyBody:
+      "Добави каналите, в които си член, за да покажеш значката си и да отключиш икони за профила.",
+    add: "Добави членство",
+    addTitle: "Добави членство",
+    editTitle: "Редактирай членството",
+    edit: "Редактирай",
+    remove: "Премахни",
+    verified: "Потвърдено от модератор",
+    channelLabel: "Канал",
+    channelLocked:
+      "За да преместиш членство в друг канал, премахни го и го добави наново.",
+    monthsLabel: "Месеци досега",
+    monthsPlaceholder: "70",
+    monthsHint: "Числото, което пише на значката ти за членство в момента.",
+    renewalLabel: "Подновява се на",
+    renewalPlaceholder: "6",
+    renewalHint: "Денят от месеца, в който ти се таксува. Между 1 и 31.",
+    // 🇧🇬 "на 6-о число", not an English-style ordinal suffix - Bulgarian
+    // ordinals inflect and are never written "6th". See `ordinal` above.
+    preview: (months: number, next: number, day: number) =>
+      `Сега имаш ${months} месеца, а от ${day}-о число на следващия месец - ${next}.`,
+    monthsAndRenewal: (months: number, renews: string) =>
+      `${months === 1 ? "1 месец" : `${months} месеца`} - подновява се на ${renews}`,
+    needsDetails: "Добави броя месеци",
+    savedToast: "Членството е запазено",
+    removedToast: "Членството е премахнато",
   },
 
   leaderboard: {

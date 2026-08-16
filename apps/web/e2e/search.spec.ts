@@ -16,7 +16,7 @@ import type { Schema } from "@ccc/api-types";
 
 import { copy } from "@/lib/copy";
 import { formatTimestamp } from "@/lib/format";
-import { RESULT_LIMIT, TRANSCRIPT_SEGMENT_LIMIT } from "@/lib/search-limits";
+import { RESULT_LIMIT, SPOKEN_LIMIT } from "@/lib/search-limits";
 
 import { test, expect, apiJson } from "./fixtures";
 
@@ -25,7 +25,12 @@ type TranscriptResult = Schema<"TranscriptSearchOut">;
 
 /** Imported, never restated: a copy of a page size drifts the moment one moves. */
 const PAGE_LIMIT = RESULT_LIMIT;
-const TRANSCRIPT_LIMIT = TRANSCRIPT_SEGMENT_LIMIT;
+/**
+ * ⚠️ EPISODES since 2026-08-16, not segments. `/api/search/transcripts` used to
+ * page over passages and group them afterwards, which is why the page could
+ * advertise more episodes than it rendered.
+ */
+const TRANSCRIPT_LIMIT = SPOKEN_LIMIT;
 
 /** Bulgarian queries with known matches in the ingested data. */
 const QUERY_KASPAROV = "Каспаров";
@@ -44,6 +49,17 @@ const QUERY_NO_MATCH = "zzznothingzzz";
  * endpoints.
  */
 const QUERY_SPOKEN_ONLY = "баница";
+
+/**
+ * A multi-word query where only SOME episodes contain every word.
+ *
+ * 🎯 The case the whole loose-matching design exists for. People search for a
+ * half-remembered phrase, not a quotation, so requiring every word answers
+ * "nothing matches" to questions with real answers - and answering loosely
+ * without saying so makes a one-of-three-words hit look like a perfect one.
+ * Measured 2026-08-16: 15 label matches, of which 4 contain both words.
+ */
+const QUERY_MULTI_WORD = "историята с колата";
 
 /** URL of the search page for a query, percent-encoded by URLSearchParams. */
 function searchPagePath(query: string): string {
@@ -76,17 +92,23 @@ function resultLinks(page: Page) {
  * alone would fail the moment a query also matched spoken words - which is most
  * of them. Each region is asserted against its own endpoint.
  *
- * ⚠️ Since 2026-08-15 the label matches are PARTITIONED across two regions -
- * `results-title` (the words are in the episode title) and `results-elsewhere`
- * (matched on a topic, moment, guest or channel). Together they are exactly
- * what `/api/search` returned, which is why this concatenates them. The
- * partition itself is pinned by 7.1b; ORDER across the two is deliberately not
- * asserted here, because the whole point of the split is that it reorders.
+ * ⚠️ Since 2026-08-15 the label matches are PARTITIONED across regions, and
+ * since 2026-08-16 there are three of them:
+ *
+ *   - `results-title`     full match, the words are in the episode title
+ *   - `results-elsewhere` full match, on a topic, moment, guest or channel
+ *   - `results-partial`   matched only SOME of the query's words
+ *
+ * Together they are exactly what `/api/search` returned, which is why this
+ * concatenates all three. The title partition is pinned by 7.1b and the
+ * full/partial one by 7.1e; ORDER across regions is deliberately not asserted
+ * here, because the whole point of the split is that it reorders.
  */
 async function renderedResultIds(page: Page): Promise<string[]> {
   return [
     ...(await regionIds(page, "results-title")),
     ...(await regionIds(page, "results-elsewhere")),
+    ...(await regionIds(page, "results-partial")),
   ];
 }
 
@@ -123,10 +145,145 @@ test.describe("search", () => {
       api.hits.map((hit) => hit.episode.youtube_id).sort(),
     );
     await expect(
+      page.getByText(copy.search.resultsFor(QUERY_KASPAROV)),
+    ).toBeVisible();
+  });
+
+  /**
+   * 🚨 The regression test for the count that lied.
+   *
+   * Reported 2026-08-16 on `царичи`: the heading said "2 episodes", the page
+   * rendered eight cards, and a line underneath advertised passages in thirteen
+   * episodes while the spoken section showed six with no way to reach the rest.
+   * Three separate defects produced that, and this pins all three:
+   *
+   *   1. the heading counted only one of the two result sets
+   *   2. the spoken episode count was an artefact of a SEGMENT page size
+   *   3. the spoken section was hard-capped below the number it advertised
+   */
+  test("7.1c every number on the page is reachable by the cards below it", async ({
+    page,
+  }) => {
+    const [labels, spoken] = await Promise.all([
+      apiJson<SearchResult>(page, searchApiPath(QUERY_SPOKEN_ONLY)),
+      apiJson<TranscriptResult>(page, transcriptApiPath(QUERY_SPOKEN_ONLY)),
+    ]);
+    expect(
+      spoken.total_episodes,
+      `"${QUERY_SPOKEN_ONLY}" must be spoken somewhere in the catalogue`,
+    ).toBeGreaterThan(0);
+
+    await page.goto(searchPagePath(QUERY_SPOKEN_ONLY));
+
+    // 1. The heading no longer claims a count at all.
+    await expect(
+      page.getByText(copy.search.resultsFor(QUERY_SPOKEN_ONLY)),
+    ).toBeVisible();
+
+    // 2. The spoken summary quotes the EXACT episode total from the API.
+    await expect(
       page.getByText(
-        copy.search.resultsFor(copy.search.resultCount(api.total), QUERY_KASPAROV),
+        copy.search.summarySpoken(spoken.total_episodes, spoken.total_segments),
       ),
     ).toBeVisible();
+
+    // 3. The API returned a full page of episodes, so the section must either
+    //    render all of them or offer a way to reach the rest. Rendering fewer
+    //    than advertised with no "load more" is the exact bug.
+    const rendered = (await spokenResultIds(page)).length;
+    const labelIds = new Set(labels.hits.map((hit) => hit.episode.youtube_id));
+    const expectedRendered = spoken.hits.filter(
+      (hit) => !labelIds.has(hit.episode.youtube_id),
+    ).length;
+    expect(rendered).toBe(expectedRendered);
+
+    if (spoken.total_episodes > spoken.hits.length) {
+      await expect(
+        page.getByRole("link", { name: copy.search.spokenLoadMore }),
+      ).toBeVisible();
+    }
+  });
+
+  /**
+   * The spoken section pages independently of the label sections, so "load
+   * more" there must actually widen the spoken region and leave the label
+   * regions alone.
+   */
+  test("7.1d spoken load-more widens only the spoken section", async ({ page }) => {
+    const spoken = await apiJson<TranscriptResult>(
+      page,
+      transcriptApiPath(QUERY_SPOKEN_ONLY),
+    );
+    // A fixture check, not a skip: if this query stops having more spoken
+    // episodes than one page holds, the test must fail loudly rather than
+    // quietly stop covering pagination.
+    expect(
+      spoken.total_episodes,
+      `"${QUERY_SPOKEN_ONLY}" must exceed one spoken page (${SPOKEN_LIMIT}) for this test to mean anything`,
+    ).toBeGreaterThan(SPOKEN_LIMIT);
+
+    await page.goto(searchPagePath(QUERY_SPOKEN_ONLY));
+    const firstSpoken = (await spokenResultIds(page)).length;
+    const firstLabels = (await renderedResultIds(page)).length;
+
+    await page.getByRole("link", { name: copy.search.spokenLoadMore }).click();
+    await page.waitForURL(/[?&]s=/);
+
+    expect((await spokenResultIds(page)).length).toBeGreaterThan(firstSpoken);
+    expect((await renderedResultIds(page)).length).toBe(firstLabels);
+  });
+
+  /**
+   * Loose matching is only safe because it is LABELLED.
+   *
+   * The API returns hits that matched some of the query's words, ordered so
+   * that full matches come first, and says exactly where that boundary is
+   * (`total_full`). This asserts the page honours it: partial hits go in their
+   * own region under their own heading, and no full match is buried among them.
+   */
+  test("7.1e partial matches are separated from full ones", async ({ page }) => {
+    const api = await apiJson<SearchResult>(page, searchApiPath(QUERY_MULTI_WORD));
+    expect(
+      api.total,
+      `"${QUERY_MULTI_WORD}" must match something for this test to mean anything`,
+    ).toBeGreaterThan(0);
+    expect(
+      api.total_full,
+      `"${QUERY_MULTI_WORD}" must have BOTH full and partial matches`,
+    ).toBeGreaterThan(0);
+    expect(api.total_full).toBeLessThan(api.total);
+
+    await page.goto(searchPagePath(QUERY_MULTI_WORD));
+
+    await expect(
+      page.getByRole("heading", { name: copy.search.partialHeading }),
+    ).toBeVisible();
+
+    const fullIds = new Set(
+      api.hits.filter((hit) => hit.match_kind !== "partial").map((h) => h.episode.youtube_id),
+    );
+    const partialIds = new Set(
+      api.hits.filter((hit) => hit.match_kind === "partial").map((h) => h.episode.youtube_id),
+    );
+    expect(partialIds.size).toBeGreaterThan(0);
+
+    const renderedPartial = await regionIds(page, "results-partial");
+    expect(renderedPartial.length).toBe(partialIds.size);
+    for (const id of renderedPartial) {
+      expect(partialIds.has(id), `${id} is under "partial" but the API called it full`).toBe(true);
+    }
+
+    // ...and nothing the API called partial may sit in a full-match region.
+    const renderedFull = [
+      ...(await regionIds(page, "results-title")),
+      ...(await regionIds(page, "results-elsewhere")),
+    ];
+    expect(renderedFull.length).toBe(fullIds.size);
+    for (const id of renderedFull) {
+      expect(fullIds.has(id), `${id} is shown as a full match but the API called it partial`).toBe(
+        true,
+      );
+    }
   });
 
   /**

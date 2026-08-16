@@ -17,6 +17,7 @@ from ninja.files import UploadedFile
 
 from podcast.auth import get_auth
 from podcast.auth.backends import humanize
+from podcast.data import avatar_icons
 from podcast.models import (
     Channel,
     ChannelMembership,
@@ -27,10 +28,13 @@ from podcast.models import (
     UserProfile,
     WatchEvent,
 )
+from podcast.services import memberships as membership_math
 from podcast.services import scoring
 from podcast.services.handles import HandleError, clean_handle
 
 from .schemas import (
+    AvatarIconOut,
+    AvatarSelectionIn,
     EpisodeListOut,
     FavoriteOut,
     MembershipIn,
@@ -67,12 +71,30 @@ def _profile(user) -> UserProfile:
 # ---------------------------------------------------------------------------
 
 
+def _months_by_channel(memberships, today=None) -> dict[str, int]:
+    """Months held per channel slug, for the icon unlock rules.
+
+    🚨 Memberships do NOT pool. Seventeen months on one channel unlocks nothing
+    on another - that is the entire point of the ladder, so this is keyed by
+    slug and never summed.
+    """
+    today = today or timezone.localdate()
+    out: dict[str, int] = {}
+    for membership in memberships:
+        if not (membership.renewal_day and membership.member_since):
+            continue
+        out[membership.channel.slug] = membership_math.months_held(
+            membership.member_since, membership.renewal_day, today
+        )
+    return out
+
+
 @router.get("/me", response=MeOut)
 def get_me(request):
     user = request.auth
     profile = _profile(user)
 
-    memberships = (
+    memberships = list(
         ChannelMembership.objects.filter(user=user)
         .select_related("channel")
         .order_by("channel__name")
@@ -83,12 +105,20 @@ def get_me(request):
     # `user.get_username()` unguarded is the bug this replaces.
     readable = humanize(profile.display_name, user.get_username())
 
+    # A chosen icon wins over the profile's own avatar_url, but only while it is
+    # still unlocked. `resolve_image` returns "" for an unknown, retired or
+    # re-locked key, which falls through to whatever the account already had.
+    chosen = avatar_icons.resolve_image(
+        profile.avatar_key, _months_by_channel(memberships)
+    )
+
     return {
         "id": user.id,
         "username": readable,
         "display_name": readable,
         "handle": profile.handle or None,
-        "avatar_url": profile.avatar_url,
+        "avatar_url": chosen or profile.avatar_url,
+        "avatar_key": profile.avatar_key,
         "bio": profile.bio,
         "role": profile.role,
         "memberships": [membership_out(m) for m in memberships],
@@ -134,6 +164,72 @@ def update_me(request, payload: ProfileIn):
         profile.save()
     except IntegrityError as exc:
         raise HttpError(409, "That handle is already taken.") from exc
+    return get_me(request)
+
+
+# ---------------------------------------------------------------------------
+# Profile icons (2026-08-16)
+# ---------------------------------------------------------------------------
+
+
+def _viewer_months(user) -> dict[str, int]:
+    return _months_by_channel(
+        ChannelMembership.objects.filter(user=user).select_related("channel")
+    )
+
+
+@router.get("/me/avatars", response=list[AvatarIconOut])
+def list_avatars(request):
+    """The icon catalogue, with each entry marked unlocked or not for this user.
+
+    🚨 Locked icons are LISTED, not hidden. The ladder is the feature - seeing
+    that eleven more months of a channel earns a particular icon is the whole
+    reason it motivates anything. Hiding them would make the picker look like it
+    only ever has the two icons you already have.
+
+    ⚠️ The catalogue is nearly empty until the artwork lands; see
+    podcast/data/avatar_icons.py. This endpoint needs no change when it fills.
+    """
+    profile = _profile(request.auth)
+    months = _viewer_months(request.auth)
+    return [
+        {
+            "key": icon.key,
+            "label": icon.label,
+            "image_url": icon.image_url,
+            "channel_slug": icon.channel_slug,
+            "min_months": icon.min_months,
+            "unlocked": avatar_icons.unlocked_months(icon, months),
+            "selected": profile.avatar_key == icon.key,
+        }
+        for icon in avatar_icons.CATALOGUE
+    ]
+
+
+@router.put("/me/avatar", response=MeOut)
+def select_avatar(request, payload: AvatarSelectionIn):
+    """Choose a profile icon, or pass "" to go back to the default.
+
+    🔒 The unlock is enforced HERE, on the server, against the actor's own
+    memberships. The picker greys locked icons out, but a hidden button is not
+    an authorization check.
+    """
+    profile = _profile(request.auth)
+    key = payload.avatar_key.strip()
+
+    if key == "":
+        profile.avatar_key = ""
+        profile.save(update_fields=["avatar_key"])
+        return get_me(request)
+
+    icon = avatar_icons.get(key)
+    if icon is None:
+        raise HttpError(404, "No such profile icon")
+    if not avatar_icons.unlocked_months(icon, _viewer_months(request.auth)):
+        raise HttpError(403, "That icon is not unlocked yet")
+
+    profile.avatar_key = key
+    profile.save(update_fields=["avatar_key"])
     return get_me(request)
 
 
@@ -383,16 +479,75 @@ def list_my_tags(request, q: str | None = Query(None)):
 # ---------------------------------------------------------------------------
 
 
+def _apply_membership_payload(membership, payload: MembershipIn) -> None:
+    """Write a claim onto a membership row, converting months into an anchor.
+
+    🚨 The user's "70 months, renews on the 6th" becomes ONE date. Nothing here
+    stores the 70 - see podcast/services/memberships.py for why a stored count
+    is wrong by the next morning.
+    """
+    membership.tier = payload.tier
+
+    if payload.months is not None and payload.renewal_day is not None:
+        try:
+            membership.renewal_day = payload.renewal_day
+            membership.member_since = membership_math.member_since_for(
+                payload.months, payload.renewal_day, timezone.localdate()
+            )
+        except membership_math.MembershipMathError as exc:
+            # 422 with the reason, so the form can say WHY rather than "invalid".
+            raise HttpError(422, str(exc)) from exc
+    elif payload.member_since is not None:
+        # The pre-2026-08-16 shape: a bare date, no renewal day. Kept working
+        # rather than 400ing, but it cannot produce a month count.
+        membership.member_since = payload.member_since
+
+
 @router.post("/me/memberships", response=MembershipOut)
 def claim_membership(request, payload: MembershipIn):
-    """Claim membership of a channel. Unverified until an admin reviews it."""
+    """Claim - or re-state - membership of a channel.
+
+    🚨 An UPSERT, not a create. There is a unique constraint on (user, channel),
+    so a second POST for the same channel used to be a silent no-op that
+    returned the OLD row: a user correcting a typo in their month count got
+    their original number back and no error, which reads as the form not
+    working. Posting the same channel twice now means "this is my membership".
+
+    🚨 Claiming does NOT verify. `is_verified` stays whatever an admin set it to
+    and is the only thing that feeds the elite score. (Owner ruling, 2026-08-16:
+    self-reported memberships earn the badge and the icons, not the vote.)
+    """
     channel = get_object_or_404(Channel, id=payload.channel_id)
-    membership, _ = ChannelMembership.objects.get_or_create(
-        user=request.auth,
-        channel=channel,
-        defaults={"tier": payload.tier, "member_since": payload.member_since},
-    )
+
+    with transaction.atomic():
+        membership, _created = ChannelMembership.objects.select_for_update().get_or_create(
+            user=request.auth, channel=channel
+        )
+        _apply_membership_payload(membership, payload)
+        membership.save()
+
     membership.channel = channel
+    return membership_out(membership)
+
+
+@router.patch("/me/memberships/{membership_id}", response=MembershipOut)
+def update_membership(request, membership_id: int, payload: MembershipIn):
+    """Correct an existing claim - the month count, the renewal day or the tier.
+
+    🔒 Scoped to `request.auth`, not just the id, so a membership id guessed off
+    another user cannot be edited.
+
+    ⚠️ `channel_id` in the body is IGNORED here. Moving a membership to a
+    different channel would silently change which channel's elite score a
+    verified user votes on; that is a delete and a new claim, not an edit.
+    """
+    membership = get_object_or_404(
+        ChannelMembership.objects.select_related("channel"),
+        id=membership_id,
+        user=request.auth,
+    )
+    _apply_membership_payload(membership, payload)
+    membership.save()
     return membership_out(membership)
 
 

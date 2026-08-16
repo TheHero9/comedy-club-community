@@ -343,8 +343,20 @@ test("1.6 search page renders results for a Bulgarian query", async ({ page }) =
   expect(response?.status()).toBe(200);
 
   await expect(
-    page.getByText(
-      copy.search.resultsFor(copy.search.resultCount(results.total), BULGARIAN_QUERY),
+    page.getByText(copy.search.resultsFor(BULGARIAN_QUERY)),
+  ).toBeVisible();
+  // 🚨 The count moved OUT of the heading and into a summary line that names
+  // what it counts. The heading used to carry the label-match total alone,
+  // which printed "2 episodes" above eight cards on a query that also had
+  // spoken matches.
+  await expect(
+    page.getByText(copy.search.summaryLabelled(results.total)).or(
+      page.getByText(
+        copy.search.summaryLabelledSplit(
+          results.total_full,
+          results.total - results.total_full,
+        ),
+      ),
     ),
   ).toBeVisible();
   expect(await page.locator('main a[href^="/e/"]').count()).toBeGreaterThan(0);

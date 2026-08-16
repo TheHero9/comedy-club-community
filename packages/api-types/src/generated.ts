@@ -259,6 +259,20 @@ export interface paths {
          *     🎯 The half of search community labels cannot cover. Labels answer "which
          *     episodes are about X"; this answers "X was said at 45:12 in these episodes".
          *
+         *     🚨 **`limit`/`offset` page over EPISODES**, and did not always. Until
+         *     2026-08-16 they paged over PASSAGES, which were then grouped for display - so
+         *     the number of episodes in a response was an accident of how many passages
+         *     happened to land on that page, and `hits` was not a page of anything. The
+         *     page above it advertised "21 passages in 13 episodes" and rendered six cards
+         *     with no way to reach the rest. Meilisearch's `distinct` does the grouping
+         *     inside the engine instead, which makes the page size mean what it says and
+         *     makes `total_episodes` exact.
+         *
+         *     Two round trips, deliberately: the first batch cannot know which episodes are
+         *     on the page, so the passages that fill each card have to be fetched once
+         *     those ids are known. Each episode carries its best-ranked passage from the
+         *     first batch as a floor, so a card can never render empty.
+         *
          *     ⚠️ Coverage is PARTIAL and date-dependent - roughly the newer part of the
          *     catalogue has captions, and members-only episodes have none. An episode
          *     missing from these results has not been ruled out, it may simply have no
@@ -321,6 +335,58 @@ export interface paths {
         head?: never;
         /** Update Me */
         patch: operations["podcast_api_me_update_me"];
+        trace?: never;
+    };
+    "/api/me/avatars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Avatars
+         * @description The icon catalogue, with each entry marked unlocked or not for this user.
+         *
+         *     🚨 Locked icons are LISTED, not hidden. The ladder is the feature - seeing
+         *     that eleven more months of a channel earns a particular icon is the whole
+         *     reason it motivates anything. Hiding them would make the picker look like it
+         *     only ever has the two icons you already have.
+         *
+         *     ⚠️ The catalogue is nearly empty until the artwork lands; see
+         *     podcast/data/avatar_icons.py. This endpoint needs no change when it fills.
+         */
+        get: operations["podcast_api_me_list_avatars"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Select Avatar
+         * @description Choose a profile icon, or pass "" to go back to the default.
+         *
+         *     🔒 The unlock is enforced HERE, on the server, against the actor's own
+         *     memberships. The picker greys locked icons out, but a hidden button is not
+         *     an authorization check.
+         */
+        put: operations["podcast_api_me_select_avatar"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/episodes/{youtube_id}/me": {
@@ -537,13 +603,51 @@ export interface paths {
         put?: never;
         /**
          * Claim Membership
-         * @description Claim membership of a channel. Unverified until an admin reviews it.
+         * @description Claim - or re-state - membership of a channel.
+         *
+         *     🚨 An UPSERT, not a create. There is a unique constraint on (user, channel),
+         *     so a second POST for the same channel used to be a silent no-op that
+         *     returned the OLD row: a user correcting a typo in their month count got
+         *     their original number back and no error, which reads as the form not
+         *     working. Posting the same channel twice now means "this is my membership".
+         *
+         *     🚨 Claiming does NOT verify. `is_verified` stays whatever an admin set it to
+         *     and is the only thing that feeds the elite score. (Owner ruling, 2026-08-16:
+         *     self-reported memberships earn the badge and the icons, not the vote.)
          */
         post: operations["podcast_api_me_claim_membership"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/me/memberships/{membership_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Membership */
+        delete: operations["podcast_api_me_delete_membership"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Membership
+         * @description Correct an existing claim - the month count, the renewal day or the tier.
+         *
+         *     🔒 Scoped to `request.auth`, not just the id, so a membership id guessed off
+         *     another user cannot be edited.
+         *
+         *     ⚠️ `channel_id` in the body is IGNORED here. Moving a membership to a
+         *     different channel would silently change which channel's elite score a
+         *     verified user votes on; that is a delete and a new claim, not an edit.
+         */
+        patch: operations["podcast_api_me_update_membership"];
         trace?: never;
     };
     "/api/me/memberships/{membership_id}/screenshot": {
@@ -564,23 +668,6 @@ export interface paths {
          */
         post: operations["podcast_api_me_upload_verification_screenshot"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/me/memberships/{membership_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Membership */
-        delete: operations["podcast_api_me_delete_membership"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1191,6 +1278,12 @@ export interface components {
              * @default []
              */
             matched_moments: string[];
+            /**
+             * Match Kind
+             * @description 'full' when the hit matched EVERY word of the query, 'partial' when it matched only some. Matching is deliberately loose (a remembered phrase is rarely verbatim), so this is what lets the UI show a two-of-three-words hit without passing it off as a perfect one. Hits are always ordered full first.
+             * @default full
+             */
+            match_kind: string;
         };
         /** SearchOut */
         SearchOut: {
@@ -1198,8 +1291,23 @@ export interface components {
             query: string;
             /** Hits */
             hits: components["schemas"]["SearchHitOut"][];
-            /** Total */
+            /**
+             * Total
+             * @description Episodes matching at least one word, counted EXHAUSTIVELY. This is `totalHits` from a page-mode search, never `estimatedTotalHits` - the estimate over-reported one query's 13 episodes as 17.
+             */
             total: number;
+            /**
+             * Total Full
+             * @description Of `total`, how many matched every word. Also the exact index at which `hits` stops being full matches, which is how a hit's `match_kind` stays correct across pagination.
+             * @default 0
+             */
+            total_full: number;
+            /**
+             * Word Count
+             * @description Words in the query that can match (stop words excluded).
+             * @default 0
+             */
+            word_count: number;
             /** Limit */
             limit: number;
             /** Offset */
@@ -1217,6 +1325,12 @@ export interface components {
             episode: components["schemas"]["EpisodeBriefOut"];
             /** Matches */
             matches: components["schemas"]["TranscriptMatchOut"][];
+            /**
+             * Match Kind
+             * @description 'full' when the hit matched EVERY word of the query, 'partial' when it matched only some. Matching is deliberately loose (a remembered phrase is rarely verbatim), so this is what lets the UI show a two-of-three-words hit without passing it off as a perfect one. Hits are always ordered full first.
+             * @default full
+             */
+            match_kind: string;
         };
         /**
          * TranscriptMatchOut
@@ -1242,9 +1356,10 @@ export interface components {
          * TranscriptSearchOut
          * @description Where a phrase was SAID, as opposed to which episodes are ABOUT it.
          *
-         *     ⚠️ `limit`/`offset` page over SEGMENTS, not episodes, and the segments on a
-         *     page are then grouped by episode for display. So `hits` is however many
-         *     distinct episodes this page of segments touched - it is not a page size.
+         *     🚨 `limit`/`offset` page over EPISODES. They paged over SEGMENTS until
+         *     2026-08-16, which meant the episode count in a response was an accident of
+         *     how many passages happened to land on the page - the UI printed "21 passages
+         *     in 13 episodes" and rendered six cards with no way to reach the other seven.
          */
         TranscriptSearchOut: {
             /** Query */
@@ -1253,9 +1368,27 @@ export interface components {
             hits: components["schemas"]["TranscriptHitOut"][];
             /**
              * Total Segments
-             * @description Matching passages across the catalogue (clamped at 20,000)
+             * @description Matching PASSAGES across the catalogue, counted exhaustively (clamped at 20,000 by the index's maxTotalHits).
              */
             total_segments: number;
+            /**
+             * Total Episodes
+             * @description Matching EPISODES across the catalogue, counted exhaustively. A different question from total_segments, and the one the page size pages over - conflating the two is what made the old UI misleading.
+             * @default 0
+             */
+            total_episodes: number;
+            /**
+             * Total Full Episodes
+             * @description Of `total_episodes`, how many contain EVERY word of the query. Also the exact index at which `hits` stops being full matches.
+             * @default 0
+             */
+            total_full_episodes: number;
+            /**
+             * Word Count
+             * @description Words in the query that can match (stop words excluded).
+             * @default 0
+             */
+            word_count: number;
             /** Limit */
             limit: number;
             /** Offset */
@@ -1278,8 +1411,17 @@ export interface components {
             display_name: string;
             /** Handle */
             handle?: string | null;
-            /** Avatar Url */
+            /**
+             * Avatar Url
+             * @description The image to render. Resolved from avatar_key when one is chosen AND still unlocked, otherwise the profile's own avatar_url.
+             */
             avatar_url: string;
+            /**
+             * Avatar Key
+             * @description The chosen catalogue key, if any.
+             * @default
+             */
+            avatar_key: string;
             /** Bio */
             bio: string;
             /** Role */
@@ -1319,7 +1461,25 @@ export interface components {
             tier: string;
             /** Member Since */
             member_since: string | null;
-            /** Is Verified */
+            /**
+             * Renewal Day
+             * @description Day of the month the membership renews (1-31).
+             */
+            renewal_day: number | null;
+            /**
+             * Months
+             * @description How many months the membership has run, COMPUTED from member_since on every read - never a stored column, so it is correct without a nightly job. Null on rows claimed before renewal_day existed.
+             */
+            months: number | null;
+            /**
+             * Next Renewal
+             * @description The next renewal date, strictly after today.
+             */
+            next_renewal: string | null;
+            /**
+             * Is Verified
+             * @description 🚨 Admin-set, and the ONLY thing that feeds the elite score. A self-added membership is a claim: it shows the badge and unlocks profile icons, but it does not vote.
+             */
             is_verified: boolean;
             /**
              * Has Screenshot
@@ -1339,6 +1499,40 @@ export interface components {
             bio?: string | null;
             /** Avatar Url */
             avatar_url?: string | null;
+        };
+        /**
+         * AvatarIconOut
+         * @description One entry in the profile-icon catalogue, as this viewer sees it.
+         */
+        AvatarIconOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Image Url */
+            image_url: string;
+            /** Channel Slug */
+            channel_slug: string | null;
+            /**
+             * Min Months
+             * @default 0
+             */
+            min_months: number;
+            /**
+             * Unlocked
+             * @description Whether this viewer has enough months on the icon's channel. Locked icons are still listed so the ladder is visible, but selecting one is a 403.
+             */
+            unlocked: boolean;
+            /**
+             * Selected
+             * @default false
+             */
+            selected: boolean;
+        };
+        /** AvatarSelectionIn */
+        AvatarSelectionIn: {
+            /** Avatar Key */
+            avatar_key: string;
         };
         /**
          * ViewerStateOut
@@ -1452,10 +1646,28 @@ export interface components {
             /** Text */
             text: string;
         };
-        /** MembershipIn */
+        /**
+         * MembershipIn
+         * @description Claim or update a channel membership.
+         *
+         *     🚨 The month count is an INPUT, never a stored column. The user knows "I have
+         *     70 months and it renews on the 6th"; the API turns that into the start date
+         *     it implies and counts forward from then on. See
+         *     `podcast/services/memberships.py`.
+         */
         MembershipIn: {
             /** Channel Id */
             channel_id: number;
+            /**
+             * Months
+             * @description Months held right now, as the user sees it.
+             */
+            months?: number | null;
+            /**
+             * Renewal Day
+             * @description Day of the month it renews.
+             */
+            renewal_day?: number | null;
             /**
              * Tier
              * @default
@@ -1932,6 +2144,7 @@ export interface operations {
                 /** @description Restrict to one episode id */
                 episode?: number | null;
                 members_only?: boolean | null;
+                /** @description EPISODES per page */
                 limit?: number;
                 offset?: number;
             };
@@ -2005,6 +2218,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProfileIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeOut"];
+                };
+            };
+        };
+    };
+    podcast_api_me_list_avatars: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarIconOut"][];
+                };
+            };
+        };
+    };
+    podcast_api_me_select_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvatarSelectionIn"];
             };
         };
         responses: {
@@ -2386,6 +2643,54 @@ export interface operations {
             };
         };
     };
+    podcast_api_me_delete_membership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    podcast_api_me_update_membership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MembershipIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipOut"];
+                };
+            };
+        };
+    };
     podcast_api_me_upload_verification_screenshot: {
         parameters: {
             query?: never;
@@ -2414,28 +2719,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MembershipOut"];
-                };
-            };
-        };
-    };
-    podcast_api_me_delete_membership: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                membership_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageOut"];
                 };
             };
         };
