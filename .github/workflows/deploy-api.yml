@@ -34,17 +34,27 @@ name: Deploy API
 # bug it exists to prevent.
 
 on:
-  # 🚨 Gated on CI, via workflow_run rather than a bare `push`. Railway runs
-  # `migrate --noinput` as the api service's preDeployCommand, so a deploy IS a
-  # schema change against production Postgres. It must not start until ruff,
+  # 🚨 NOT ARMED YET - deliberately manual-only until `RAILWAY_TOKEN` exists
+  # (owner, 2026-08-16: "I will look at the automation later").
+  #
+  # TO ARM IT: add the secret, then uncomment the `workflow_run` block below.
+  # That is the whole change.
+  #
+  #   workflow_run:
+  #     workflows: ["CI"]
+  #     types: [completed]
+  #     branches: [main]
+  #
+  # Gated on CI via `workflow_run` rather than a bare `push`, because the api
+  # service's preDeployCommand is `migrate --noinput` - a deploy IS a schema
+  # change against production Postgres, and must not start until ruff,
   # migration-drift and pytest have passed on that exact commit.
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
-  # Always available by hand. A trigger you cannot fire manually is a deploy you
-  # cannot fix under pressure - and some redeploys are needed for reasons that
-  # are not in the diff at all (a changed service variable, a rolled-back image).
+  #
+  # ⚠️ It is commented out rather than left running-and-failing on purpose. A
+  # job that goes red on every single push until an unrelated setup step is
+  # done does not communicate "configure me", it trains you to ignore red - and
+  # then hides the failure that matters. Not wired is honest; wired and always
+  # broken is not.
   workflow_dispatch:
 
 concurrency:

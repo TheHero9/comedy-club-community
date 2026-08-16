@@ -72,6 +72,23 @@ reject every push rather than gate the deploy.
 
 ---
 
+## ⚠️ Current state: written, NOT armed
+
+`.github/workflows/deploy-api.yml` is `workflow_dispatch`-only. The
+`workflow_run` trigger is commented out until the secret exists (owner,
+2026-08-16: *"I will look at the automation later"*), so **a push to `main`
+still deploys the web only** and the API is deployed by hand.
+
+Arming it is two steps: add the secret below, then uncomment the `workflow_run`
+block at the top of the file.
+
+It is commented out rather than left running-and-failing deliberately. A job
+that goes red on every push until an unrelated setup step is done does not
+communicate "configure me" - it trains you to ignore red, and then hides the
+failure that matters.
+
+---
+
 ## Setup (one time)
 
 1. Railway → project **comedy-club-community** → **Settings → Tokens** → create
