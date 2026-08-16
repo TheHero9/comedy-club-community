@@ -157,6 +157,14 @@ async function DesktopGrid({ grid }: { grid: Grid }) {
   const copy = await getCopy();
   return (
     <div className="mt-4 hidden rounded-3xl border border-border bg-card-2 py-4 md:block">
+      {/* 🚨 THE STICKY YEAR COLUMN'S MASK IS A BORDER, NEVER A BOX-SHADOW.
+          It was `shadow-[4px_0_0_0_var(--card-2)]`, and a box-shadow paints
+          OUTSIDE the element and occupies no layout space - so those 4px sat
+          permanently on top of the first data column, clipping the left edge
+          off every episode-1 cell at every scroll position. On the dense grid
+          that is 3 of a 20px cell, which reads exactly like the first column
+          being cut off. `border-r-4` in the same colour looks identical and
+          pushes the cells clear instead of covering them. */}
       {/* 🚨 The only overflow-x container on the page. `relative` is
           load-bearing: Tailwind's `sr-only` is `position: absolute`, so without
           a positioned ancestor those spans resolve their containing block above
@@ -181,7 +189,7 @@ async function DesktopGrid({ grid }: { grid: Grid }) {
           </caption>
           <thead>
             <tr>
-              <th scope="col" className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] w-[88px]">
+              <th scope="col" className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 w-[88px]">
                 <span className="sr-only">{copy.channel.yearColumn}</span>
               </th>
               {grid.rows.map((row) => (
@@ -200,7 +208,7 @@ async function DesktopGrid({ grid }: { grid: Grid }) {
               <tr key={season.year}>
                 <th
                   scope="row"
-                  className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] w-[88px] pr-3 text-left align-middle"
+                  className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 w-[88px] pr-3 text-left align-middle"
                 >
                   <span className="flex flex-col">
                     <span className="font-display text-[15px] font-bold text-foreground">
@@ -341,7 +349,7 @@ async function DenseGrid({ grid }: { grid: Grid }) {
           </caption>
           <thead>
             <tr>
-              <th scope="col" className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] pr-3">
+              <th scope="col" className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 pr-3">
                 <span className="sr-only">{copy.channel.yearColumn}</span>
               </th>
               {grid.rows.map((row) => (
@@ -367,7 +375,7 @@ async function DenseGrid({ grid }: { grid: Grid }) {
               <tr key={season.year}>
                 <th
                   scope="row"
-                  className="sticky left-0 z-30 bg-card-2 shadow-[4px_0_0_0_var(--card-2)] pr-3 text-left align-middle"
+                  className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 pr-3 text-left align-middle"
                 >
                   <span className="flex items-baseline gap-1.5 leading-tight">
                     <span className="font-display text-[13px] font-bold">

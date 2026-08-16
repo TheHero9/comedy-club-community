@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 
 import { SearchOverlay } from "@/components/shell/SearchOverlay";
 import { useCopy } from "@/components/i18n/LocaleProvider";
@@ -38,7 +38,7 @@ export function SearchTrigger({
         onClick={() => setOpen(true)}
         className={cn(
           "flex w-full items-center gap-3 rounded-pill border-2 border-primary bg-card text-left",
-          size === "lg" ? "h-14 px-5" : "h-[54px] px-5",
+          size === "lg" ? "h-14 pr-1.5 pl-5" : "h-[54px] pr-1.5 pl-5",
           className,
         )}
       >
@@ -55,6 +55,20 @@ export function SearchTrigger({
           )}
         >
           {label}
+        </span>
+        {/* 🚨 The filled circle is what makes this read as a field you can
+            SUBMIT rather than a label. It is part of the same button, not a
+            nested one - a button inside a button is invalid HTML and the whole
+            pill already opens the overlay. Its twin in the overlay is the real
+            submit control. */}
+        <span
+          aria-hidden
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-pill bg-primary text-primary-foreground",
+            size === "lg" ? "size-11" : "size-[42px]",
+          )}
+        >
+          <ArrowRight className="size-[19px]" strokeWidth={2.6} />
         </span>
       </button>
 

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
+import { Clock, LayoutGrid } from "lucide-react";
+
 import { EpisodeRow } from "@/components/episode/EpisodeCard";
-import { GridFullscreen } from "@/components/grid/GridFullscreen";
 import { RatingsGrid } from "@/components/grid/RatingsGrid";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { MetaLine, Page, SectionHeading, StatTile } from "@/components/shell/Page";
@@ -174,7 +175,14 @@ export default async function ChannelPage({
           header lands on top of the heading you just jumped to. */}
       <section id={GRID_ANCHOR} className="mt-7 scroll-mt-20">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h2 className="text-h2">{copy.channel.gridTitle}</h2>
+          <h2 className="text-h2 flex items-center gap-2">
+            <LayoutGrid
+              className="size-[19px] shrink-0 text-subtle-foreground"
+              aria-hidden
+              strokeWidth={2.2}
+            />
+            {copy.channel.gridTitle}
+          </h2>
 
           {/* Plain links, not client state: the toggle stays server-rendered,
               so it is shareable, indexable and works with JS off. */}
@@ -203,19 +211,20 @@ export default async function ChannelPage({
           {copy.channel.hintDesktop}
         </p>
 
-        {/* 🚨 "Fit to screen" is GONE (owner call, 2026-08-16). It was a
-            `transform: scale()` over the inline grid, which shrank the grid but
-            not the box holding it, so the page grew a vertical scrollbar over a
-            mostly-empty area - the layout got worse in exactly the way "fit to
-            screen" promises it will not.
+        {/* 🚨 There is NO "fit to screen" and NO "full view" button here, and
+            both were tried (owner calls, 2026-08-16 and again the same day).
 
-            Its replacement is a fullscreen overlay that transposes the grid
-            (years across, episodes down) so a whole channel fits one frame and
-            can be screenshotted. It fetches the grid itself on first open
-            rather than taking it as a prop: it is a Client Component, and this
-            channel's grid is 322 KB of JSON that would otherwise ship in the
-            RSC flight payload on every load, opened or not. */}
-        <GridFullscreen slug={slug} channelName={channel.name} score={score} />
+            "Fit to screen" scaled the inline grid with `transform: scale()`
+            without shrinking its container, so the page grew a vertical
+            scrollbar over empty space. Its replacement, a fullscreen overlay
+            transposing years into columns, fitted the whole channel in one
+            frame and was still rejected: on the 1,225-episode channel the
+            cells collapse to a few pixels and the result reads as noise
+            rather than as a chart. The owner's word was "awful".
+
+            So the grid on this page is the only grid. If a screenshottable
+            whole-channel view is wanted again, the thing to fix is the cell
+            count, not the viewport it is squeezed into. */}
         <RatingsGrid grid={grid} />
       </section>
 
@@ -223,6 +232,7 @@ export default async function ChannelPage({
         <section className="mt-8">
           <SectionHeading
             title={copy.channel.recent}
+            icon={Clock}
             action={
               <Link
                 href={`/episodes?channel=${encodeURIComponent(slug)}`}

@@ -7,7 +7,7 @@ import { useCopy } from "@/components/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
 /**
- * The description, fully collapsed behind a disclosure.
+ * The description, ALWAYS collapsed behind a disclosure.
  *
  * 🚨 Fully collapsed as of 2026-08-15, where it used to show a 2-line clamp.
  * These are YouTube descriptions: business-enquiry addresses, sponsor codes and
@@ -15,21 +15,21 @@ import { cn } from "@/lib/utils";
  * shortest is empty, so the two visible lines were almost never the interesting
  * part - they just pushed the cast, moments and community score down.
  *
- * A short description has no toggle at all: a disclosure that opens to reveal
- * one more line is worse than just printing the line.
+ * 🚨 The "short descriptions print in full" exception is GONE (owner call,
+ * 2026-08-16). It made the page inconsistent in the one way that reads as a
+ * bug: whether the description was hidden depended on a character count nobody
+ * can see, so the same section collapsed on one episode and sat open on the
+ * next. Every episode now behaves identically.
+ *
+ * An EMPTY description renders nothing at all - not a toggle, and not a
+ * "no description" placeholder. A disclosure that opens onto an apology is
+ * worse than the absence it is apologising for.
  */
-const TOGGLE_ABOVE_CHARS = 90;
-
 export function EpisodeDescription({ text }: { text: string }) {
   const copy = useCopy();
   const [open, setOpen] = useState(false);
-  const toggleable = text.length > TOGGLE_ABOVE_CHARS;
 
-  if (!toggleable) {
-    return (
-      <p className="text-body mt-4 text-muted-foreground">{text}</p>
-    );
-  }
+  if (text.trim().length === 0) return null;
 
   return (
     <div className="mt-4">

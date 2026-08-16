@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { AudioLines, CircleDashed, Tags, Type, type LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 
 import { SearchResultCard } from "@/components/search/SearchResultCard";
@@ -9,7 +9,7 @@ import { LinkPending } from "@/components/shared/LinkPending";
 import { Page } from "@/components/shell/Page";
 import { buttonVariants, LinkButton } from "@/components/ui/button";
 import type { SearchHit, TranscriptHit, TranscriptMatch } from "@/lib/api/podcast";
-import { listTopics, search, searchTranscripts } from "@/lib/api/podcast";
+import { search, searchTranscripts } from "@/lib/api/podcast";
 import { getCopy } from "@/lib/locale";
 import {
   API_SEARCH_MAX_LIMIT,
@@ -33,8 +33,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** Search results must never be cached: a stale answer is worse than a slow one. */
 export const dynamic = "force-dynamic";
-
-const POPULAR_TOPIC_LIMIT = 8;
 
 /**
  * How many results this render should reach, read off a query parameter.
@@ -119,61 +117,39 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
   const spokenWanted = readWanted(params.s, SPOKEN_LIMIT, SPOKEN_MAX_RESULTS);
 
   if (query.length === 0) {
-    const topics = await listTopics({ limit: POPULAR_TOPIC_LIMIT });
-
+    /**
+     * 🚨 The empty search page is now ONE thing: the field, centred, with the
+     * two lines that say what it reaches.
+     *
+     * The "popular topics" disclosure that used to sit under it is gone (owner
+     * call, 2026-08-16). It had already been collapsed once for competing with
+     * the field; collapsing it only made it a control nobody opened, sitting
+     * below the one object the page exists for. And the topics it listed are
+     * machine suggestions - a menu of them reads as "these are the subjects we
+     * cover", which is exactly the wrong promise for a free-text search box.
+     *
+     * Centring is vertical as well as horizontal: `min-h` off the viewport
+     * minus the header, so on a phone the field lands under the thumb instead
+     * of at the top of an otherwise empty screen.
+     */
     return (
-      <Page>
-        <SearchTrigger size="md" />
+      <Page className="flex min-h-[calc(100dvh-54px)] flex-col justify-center md:min-h-[calc(100dvh-64px)] md:justify-start md:pt-[12vh]">
+        <div className="mx-auto w-full max-w-[620px] text-center">
+          <h1 className="text-display leading-[1.1]">{copy.search.title}</h1>
+          <p className="text-body mx-auto mt-3 max-w-[520px] text-muted-foreground">
+            {copy.search.subtitle}
+          </p>
 
-        <h1 className="text-display mt-6 leading-[1.1]">{copy.search.title}</h1>
-        <p className="text-body mt-3 max-w-[560px] text-muted-foreground">
-          {copy.search.subtitle}
-        </p>
+          <SearchTrigger size="lg" className="mt-6" />
 
-        {/* 🚨 States the REACH of search before anyone types, and states its
-            limit in the same breath. Transcript coverage is ~30% overall and
-            runs 99% to 0% by channel, so "most episodes, though not all" is the
-            strongest honest claim available - and the four example-query chips
-            that used to sit here said nothing about any of it. */}
-        <p className="mt-2.5 max-w-[560px] text-small text-subtle-foreground">
-          {copy.search.scopeNote}
-        </p>
-
-
-        {topics.length > 0 ? (
-          /* 🚨 Collapsed by default (owner call, 2026-08-15). A wall of topic
-             chips under an empty search field reads as the menu, and the field
-             stops looking like it accepts anything else. `<details>` keeps this
-             a Server Component and works before hydration. */
-          <details className="group mt-7">
-            <summary className="text-eyebrow inline-flex cursor-pointer list-none items-center gap-1.5 outline-none hover:text-foreground">
-              <ChevronDown
-                className="size-3.5 transition-transform duration-120 group-open:rotate-180"
-                aria-hidden
-                strokeWidth={2.4}
-              />
-              {copy.search.popularTopicsToggle}
-            </summary>
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              {topics.map((topic) => (
-                <LinkButton
-                  key={topic.slug}
-                  href={`/search?q=${encodeURIComponent(topic.name)}`}
-                  prefetch={false}
-                  variant="outline"
-                  size="sm"
-                  className="font-normal"
-                >
-                  {topic.name}
-                  <span className="font-mono text-[11px] text-subtle-foreground tabular">
-                    {topic.episode_count}
-                  </span>
-                  <LinkPending />
-                </LinkButton>
-              ))}
-            </div>
-          </details>
-        ) : null}
+          {/* 🚨 States the REACH of search, and its limit, in the same breath.
+              Transcript coverage is ~30% overall and runs 99% to 0% by channel,
+              so "most episodes, though not all" is the strongest honest claim
+              available. */}
+          <p className="mx-auto mt-3.5 max-w-[520px] text-small text-subtle-foreground">
+            {copy.search.scopeNote}
+          </p>
+        </div>
       </Page>
     );
   }
@@ -374,7 +350,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
                   and nothing to compare to is just a label on the whole page. */}
               {elsewhere.length > 0 || partialMatches.length > 0 ? (
                 <div className="mt-6">
-                  <h2 className="text-h3">{copy.search.inTitleHeading}</h2>
+                  <ResultsHeading title={copy.search.inTitleHeading} icon={Type} />
                   <p className="mt-1.5 text-small text-subtle-foreground">
                     {copy.search.inTitleSubtitle}
                   </p>
@@ -397,7 +373,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             <>
               {inTitle.length > 0 ? (
                 <div className="mt-7 border-t border-border pt-5">
-                  <h2 className="text-h3">{copy.search.elsewhereHeading}</h2>
+                  <ResultsHeading title={copy.search.elsewhereHeading} icon={Tags} />
                   <p className="mt-1.5 text-small text-subtle-foreground">
                     {copy.search.elsewhereSubtitle}
                   </p>
@@ -427,7 +403,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
           {partialMatches.length > 0 ? (
             <>
               <div className="mt-7 border-t border-border pt-5">
-                <h2 className="text-h3">{copy.search.partialHeading}</h2>
+                <ResultsHeading title={copy.search.partialHeading} icon={CircleDashed} />
                 <p className="mt-1.5 text-small text-subtle-foreground">
                   {copy.search.partialSubtitle}
                 </p>
@@ -454,6 +430,13 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             <LinkButton
               href={searchHref({ n: nextWanted })}
               prefetch={false}
+              /* 🚨 `scroll={false}`. Next restores scroll to the TOP on every
+                 navigation by default, and "load more" IS a navigation here -
+                 so clicking it threw the reader back to the heading and they
+                 had to scroll past everything they had already read to reach
+                 the new cards. The URL still changes, so the longer page is
+                 shareable and survives a reload; only the jump is gone. */
+              scroll={false}
               variant="outline"
               size="lg"
               block
@@ -467,7 +450,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
           {spokenOnly.length > 0 ? (
             <>
               <div className="mt-7 border-t border-border pt-5">
-                <h2 className="text-h3">{copy.search.spokenHeading}</h2>
+                <ResultsHeading title={copy.search.spokenHeading} icon={AudioLines} />
                 <p className="mt-1.5 text-small text-subtle-foreground">
                   {copy.search.spokenSubtitle}
                 </p>
@@ -491,6 +474,11 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
                 <LinkButton
                   href={searchHref({ s: nextSpokenWanted })}
                   prefetch={false}
+                  /* 🚨 Same as above, and this is the one the owner hit: the
+                     spoken section is the LAST thing on the page, so its load
+                     more sits furthest from the top - and a scroll reset from
+                     there is the most expensive one on the site. */
+                  scroll={false}
                   variant="outline"
                   size="lg"
                   block
@@ -517,5 +505,26 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
         </>
       )}
     </Page>
+  );
+}
+
+/**
+ * A results-section heading.
+ *
+ * The four sections on this page answer four different questions ("in the
+ * title", "somewhere else", "only some of your words", "said out loud"), and
+ * as four same-weight Bulgarian headings they were indistinguishable while
+ * scrolling. The icon is a `lucide-react` component, never an emoji.
+ */
+function ResultsHeading({ title, icon: Icon }: { title: string; icon: LucideIcon }) {
+  return (
+    <h2 className="text-h3 flex items-center gap-2">
+      <Icon
+        className="size-[18px] shrink-0 text-subtle-foreground"
+        aria-hidden
+        strokeWidth={2.2}
+      />
+      {title}
+    </h2>
   );
 }

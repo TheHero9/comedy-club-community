@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
 
+import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { Logo } from "@/components/shell/Logo";
 import { SettingsSheet } from "@/components/shell/SettingsSheet";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Button } from "@/components/ui/button";
+import type { Me } from "@/lib/api/podcast";
+import { viewerApi } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,8 +26,27 @@ import { cn } from "@/lib/utils";
 export function AppHeader() {
   const copy = useCopy();
   const pathname = usePathname();
+  const { signedIn } = useViewerAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  /**
+   * 🚨 The SAME query key the profile page and the avatar picker use, and that
+   * is the whole fix: picking a new icon invalidates `["me"]`, so this avatar
+   * had to be reading the same cache entry to follow it. It was not reading
+   * anything at all - it rendered a neutral initials tile forever, so choosing
+   * an icon changed the profile page and left the header showing the old one.
+   *
+   * Deduped by TanStack Query, so on /me this is the profile page's own
+   * in-flight request rather than a second round trip.
+   */
+  const me = useQuery({
+    queryKey: ["me"],
+    enabled: signedIn,
+    retry: false,
+    queryFn: ({ signal }) =>
+      viewerApi.get<Me>("/api/me", { signal, cache: "no-store" }),
+  });
 
   // 🚨 Built inside the component, not at module scope. A module-level table
   // would capture whichever dictionary happened to be loaded first and would
@@ -101,7 +124,12 @@ export function AppHeader() {
             aria-label={copy.nav.profile}
             className="rounded-pill outline-none"
           >
-            <PersonAvatar name={copy.nav.profile} size="sm" neutral />
+            <PersonAvatar
+              name={copy.nav.profile}
+              imageUrl={me.data?.avatar_url}
+              size="sm"
+              neutral
+            />
           </Link>
         </div>
       </header>

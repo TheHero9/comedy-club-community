@@ -1186,6 +1186,11 @@ export interface components {
              * @default 0
              */
             score: number;
+            /**
+             * Is Auto
+             * @description True when this label was suggested by the automatic labeller rather than added by a community member.
+             */
+            is_auto: boolean;
         };
         /** TopicOut */
         TopicOut: {
@@ -1463,6 +1468,8 @@ export interface components {
             channel_name: string;
             /** Channel Slug */
             channel_slug: string;
+            /** Channel Avatar Url */
+            channel_avatar_url: string;
             /** Tier */
             tier: string;
             /** Member Since */

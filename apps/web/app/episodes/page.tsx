@@ -16,7 +16,9 @@ import { FilterBar } from "@/components/browse/FilterBar";
 import { EpisodeCard } from "@/components/episode/EpisodeCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LinkPending } from "@/components/shared/LinkPending";
-import { Page } from "@/components/shell/Page";
+import { LayoutList } from "lucide-react";
+
+import { Page, PageHeading } from "@/components/shell/Page";
 import { buttonVariants } from "@/components/ui/button";
 import { listChannels, listEpisodes, listPeople } from "@/lib/api/podcast";
 import { getCopy } from "@/lib/locale";
@@ -135,7 +137,7 @@ export default async function EpisodesPage({
   return (
     <Page>
       <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-h1">{copy.browse.title}</h1>
+        <PageHeading title={copy.browse.title} icon={LayoutList} />
         <p className="text-[13.5px] text-subtle-foreground">
           {copy.browse.showing(shown, total)}
         </p>

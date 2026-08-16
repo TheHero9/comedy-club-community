@@ -3,14 +3,24 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import {
+  ChevronRight,
+  Crown,
+  Heart,
+  History,
+  Pencil,
+  Star,
+  Tags,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 
 import { EpisodeRow } from "@/components/episode/EpisodeCard";
 import { InstallAppGuide } from "@/components/profile/InstallAppGuide";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
-import { Page, StatTile } from "@/components/shell/Page";
+import { Page, PageHeading, StatTile } from "@/components/shell/Page";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { EpisodeList, Me } from "@/lib/api/podcast";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
@@ -61,7 +71,7 @@ export default function ProfilePage() {
   if (!signedIn || profile.isError) {
     return (
       <Page>
-        <h1 className="text-h1">{copy.nav.profile}</h1>
+        <PageHeading title={copy.nav.profile} icon={UserRound} />
         <div className="mt-5">
           <SignedOutNotice />
         </div>
@@ -89,16 +99,29 @@ export default function ProfilePage() {
   const LINKS: ReadonlyArray<{
     href: string;
     label: string;
+    /**
+     * 🚨 The icon COMPONENT, never an emoji and never a glyph on the data
+     * shape. Five rows that differed only by a Bulgarian noun were four
+     * identical grey bars to anyone scanning; the icon is what makes them
+     * findable at a glance.
+     */
+    icon: LucideIcon;
     key: "rating_count" | "watched_count" | "favorite_count" | null;
     value?: string;
   }> = [
-    { href: "/me/ratings", label: copy.profile.linkRatings, key: "rating_count" },
-    { href: "/me/history", label: copy.profile.linkHistory, key: "watched_count" },
-    { href: "/me/favorites", label: copy.profile.linkFavorites, key: "favorite_count" },
-    { href: "/me/tags", label: copy.profile.linkTags, key: null },
+    { href: "/me/ratings", label: copy.profile.linkRatings, icon: Star, key: "rating_count" },
+    { href: "/me/history", label: copy.profile.linkHistory, icon: History, key: "watched_count" },
+    {
+      href: "/me/favorites",
+      label: copy.profile.linkFavorites,
+      icon: Heart,
+      key: "favorite_count",
+    },
+    { href: "/me/tags", label: copy.profile.linkTags, icon: Tags, key: null },
     {
       href: "/me/memberships",
       label: copy.profile.linkMemberships,
+      icon: Crown,
       key: null,
       value: me ? String(me.memberships.length) : "",
     },
@@ -109,12 +132,38 @@ export default function ProfilePage() {
       <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-[1fr_320px]">
         <div className="min-w-0">
           <div className="flex items-center gap-3.5">
-            <PersonAvatar
-              name={me?.display_name || copy.profile.unnamed}
-              imageUrl={me?.avatar_url}
-              size="lg"
-              neutral
-            />
+            {/*
+              🚨 The avatar IS the way into the icon picker. It used to live
+              only behind an "Edit profile" button at the bottom of the nav
+              rows, past five links - the owner's words were that it is "a bit
+              difficult to find that you can actually change your icon there".
+              Tapping your own picture to change it is the convention
+              everywhere else, and it costs nothing to honour.
+
+              A real <button> rather than a click handler on the span, so it is
+              keyboard-reachable and announces itself. `group` + the overlay
+              below make it look pressable without adding chrome that would
+              sit on the picture permanently.
+            */}
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              aria-label={copy.profile.changeIcon}
+              className="group relative shrink-0 rounded-pill outline-none"
+            >
+              <PersonAvatar
+                name={me?.display_name || copy.profile.unnamed}
+                imageUrl={me?.avatar_url}
+                size="lg"
+                neutral
+              />
+              <span
+                aria-hidden
+                className="absolute right-0 bottom-0 flex size-6 items-center justify-center rounded-pill border-2 border-background bg-elevated text-muted-foreground transition-colors duration-120 group-hover:text-foreground"
+              >
+                <Pencil className="size-3" strokeWidth={2.6} />
+              </span>
+            </button>
             <div className="min-w-0 flex-1">
               <h1 className="text-h1">
                 {me ? (
@@ -184,6 +233,11 @@ export default function ProfilePage() {
                 href={link.href}
                 className="flex min-h-[52px] items-center gap-3 rounded-xl border border-border bg-card px-3.5 outline-none"
               >
+                <link.icon
+                  className="size-[18px] shrink-0 text-subtle-foreground"
+                  aria-hidden
+                  strokeWidth={2.2}
+                />
                 <span className="flex-1 text-[14.5px]">{link.label}</span>
                 <span className="font-mono text-[12.5px] text-subtle-foreground tabular">
                   {link.value ?? (me && link.key ? me[link.key] : "")}

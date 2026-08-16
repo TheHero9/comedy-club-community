@@ -35,6 +35,7 @@
 | 14 | **Visual redesign** | ✅ | Whole frontend rebuilt from `Designs/design_handoff_podcast_index/`. All 10 routes, dark + light, Bulgarian copy, transposed mobile ratings grid. See [`specs/07-visual-redesign/`](../specs/07-visual-redesign/01-implementation.md). |
 | 15 | **Post-launch UX pass** | ✅ | **2026-08-15.** The owner's first full walkthrough of the live site, turned into 31 tracked items and all 31 built - including EN/BG i18n with **English as the new default**, a curated channel order, a title-first search split with working pagination, and the Clerk identity bug that showed a raw `user_...` id as both name and handle. See [`specs/11-ux-feedback/`](../specs/11-ux-feedback/01-backlog.md). |
 | 16 | **Search honesty + memberships + full-view grid** | ✅ | **2026-08-16.** Three lying counts on `/search` fixed and multi-word matching made loose-but-labelled; self-managed channel memberships whose month count is **derived, never stored**; the profile-icon ladder (machinery only, artwork pending); the fullscreen channel grid replacing "Fit to screen". See [`specs/12-search-and-memberships/`](../specs/12-search-and-memberships/01-search-counts-and-matching.md). |
+| 17 | **UX feedback, round 3** | ✅ | **2026-08-16.** Fourteen items from the owner's walkthrough the same day. Machine-suggested topic labels are now visibly distinct from members' (`is_auto`, derived from `added_by` - no new column); the header avatar follows the icon picker; icons on every section heading; `/search` centred on its field with a real submit button and no scroll reset on "load more"; the description always collapsed; the watched button stops claiming you have watched an episode you have not. **The fullscreen grid shipped in wave 16 is deleted** - the cell count is the problem, not the viewport. See [`specs/13-ux-feedback-round-3/`](../specs/13-ux-feedback-round-3/01-changes.md). |
 
 Legend: ⬜ not started · 🔵 in progress · 🟡 partial/blocked · ✅ done
 
@@ -72,6 +73,7 @@ Adding the real icons is an append to that tuple - no migration, no code.
 **The channel grid gained a fullscreen "Full view"** (years as columns, episodes
 down, nothing scrolls) and lost "Fit to screen", which scaled the grid without
 shrinking its container and so added a page scrollbar over empty space.
+⚠️ **"Full view" was itself removed the same day** - see the round-3 entry below.
 
 Migration `0007` adds two nullable/blank columns
 (`ChannelMembership.renewal_day`, `UserProfile.avatar_key`).
@@ -106,6 +108,45 @@ with zero inner scroll, and no console errors.
 is `workflow_dispatch`-only until a `RAILWAY_TOKEN` secret exists, so **a push
 to `main` still deploys the web only** and the API needs a manual trigger. See
 [`specs/10-deployment/02-auto-deploy.md`](../specs/10-deployment/02-auto-deploy.md).
+
+---
+
+## 🔄 Wave 17 - UX feedback, round 3 (2026-08-16)
+
+The owner walked the app the same day wave 16 shipped. Fourteen items, all
+built. Full write-up: [`specs/13-ux-feedback-round-3/`](../specs/13-ux-feedback-round-3/01-changes.md).
+
+**Machine labels no longer masquerade as community labels.** All 2,565 topic
+links in the catalogue were written by `import_topic_labels` and rendered
+exactly like a member's. Auto chips are now dashed with a spark and a line of
+copy. 🚨 `is_auto` is **derived from `added_by`**, not a new column - the system
+account already exists so `--clear` can be exact, and a second stored copy would
+drift. 🚨 `added_by IS NULL` means a **deleted member**, never the machine.
+
+**"Full view" is gone, one day after shipping.** It fit 1,225 cells in one frame
+with no inner scroll and passed six E2E tests, and it still read as noise at
+that density. The lesson is that "the whole channel at once" is a cell-count
+problem; shrinking the viewport cannot solve it. Removing the overlay took the
+flagship channel page from **916 KB to 841 KB** (it was a Client Component).
+
+**The rest:** the header avatar follows the icon picker (it reads the same
+`["me"]` query the picker invalidates); `lucide-react` marks on every page and
+section heading; `/search` centred on its field with the topics drawer deleted
+and a real submit button added; `scroll={false}` on both load-more links; the
+episode description always collapsed rather than sometimes; the channel avatar
+on membership rows; the avatar itself opens the profile editor; and the watched
+button no longer says "Watched" with a red tick while the episode is unwatched.
+
+**No migration.** Every change is additive on the API side or presentational.
+
+Gates: **1,679 pytest + 210 Vitest + 386 Playwright green** (5 pre-existing
+skips), ruff clean, no migration drift, 35/35 perf budgets pass.
+
+⚠️ Two false alarms during verification, both environmental: a `next start`
+left over from an earlier session owned port 3200 (so every probe hit a stale
+build and `scroll={false}` looked broken), and the long-running `next dev` on
+3000 had exhausted its heap. **Read a backgrounded server's own log** - the
+`EADDRINUSE` was sitting in it the whole time.
 
 ---
 

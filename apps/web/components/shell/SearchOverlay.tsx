@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Search, X } from "lucide-react";
+import { ArrowRight, Clock, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -96,7 +96,7 @@ export function SearchOverlay({
           event.preventDefault();
           go(value);
         }}
-        className="flex h-[50px] items-center gap-2.5 rounded-pill border-2 border-primary bg-card px-[18px]"
+        className="flex h-[50px] items-center gap-2.5 rounded-pill border-2 border-primary bg-card py-0 pr-[5px] pl-[18px]"
       >
         <Search
           className="size-[18px] shrink-0 text-primary"
@@ -132,6 +132,32 @@ export function SearchOverlay({
             <X className="size-4" aria-hidden strokeWidth={2.6} />
           </Button>
         ) : null}
+
+        {/*
+          🚨 A real submit button, not decoration.
+
+          There was none: the only way to run a query was the Enter key. On a
+          phone that is the keyboard's own return key and nothing on screen
+          says so, so the field looked like it had swallowed what you typed.
+          The owner's words were "I don't have like an enter button or anything
+          which I can actually search".
+
+          `type="submit"` so the form's existing onSubmit is the single code
+          path - Enter and this button cannot diverge. Disabled on an empty
+          field rather than hidden: a control that appears as you type moves
+          the clear button sideways under your thumb.
+        */}
+        <Button
+          type="submit"
+          variant="primary"
+          size="icon"
+          shape="pill"
+          aria-label={copy.search.submit}
+          disabled={trimmed.length === 0}
+          className="size-10"
+        >
+          <ArrowRight className="size-[18px]" aria-hidden strokeWidth={2.6} />
+        </Button>
       </form>
 
       {/*

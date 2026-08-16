@@ -123,6 +123,14 @@ def episode_brief(episode: Episode) -> dict:
 
 
 def episode_detail(episode: Episode) -> dict:
+    from podcast.services.labels import auto_labeller_id
+
+    # One cached lookup for the whole response, not one per label. `None` means
+    # the labeller has never run, in which case no link can be machine-made -
+    # and `added_by_id == None` must NOT satisfy that, because a NULL added_by
+    # means "a member whose account was deleted".
+    machine = auto_labeller_id()
+
     data = episode_brief(episode)
     data.update(
         {
@@ -139,6 +147,7 @@ def episode_detail(episode: Episode) -> dict:
                     "name": et.topic.name,
                     "slug": et.topic.slug,
                     "score": et.score,
+                    "is_auto": machine is not None and et.added_by_id == machine,
                 }
                 for et in episode.topics.all()
             ],
@@ -259,6 +268,7 @@ def membership_out(membership, *, today=None) -> dict:
         "channel_id": membership.channel_id,
         "channel_name": membership.channel.name,
         "channel_slug": membership.channel.slug,
+        "channel_avatar_url": membership.channel.avatar_url,
         "tier": membership.tier,
         "member_since": membership.member_since,
         "renewal_day": membership.renewal_day,

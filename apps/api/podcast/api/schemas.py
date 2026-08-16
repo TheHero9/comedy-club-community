@@ -64,6 +64,17 @@ class TopicBriefOut(Schema):
     name: str
     slug: str
     score: int = 0
+    # 🚨 REQUIRED, not defaulted. A machine suggestion and a member's label mean
+    # different things to a reader, and a default of False would silently render
+    # every auto label as community-authored the moment a caller forgot to set
+    # it. Derived from `added_by`, never stored - see services/labels.py.
+    is_auto: bool = Field(
+        ...,
+        description=(
+            "True when this label was suggested by the automatic labeller rather "
+            "than added by a community member."
+        ),
+    )
 
 
 class PersonBriefOut(Schema):
@@ -215,6 +226,10 @@ class MembershipOut(Schema):
     channel_id: int
     channel_name: str
     channel_slug: str
+    # The channel's YouTube picture, so a membership row looks like the same
+    # channel it does everywhere else on the site. "" means unknown; the UI
+    # layers an initials tile behind it either way.
+    channel_avatar_url: str
     tier: str
     member_since: date | None
     # 🚨 `Field(...)` - REQUIRED and nullable, not optional. `membership_out`

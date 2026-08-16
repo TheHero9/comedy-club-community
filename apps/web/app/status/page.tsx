@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
 import { ApiHealthCard } from "@/components/health/ApiHealthCard";
-import { Page } from "@/components/shell/Page";
+import { Activity } from "lucide-react";
+
+import { Page, PageHeading } from "@/components/shell/Page";
 import { getHealthResult } from "@/lib/api/health";
 import { getCopy } from "@/lib/locale";
 
@@ -26,7 +28,7 @@ export default async function StatusPage() {
 
   return (
     <Page className="max-w-[652px]">
-      <h1 className="text-h1">{copy.status.title}</h1>
+      <PageHeading title={copy.status.title} icon={Activity} />
       <div className="mt-5">
         <ApiHealthCard result={health} />
       </div>

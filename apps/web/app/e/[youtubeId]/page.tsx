@@ -1,7 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Crown, LayoutGrid, Play, Plus, Radio, Star } from "lucide-react";
+import {
+  Clock,
+  Crown,
+  LayoutGrid,
+  MessageSquare,
+  Play,
+  Plus,
+  Radio,
+  Sparkles,
+  Star,
+  Tags,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 import { CommentCard } from "@/components/episode/CommentCard";
 import { EpisodeDescription } from "@/components/episode/EpisodeDescription";
@@ -243,42 +256,78 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
 
             <EpisodeScoreStrip />
 
-            {/* Topics. Tapping one runs a real search for it. */}
-            <div className="mt-4 flex flex-wrap gap-[7px]">
-              {episode.topics.map((topic) => (
-                <LinkButton
-                  key={topic.slug}
-                  href={`/search?q=${encodeURIComponent(topic.name)}`}
-                  prefetch={false}
-                  variant="outline"
-                  size="xs"
-                  className="font-medium"
-                >
-                  {topic.name}
-                  {/* /search is force-dynamic, so this chip is a real round
-                      trip. Without a marker it looked broken for ~300ms. */}
-                  <LinkPending />
-                </LinkButton>
-              ))}
-              {episode.topics.length === 0 ? (
-                <span
-                  className={cn(
-                    buttonVariants({ variant: "dashed", size: "xs" }),
-                    "cursor-default",
-                  )}
-                >
-                  <Plus className="size-3.5" aria-hidden strokeWidth={2.4} />
-                  {copy.episode.addFirstTopic}
-                </span>
-              ) : null}
-            </div>
+            {/*
+              Topics. Tapping one runs a real search for it.
 
-            <EpisodeDescription
-              text={episode.description || copy.episode.noDescription}
-            />
+              🚨 A MACHINE SUGGESTION AND A MEMBER'S LABEL DO NOT LOOK THE
+              SAME. Every one of the catalogue's 2,565 labels today was
+              suggested automatically from titles and transcripts, and they
+              used to render exactly like a human-authored one. That is wrong
+              in both directions: a reader takes a guess for a fact, and a
+              member who adds a label sees it disappear into a row of guesses.
+
+              The distinction is `is_auto` off the API - derived from the
+              system account `import_topic_labels` attributes its work to, not
+              a second stored column that could drift. Auto chips take the
+              `dashed` variant, which already means "provisional" everywhere
+              else in this design (the unrated grid cell, the add-a-topic
+              placeholder), plus a spark. Community chips keep the solid
+              border they always had.
+            */}
+            <Section title={copy.episode.topics} icon={Tags}>
+              <div className="mt-3 flex flex-wrap gap-[7px]">
+                {episode.topics.map((topic) => (
+                  <LinkButton
+                    key={topic.slug}
+                    href={`/search?q=${encodeURIComponent(topic.name)}`}
+                    prefetch={false}
+                    variant={topic.is_auto ? "dashed" : "outline"}
+                    size="xs"
+                    className="font-medium"
+                  >
+                    {topic.is_auto ? (
+                      <Sparkles
+                        className="size-3.5 text-faint-foreground"
+                        aria-label={copy.episode.topicAuto}
+                        strokeWidth={2.2}
+                      />
+                    ) : null}
+                    {topic.name}
+                    {/* /search is force-dynamic, so this chip is a real round
+                        trip. Without a marker it looked broken for ~300ms. */}
+                    <LinkPending />
+                  </LinkButton>
+                ))}
+                {episode.topics.length === 0 ? (
+                  <span
+                    className={cn(
+                      buttonVariants({ variant: "dashed", size: "xs" }),
+                      "cursor-default",
+                    )}
+                  >
+                    <Plus className="size-3.5" aria-hidden strokeWidth={2.4} />
+                    {copy.episode.addFirstTopic}
+                  </span>
+                ) : null}
+              </div>
+              {/* Only when there is actually a spark on screen to explain. */}
+              {episode.topics.some((topic) => topic.is_auto) ? (
+                <p className="mt-2.5 text-small text-subtle-foreground">
+                  {copy.episode.topicsAutoNote}
+                </p>
+              ) : null}
+            </Section>
+
+            {/* The raw description, never a placeholder: an episode with none
+                renders nothing here rather than a toggle onto an apology. */}
+            <EpisodeDescription text={episode.description} />
 
             {episode.participants.length > 0 ? (
-              <Section title={copy.episode.cast} meta={String(episode.participants.length)}>
+              <Section
+                title={copy.episode.cast}
+                icon={Users}
+                meta={String(episode.participants.length)}
+              >
                 <div className="noscroll mt-3 flex gap-2.5 overflow-x-auto pb-0.5">
                   {episode.participants.map((person) => (
                     <Link
@@ -303,6 +352,7 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
 
             <Section
               title={copy.episode.moments}
+              icon={Clock}
               meta={moments.length > 0 ? String(moments.length) : undefined}
             >
               {/* 🚨 Printed whether or not there are moments. The owner's words
@@ -376,7 +426,7 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
               )}
             </Section>
 
-            <Section title={copy.episode.community}>
+            <Section title={copy.episode.community} icon={MessageSquare}>
               {/* ⚠️ The design also puts a 1-10 breakdown histogram beside this
                   score. It is NOT built: no endpoint returns the distribution -
                   `EpisodeOut` carries `public_score` and `rating_count` and
@@ -437,6 +487,7 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
             {similar.items.length > 0 ? (
               <Section
                 title={copy.episode.similar}
+                icon={LayoutGrid}
                 meta={`${copy.episode.similarWhyPrefix} ${similar.reason}`}
               >
                 <div className="noscroll mt-3 flex gap-3 overflow-x-auto pb-1">
@@ -483,19 +534,37 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
   );
 }
 
+/**
+ * One section of the episode page.
+ *
+ * The `icon` is a `lucide-react` component, never an emoji: five same-weight
+ * Bulgarian headings stacked down a long page are indistinguishable while
+ * scrolling, and the mark to the left of each is what makes them findable.
+ */
 function Section({
   title,
+  icon: Icon,
   meta,
   children,
 }: {
   title: string;
+  icon?: LucideIcon;
   meta?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="mt-5.5 border-t border-border pt-4.5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-section-label">{title}</h2>
+        <h2 className="text-section-label flex items-center gap-1.5">
+          {Icon ? (
+            <Icon
+              className="size-[15px] shrink-0 text-subtle-foreground"
+              aria-hidden
+              strokeWidth={2.4}
+            />
+          ) : null}
+          {title}
+        </h2>
         {meta ? (
           <span className="text-[12.5px] text-subtle-foreground">{meta}</span>
         ) : null}

@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -26,23 +27,78 @@ export function Page({
   );
 }
 
-/** Section heading with an optional right-aligned action. */
+/**
+ * Section heading with an optional leading icon and right-aligned action.
+ *
+ * 🚨 The icon is a COMPONENT passed in, never an emoji and never a glyph
+ * stored on data. Sections on this site were a stack of same-weight Bulgarian
+ * headings with nothing to tell them apart at a glance; a `lucide-react` mark
+ * to the left of each is what makes the page scannable.
+ *
+ * `items-center` rather than `items-baseline` once an icon is present: an SVG
+ * has no baseline, so it aligns to the bottom of the text box and sits low.
+ */
 export function SectionHeading({
   title,
+  icon: Icon,
   action,
   className,
 }: {
   title: string;
+  icon?: LucideIcon;
   action?: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
-      className={cn("flex items-baseline justify-between gap-4", className)}
+      className={cn(
+        "flex justify-between gap-4",
+        Icon ? "items-center" : "items-baseline",
+        className,
+      )}
     >
-      <h2 className="text-h2">{title}</h2>
+      <h2 className="text-h2 flex min-w-0 items-center gap-2">
+        {Icon ? (
+          <Icon
+            className="size-[19px] shrink-0 text-subtle-foreground"
+            aria-hidden
+            strokeWidth={2.2}
+          />
+        ) : null}
+        <span className="min-w-0 truncate">{title}</span>
+      </h2>
       {action}
     </div>
+  );
+}
+
+/**
+ * The page's own H1, with the same leading-icon treatment as a section.
+ *
+ * Separate from `SectionHeading` rather than a `level` prop because the two
+ * differ in more than the tag: an H1 carries the page's type scale and never
+ * takes an action slot.
+ */
+export function PageHeading({
+  title,
+  icon: Icon,
+  className,
+}: {
+  title: string;
+  icon?: LucideIcon;
+  className?: string;
+}) {
+  return (
+    <h1 className={cn("text-h1 flex items-center gap-2.5", className)}>
+      {Icon ? (
+        <Icon
+          className="size-[22px] shrink-0 text-subtle-foreground"
+          aria-hidden
+          strokeWidth={2.2}
+        />
+      ) : null}
+      <span className="min-w-0">{title}</span>
+    </h1>
   );
 }
 

@@ -3,7 +3,9 @@ import type { Metadata } from "next";
 import { YearSparkline } from "@/components/channel/YearSparkline";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Page } from "@/components/shell/Page";
+import { Mic } from "lucide-react";
+
+import { Page, PageHeading } from "@/components/shell/Page";
 import { LinkButton } from "@/components/ui/button";
 import {
   getChannelGrid,
@@ -52,7 +54,7 @@ export default async function ChannelsPage() {
 
   return (
     <Page>
-      <h1 className="text-h1">{copy.channels.title}</h1>
+      <PageHeading title={copy.channels.title} icon={Mic} />
       <p className="text-body mt-2.5 text-muted-foreground">
         {copy.channels.subtitle(channels.length, totalEpisodes, totalRated)}
       </p>

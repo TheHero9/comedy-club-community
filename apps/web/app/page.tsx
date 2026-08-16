@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Star } from "lucide-react";
+import { ChevronRight, Mic, Star, Trophy } from "lucide-react";
 
 import { SearchTrigger } from "@/components/search/SearchTrigger";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
@@ -98,6 +98,7 @@ export default async function HomePage() {
         <section className="mt-9">
           <SectionHeading
             title={copy.home.topRated}
+            icon={Trophy}
             action={
               <Link
                 href="/leaderboard"
@@ -129,7 +130,7 @@ export default async function HomePage() {
           channels. A newest-first grid is what /episodes is for, and putting
           it here made the search field compete with a wall of thumbnails. */}
       <section className="mt-9">
-        <h2 className="text-h2">{copy.home.channels}</h2>
+        <SectionHeading title={copy.home.channels} icon={Mic} />
         <div className="mt-3.5 flex flex-col gap-2.5">
           {channels.map((channel) => (
             <Link

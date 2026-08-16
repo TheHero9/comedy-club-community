@@ -188,7 +188,6 @@ const en = {
     title: "Search for something that happened",
     subtitle:
       "Not just titles. Search runs across topics, moments, guests and what was actually said in the episode.",
-    popularTopics: "POPULAR TOPICS",
     suggestions: "SUGGESTIONS",
     recent: "RECENT",
     inputLabel: "Search episodes",
@@ -273,7 +272,6 @@ const en = {
     /** Sets expectations before anyone types. Coverage is real but partial. */
     scopeNote:
       "Search runs over titles, topics, moments and guests - and over the spoken words in most episodes, though not all of them.",
-    popularTopicsToggle: "Popular topics",
 
     // --- Spoken-word (transcript) results ------------------------------------
     /** Row badge on a passage. The timestamp is a deep link into the video. */
@@ -315,16 +313,6 @@ const en = {
 
   channel: {
     gridTitle: "Ratings grid",
-    /**
-     * 🚨 Replaces "Fit to screen" (owner call, 2026-08-16), which scaled the
-     * inline grid down without shrinking its container and so added a page
-     * scrollbar over empty space. This opens a fullscreen, transposed view
-     * where the whole channel fits one frame.
-     */
-    fullView: "Full view",
-    fullViewLabel: (channel: string) => `Every episode of ${channel}`,
-    fullViewHint: "Every episode, one column per year. Click any cell to open it.",
-    fullViewFailed: "The grid could not be loaded. Close this and try again.",
     hintMobile: "Rows are episodes, columns are years.",
     hintDesktop: "Rows are years, columns are the position within the year.",
     publicScore: "Public",
@@ -371,10 +359,22 @@ const en = {
     playOnYouTube: "Watch on YouTube",
     watchOnYouTube: "Watch on YouTube",
     addFirstTopic: "Add the first topic",
+    /** Section heading over the topic chips. */
+    topics: "Topics",
+    /**
+     * 🚨 Printed whenever a machine-suggested label is on screen, and never
+     * softened. Every label in the catalogue today was suggested automatically
+     * from titles and transcripts, and a reader who thinks a member chose them
+     * reads a guess as a fact - while a member who cannot tell their own label
+     * apart from a guess has no reason to add one.
+     */
+    topicsAutoNote:
+      "Labels marked with a spark were suggested automatically. Members can add and correct them.",
+    /** The marker's accessible name, on the chip itself. */
+    topicAuto: "Suggested automatically",
     descriptionMore: "more",
     descriptionLess: "less",
     descriptionToggle: "Description",
-    noDescription: "No description.",
     cast: "Cast",
     roleHost: "host",
     roleGuest: "guest",
@@ -410,8 +410,15 @@ const en = {
       n === 1 ? "1 shared guest" : `${n} shared guests`,
     similarWhySameChannel: "same channel",
     similarWhyPrefix: "Matched on",
-    /** 🚨 Short on purpose: the long form pushed the last action off-screen. */
-    markWatched: "Watched",
+    /**
+     * 🚨 An INSTRUCTION, never a state. This read "Watched" while the episode
+     * was unwatched - on a red filled button with a tick beside it - so the
+     * one control that says whether you have seen something claimed you had.
+     * Short on purpose: the long form pushed the last action off-screen on a
+     * 390px bar, so the mobile bar takes this and the sidebar takes the long
+     * one.
+     */
+    markWatched: "Mark watched",
     markWatchedLong: "Mark as watched",
     watchedCount: (n: number) => `Watched ${n}x`,
     logDate: "Log a date",
@@ -563,6 +570,8 @@ const en = {
     noHandle: "Add a handle",
     unnamed: "Unnamed",
     editProfile: "Edit profile",
+    /** The accessible name of the avatar button that opens the editor. */
+    changeIcon: "Change your profile picture",
     nameLabel: "Display name",
     handleLabel: "Handle",
     handleHint: "Letters, digits and . _ - Between 3 and 30 characters.",
@@ -619,7 +628,7 @@ const en = {
     channelLabel: "Channel",
     channelLocked: "To move a membership to another channel, remove it and add it again.",
     monthsLabel: "Months so far",
-    monthsPlaceholder: "70",
+    monthsPlaceholder: "5",
     monthsHint: "The number on your membership badge right now. Just joined? Enter 0.",
     renewalLabel: "Renews on day",
     renewalPlaceholder: "6",
@@ -816,7 +825,6 @@ const bg: Copy = {
     title: "Търси нещо, което се е случило",
     subtitle:
       "Не само заглавия. Търсенето минава през теми, моменти, гости и това, което наистина е казано в епизода.",
-    popularTopics: "ПОПУЛЯРНИ ТЕМИ",
     suggestions: "ПРЕДЛОЖЕНИЯ",
     recent: "СКОРОШНИ",
     inputLabel: "Търсене в епизодите",
@@ -861,7 +869,6 @@ const bg: Copy = {
       "Тези съвпадат с част от думите ти, но не с всички - възможно е да са по-малко подходящи.",
     scopeNote:
       "Търсенето минава през заглавия, теми, моменти и гости - и през казаното в повечето епизоди, макар и не във всички.",
-    popularTopicsToggle: "Популярни теми",
 
     reasonSaidAt: "КАЗАНО В",
     spokenHeading: "Казано в епизода",
@@ -891,11 +898,6 @@ const bg: Copy = {
 
   channel: {
     gridTitle: "Решетка на оценките",
-    fullView: "Целия канал",
-    fullViewLabel: (channel: string) => `Всички епизоди на ${channel}`,
-    fullViewHint:
-      "Всички епизоди, по една колона на година. Натисни клетка, за да я отвориш.",
-    fullViewFailed: "Решетката не можа да се зареди. Затвори и опитай отново.",
     hintMobile: "Редовете са епизоди, колоните са години.",
     hintDesktop: "Редовете са години, колоните са позицията в годината.",
     publicScore: "Public",
@@ -945,7 +947,10 @@ const bg: Copy = {
     descriptionMore: "още",
     descriptionLess: "по-малко",
     descriptionToggle: "Описание",
-    noDescription: "Без описание.",
+    topics: "Теми",
+    topicsAutoNote:
+      "Етикетите с искра са предложени автоматично. Членовете могат да ги добавят и поправят.",
+    topicAuto: "Предложен автоматично",
     cast: "Участници",
     roleHost: "домакин",
     roleGuest: "гост",
@@ -972,7 +977,7 @@ const bg: Copy = {
       n === 1 ? "1 общ гост" : `${n} общи гости`,
     similarWhySameChannel: "същия канал",
     similarWhyPrefix: "Съвпада по",
-    markWatched: "Гледано",
+    markWatched: "Отбележи",
     markWatchedLong: "Отбележи като гледано",
     watchedCount: (n: number) => `Гледано ${n}x`,
     logDate: "Запиши дата",
@@ -1122,6 +1127,7 @@ const bg: Copy = {
     noHandle: "Добави handle",
     unnamed: "Без име",
     editProfile: "Редактирай профила",
+    changeIcon: "Смени снимката на профила си",
     nameLabel: "Име за показване",
     handleLabel: "Handle",
     handleHint: "Букви, цифри и . _ - Между 3 и 30 знака.",
@@ -1166,7 +1172,7 @@ const bg: Copy = {
     channelLocked:
       "За да преместиш членство в друг канал, премахни го и го добави наново.",
     monthsLabel: "Месеци досега",
-    monthsPlaceholder: "70",
+    monthsPlaceholder: "5",
     monthsHint:
       "Числото на значката ти за членство в момента. Тъкмо си станал член? Въведи 0.",
     renewalLabel: "Подновява се на",

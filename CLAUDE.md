@@ -226,17 +226,28 @@ This bit us on 2026-08-08. `/channels/does-not-exist` and `/e/BADID` both return
 - 🚨 **A `min_months=0` icon still requires a MEMBERSHIP.** `months_by_channel.get(slug, 0) >= 0` is true for everyone, so the obvious one-liner would have made every channel's starting icon free to people who never joined. Absence is checked before the threshold; `test_a_zero_month_icon_still_needs_a_membership` pins it.
 - 🚨 **`POST /me/memberships` is an UPSERT.** A bare `get_or_create` made a second POST a silent no-op that returned the OLD row, so a user fixing a typo got their wrong number back with a `200`. Claiming also must NOT clear an existing `is_verified` - restating a month count is not new evidence; only a new screenshot resets it.
 - 🚨 **Profile-icon months do NOT pool across channels**, the unlock is re-checked on every read (a lapsed membership must stop rendering the icon), and a re-locked `avatar_key` is **kept, not erased** so renewing restores it. Icons are a `key` into `podcast/data/avatar_icons.py`, never a URL - adding artwork is a data change with no migration. 🔒 The unlock is enforced in `PUT /api/me/avatar`, not by the disabled button.
+- 🚨 **Anything that renders the viewer's avatar must read the `["me"]` query, not props.** `AppHeader` rendered a static initials tile, so picking an icon updated the profile page and left the header showing `PR` forever. TanStack dedupes it, so this is not a second round trip - and it is the only thing that makes `invalidateQueries({ queryKey: ["me"] })` reach every avatar on the page.
 
-### The channel "Full view" grid
+### Topic labels: a machine suggestion is not a member's label
 
-- 🚨 **`GridFitToggle` is gone.** It scaled the inline grid with `transform: scale()` without shrinking its container, so the page grew a vertical scrollbar over empty space - the opposite of what "fit to screen" promises.
-- 🚨 **`GridFullscreen` FETCHES the grid; never pass it as a prop.** It is a Client Component, so a prop is serialized into the RSC flight payload on every page load whether the dialog opens or not - and the flagship channel's grid is 322 KB of JSON on a page already at 916 KB.
-- 🚨 **NEVER size those cells with a pixel constant. It was got wrong twice, the same way both times** - a number standing in for a layout the browser was going to compute anyway. `(100dvh - CHROME) / rowCount` first ignored the 1px inter-cell gap (**184px** of unaccounted height on 184 rows, so the tallest years ran off the bottom), and then its `CHROME` constant - measured at 1280px, where the legend is one line - overflowed the SMALL channel by 22px at 390px, where the legend wraps to three. It is flex-sized now (`flex-1 min-h-0` all the way down) so nothing is measured. `e2e 3.13b` fails on more than 1px of overflow on the flagship channel.
+- 🚨 **Every topic link in the catalogue today (2,565 of them) was written by `import_topic_labels`, and the UI must say so.** Auto chips render `dashed` + a `Sparkles` mark with a line of copy; community chips keep the solid border. Rendering them identically takes a guess for a fact AND removes the reason for a member to add a real one.
+- 🚨 **`is_auto` is DERIVED from `added_by`, never a stored column.** `import_topic_labels` already attributes its work to one system account (`AUTO_LABELLER_USERNAME`) so that `--clear` is exact; a parallel `source` field would be a second answer to the same question and would drift on the first merge or re-import. `podcast/services/labels.py` caches the account id for 600s.
+- 🚨 **`added_by IS NULL` is a DELETED MEMBER, not the machine.** The obvious one-liner ("nobody is named, so it must be automatic") would relabel every orphaned human contribution as a guess, permanently and invisibly. `is_auto` is also **required** in the schema - a Pydantic default of `False` would make one forgotten assignment render every machine label as community-authored. `test_label_provenance.py` pins both.
+
+### The ratings grid (and the whole-channel view that does NOT exist)
+
+> 🔬 Full write-up in [`specs/13-ux-feedback-round-3/01-changes.md`](specs/13-ux-feedback-round-3/01-changes.md).
+
+- 🚨 **There is NO "fit to screen" and NO "full view" button, and BOTH were built and removed.** `GridFitToggle` scaled the inline grid with `transform: scale()` without shrinking its container, so the page grew a vertical scrollbar over empty space - the opposite of what "fit to screen" promises. `GridFullscreen` replaced it with a transposed overlay, passed six E2E tests, fit all 1,225 cells in one frame with no inner scroll, and was rejected on sight the next day ("awful"): at that density the cells are a few pixels of colour and the result reads as noise, not as a chart.
+  - 🚨 **The lesson is NOT "the sizing was wrong" - the sizing was measured and correct.** "Show me the whole channel at once" is a **cell-count** problem, and squeezing the same 1,225 cells into a smaller viewport cannot solve it. Anything built here next must **aggregate** (by month, by quarter), not shrink. Deleting the overlay also took the flagship channel page from 916 KB to **841 KB** - it was a Client Component in the bundle.
+  - 🚨 The sizing lesson survives its feature and applies to anything that fills a viewport: **never size cells with a pixel constant.** It was got wrong twice, the same way both times - a number standing in for a layout the browser was going to compute anyway. `(100dvh - CHROME) / rowCount` first ignored the 1px inter-cell gap (**184px** unaccounted on 184 rows), and then its `CHROME` constant - measured at 1280px, where the legend is one line - overflowed the SMALL channel by 22px at 390px, where the legend wraps to three. Flex-size it (`flex-1 min-h-0` all the way down) so nothing is measured.
+- 🚨 **The sticky year column's mask is a BORDER, never a box-shadow.** `shadow-[4px_0_0_0_var(--card-2)]` paints outside the border box and takes no layout space, so those 4px sat permanently on top of the first data column - at every scroll position, including zero. On the dense grid that is 3px of a 20px cell, so column 1 looked narrower than the rest and lost its dashed border. `border-r-4 border-card-2` looks identical and pushes the cells clear.
 - ⚠️ Every column renders `grid.rows.length` children - a short year renders **spacers**, not fewer cells. That is what keeps the years aligned; give a spacer a different size and the grid shears.
 
 ### Next.js specifics
 
 - 🚨 **`prefetch={false}` on every link to `/search?q=...`.** `/search` is `force-dynamic`, so each prefetch is a real Meilisearch round trip on the server; a dozen fired on paint and the RSC prefetches never settled, so the page never reached network idle.
+- 🚨 **Every "load more" link needs `scroll={false}`.** These are real navigations (the longer page stays shareable and server-rendered), and Next resets scroll to the top on every one by default - so the button threw the reader back to the heading and made them scroll past everything they had just read. `/episodes` had it; `/search` did not, and the spoken section is the LAST thing on that page, which makes it the most expensive reset on the site.
 - 🚨 **Never call `setState` synchronously inside an effect.** `react-hooks/set-state-in-effect` is an error in this repo. Use derived state, adjust-during-render for "reset when a prop changes", or `lib/use-hydrated.ts` for "the server cannot know this".
 - ✅ **`LinkButton` / `ExternalLinkButton`, never `<Button render={<Link/>}>`.** Base UI's `render` prop without `nativeButton={false}` logs a console-only accessibility error that passes typecheck, lint AND build.
 
@@ -399,6 +410,7 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
 - 🚨 **`/search` MUST query BOTH indexes. Two indexes, two questions, one page.** `apps/web/app/search/page.tsx` fires `/api/search` and `/api/search/transcripts` in a single `Promise.all`. Calling only the first is not a smaller feature, it is a broken one: for 8 months the page did exactly that, and **`баница` - an example query printed on the page itself - showed "Нищо не съвпада" while 173 passages said the word out loud**. Community labelling has barely started, so titles alone answer very little.
   - ✅ Episodes matching both collapse onto ONE card (keyed by `youtube_id`); transcript-only episodes render in the `results-spoken` region below.
   - 🚨 **Label matches are split TITLE-FIRST across two regions** (`results-title`, then `results-elsewhere`), 2026-08-15. People search for a title far more often than for a label, and a title hit ranked below three topic matches reads as "not found". The split reorders the API's ranked list by design, so e2e asserts the union as a SET and pins the partition separately (`7.1b`).
+  - 🚨 **The EMPTY `/search` page is the field and nothing else** (owner call, 2026-08-16). The "popular topics" disclosure under it is deleted: it had already been collapsed once for competing with the field, and collapsing it only made it a control nobody opened. The topics it listed are machine suggestions, so a menu of them reads as "these are the subjects we cover" - the wrong promise for a free-text box. The field is centred, with a visible submit button; **the overlay had no submit control at all**, so the only way to run a query was the keyboard's return key and nothing on screen said so.
   - 🚨 **`/search` paginates via `?n=`.** The header quotes `results.total`, so a page rendering fewer than that MUST offer a way to reach the rest - it did not, and "38 episodes" above 21 cards read as a broken search. `n` is clamped to `SEARCH_MAX_RESULTS` (500) and floored, because an unbounded page size read off the query string is a DoS lever; the API caps one request at 50, so larger asks are parallel offset pages.
   - ✅ The transcript half `.catch`es to `null`. A 4xx/5xx thrown inside a Server Component is an unhandled throw and therefore a 500 page - label matches are still a useful answer.
   - 🚨 `copy.search.spokenPartial` renders whenever spoken results do. Coverage is ~30% and runs 99% to 0% by channel, so an absent episode has NOT been ruled out.
@@ -765,7 +777,7 @@ YYYYMMDD-feature-name        e.g. 20260808-p1-ingestion
 
 ## 🧪 Testing
 
-**2,086 automated tests** (1,485 pytest + 210 Vitest + 391 Playwright, as of
+**2,275 automated tests** (1,679 pytest + 210 Vitest + 386 Playwright, as of
 2026-08-16). ⚠️ The backend number is inflated by one parametrized matrix:
 `test_memberships.py` round-trips the month maths across all 31 renewal days x 5
 month counts x 6 reference dates, which is 930 cases on its own. That is
@@ -785,9 +797,9 @@ npm run test:web             # turbo test -> Vitest then Playwright
 npm run test:api             # pytest only
 
 cd apps/web && npx vitest run           # 210 unit + contract + perf-budget tests
-cd apps/web && npx playwright test      # 391 E2E (desktop 1280x800 + mobile 390x844)
+cd apps/web && npx playwright test      # 386 E2E (desktop 1280x800 + mobile 390x844)
 cd apps/web && npx playwright test --ui # debug interactively
-cd apps/api && uv run pytest -q         # 1,485 backend tests
+cd apps/api && uv run pytest -q         # 1,679 backend tests
 ```
 
 | Layer | Tool | Location |
@@ -844,7 +856,7 @@ expensive, which is exactly why they must be **scoped**:
 # ✅ the specs that touch what you changed, one viewport while iterating
 npx playwright test e2e/public-browse.spec.ts --project=desktop
 
-# ❌ 259 tests x 2 viewports for a three-file visual change
+# ❌ the whole suite x 2 viewports for a three-file visual change
 npx playwright test
 ```
 

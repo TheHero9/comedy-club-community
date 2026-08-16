@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Crown, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { useCopy } from "@/components/i18n/LocaleProvider";
@@ -10,7 +10,7 @@ import { MembershipEditor } from "@/components/profile/MembershipEditor";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Page } from "@/components/shell/Page";
+import { Page, PageHeading } from "@/components/shell/Page";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/components/ui/toast";
@@ -81,7 +81,7 @@ export default function MembershipsPage() {
   if (!signedIn || memberships.isError) {
     return (
       <Page>
-        <h1 className="text-h1">{copy.memberships.title}</h1>
+        <PageHeading title={copy.memberships.title} icon={Crown} />
         <div className="mt-5">
           <SignedOutNotice />
         </div>
@@ -99,7 +99,7 @@ export default function MembershipsPage() {
 
   return (
     <Page>
-      <h1 className="text-h1">{copy.memberships.title}</h1>
+      <PageHeading title={copy.memberships.title} icon={Crown} />
       <p className="mt-2 max-w-[560px] text-small text-subtle-foreground">
         {copy.memberships.intro}
       </p>
@@ -123,7 +123,18 @@ export default function MembershipsPage() {
               key={membership.id}
               className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3"
             >
-              <ChannelAvatar name={membership.channel_name} size="xs" />
+              {/* 🚨 `avatarUrl` is not optional polish here. Without it this
+                  row rendered the gold initials tile while the SAME channel
+                  showed its real YouTube picture on the home page and the
+                  channel page - so the one screen where you name your channels
+                  was the one screen where they did not look like themselves.
+                  The tile stays layered behind, because Google's avatar hashes
+                  do 404 between syncs. */}
+              <ChannelAvatar
+                name={membership.channel_name}
+                avatarUrl={membership.channel_avatar_url}
+                size="s"
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-[14.5px] font-semibold text-foreground">

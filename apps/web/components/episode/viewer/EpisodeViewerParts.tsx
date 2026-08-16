@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Check, ExternalLink, Heart, Star, X } from "lucide-react";
+import { Calendar, Check, ExternalLink, Eye, Heart, Star, X } from "lucide-react";
 
 import { SignInSheet } from "@/components/auth/SignInSheet";
 import { useEpisodeViewer } from "@/components/episode/viewer/EpisodeViewerContext";
@@ -172,17 +172,39 @@ export function EpisodeSidebar() {
 
   return (
     <aside className="sticky top-20 hidden flex-col gap-3 md:flex">
+      {/*
+        🚨 THE UNWATCHED STATE MUST NOT LOOK LIKE THE WATCHED ONE. This button
+        used to render a tick on brand red with the word "Watched" beside it
+        while the episode was unwatched - the owner read it as "you have seen
+        this" and so would anyone. Three things separate them now, not one:
+        the icon (an open eye = an instruction, a tick = a fact), the label
+        (`markWatchedLong` is an imperative), and the fill.
+
+        Red stays on the UNWATCHED state deliberately: it is the page's call to
+        action, and the done state has no business shouting. The tick then
+        takes the green band colour the watch-log entries below already use,
+        so "done" reads as done rather than as another button to press.
+      */}
       <Button
-        variant={watched ? "elevated" : "primary"}
+        variant={watched ? "soft" : "primary"}
         size="2xl"
         block
         className="text-[15px] font-bold"
         onClick={viewer.toggleWatched}
+        aria-pressed={watched}
       >
-        <Check className="size-[18px]" aria-hidden strokeWidth={2.4} />
+        {watched ? (
+          <Check
+            className="size-[18px] text-band-great"
+            aria-hidden
+            strokeWidth={2.6}
+          />
+        ) : (
+          <Eye className="size-[18px]" aria-hidden strokeWidth={2.4} />
+        )}
         {watched
           ? copy.episode.watchedCount(viewer.watchCount)
-          : copy.episode.markWatched}
+          : copy.episode.markWatchedLong}
       </Button>
 
       <div className="flex gap-2">
@@ -327,13 +349,25 @@ export function EpisodeActionBar() {
           the viewport and shoved the last icon off the right edge of a 390px
           screen. The label is also short now ("Watched" / "Гледано"); both
           fixes are needed, because one long word would do it again. */}
+      {/* Same three-way distinction as the sidebar; the SHORT label, because
+          this bar is 390px wide and the long form pushed the favourite button
+          off the right edge. */}
       <Button
-        variant={watched ? "elevated" : "primary"}
+        variant={watched ? "soft" : "primary"}
         size="lg"
         className="min-w-0 flex-1 text-[14.5px] font-bold"
         onClick={viewer.toggleWatched}
+        aria-pressed={watched}
       >
-        <Check className="size-[17px] shrink-0" aria-hidden strokeWidth={2.4} />
+        {watched ? (
+          <Check
+            className="size-[17px] shrink-0 text-band-great"
+            aria-hidden
+            strokeWidth={2.6}
+          />
+        ) : (
+          <Eye className="size-[17px] shrink-0" aria-hidden strokeWidth={2.4} />
+        )}
         <span className="truncate">
           {watched
             ? copy.episode.watchedCount(viewer.watchCount)

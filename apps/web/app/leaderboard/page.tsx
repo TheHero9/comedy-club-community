@@ -4,7 +4,9 @@ import type { Metadata } from "next";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ScoreChip } from "@/components/shared/ScoreChip";
 import { Thumbnail } from "@/components/shared/Thumbnail";
-import { Page } from "@/components/shell/Page";
+import { Trophy } from "lucide-react";
+
+import { Page, PageHeading } from "@/components/shell/Page";
 import {
   getLeaderboard,
   LEADERBOARD_KINDS,
@@ -63,7 +65,7 @@ export default async function LeaderboardPage({
 
   return (
     <Page>
-      <h1 className="text-h1">{copy.leaderboard.title}</h1>
+      <PageHeading title={copy.leaderboard.title} icon={Trophy} />
 
       <div className="mt-3.5 flex flex-wrap gap-1.5">
         {TABS.map((tab) => {
