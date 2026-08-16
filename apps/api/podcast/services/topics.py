@@ -23,6 +23,18 @@ logger = logging.getLogger("podcast")
 
 MAX_TOPIC_NAME_LENGTH = 80
 
+#: 🚨 An ABUSE CEILING, not a product limit, and deliberately far above what a
+#: real episode needs - the most-labelled episode in the catalogue has nowhere
+#: near this many. Adding a topic is an authenticated write that mints a
+#: CANONICAL `Topic` row on first use and queues a Celery re-index, and the
+#: write throttle is keyed per account (60/min), so N sign-ups is N buckets and
+#: nothing bounded how many labels one episode could accumulate.
+#:
+#: A label list past this length has also stopped being useful to a reader: the
+#: whole point of canonical topics is that "every episode about X" means
+#: something, which it does not when an episode is about forty things.
+MAX_TOPICS_PER_EPISODE = 40
+
 
 class TopicError(Exception):
     """A topic name that cannot be accepted."""
@@ -79,6 +91,17 @@ def suggest_topics(query: str, limit: int = 8) -> list[Topic]:
 def add_topic_to_episode(episode, name: str, user) -> tuple[EpisodeTopic, bool]:
     """Attach a canonical topic to an episode. Idempotent per (episode, topic)."""
     topic = resolve_topic(name)
+
+    # ⚠️ Checked BEFORE get_or_create, but only blocks a NEW link: re-adding a
+    # topic an episode already carries is idempotent and must stay a no-op
+    # rather than becoming an error once the episode is full.
+    if not EpisodeTopic.objects.filter(episode=episode, topic=topic).exists():
+        if EpisodeTopic.objects.filter(episode=episode).count() >= MAX_TOPICS_PER_EPISODE:
+            raise TopicError(
+                f"This episode already has the maximum of "
+                f"{MAX_TOPICS_PER_EPISODE} topics."
+            )
+
     episode_topic, created = EpisodeTopic.objects.get_or_create(
         episode=episode, topic=topic, defaults={"added_by": user}
     )

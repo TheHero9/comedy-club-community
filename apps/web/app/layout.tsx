@@ -9,6 +9,7 @@ import { BottomNav } from "@/components/shell/BottomNav";
 import { SiteFooter } from "@/components/shell/SiteFooter";
 import { Toaster } from "@/components/ui/sonner";
 import { getCopy, getLocale, htmlLang, openGraphLocale } from "@/lib/locale";
+import { SITE_URL } from "@/lib/site";
 
 import { Providers } from "./providers";
 import "./globals.css";
@@ -47,6 +48,11 @@ export async function generateMetadata(): Promise<Metadata> {
   const copy = await getCopy();
 
   return {
+    // 🚨 Without this every canonical and Open Graph URL Next resolves is
+    // relative to `localhost:3000`, and Next warns about it at build time
+    // rather than failing - so a share preview pointing at localhost is the
+    // kind of thing that ships silently. Same origin the sitemap uses.
+    metadataBase: new URL(SITE_URL),
     title: {
       default: copy.app.name,
       template: `%s | ${copy.app.shortName}`,

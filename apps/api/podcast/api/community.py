@@ -35,6 +35,7 @@ from podcast.models import (
 from podcast.services import participants as participant_service
 from podcast.services import topics as topic_service
 from podcast.services.indexing import schedule_episode_reindex
+from podcast.services.links import LinkError, clean_avatar_url
 from podcast.services.timestamps import TimestampError, resolve_timestamp
 from podcast.slugs import bg_slugify
 
@@ -66,6 +67,10 @@ from .serializers import (
 )
 
 router = Router(tags=["community"], auth=get_auth())
+
+#: 🚨 See MAX_TOPICS_PER_EPISODE in services/topics.py. An abuse ceiling on a
+#: write that queues background work, not a product limit anyone should reach.
+MAX_MOMENTS_PER_EPISODE_PER_USER = 200
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +269,22 @@ def add_moment(request, youtube_id: str, payload: MomentIn):
     label = payload.label.strip()
     if not label:
         raise HttpError(422, "Moment label cannot be empty")
+
+    # 🚨 An ABUSE CEILING, per member per episode - see MAX_TOPICS_PER_EPISODE
+    # for the same reasoning. Every moment queues a Celery re-index, and the
+    # write throttle is keyed per account, so nothing bounded how many one
+    # member could add. Scoped to the actor rather than to the episode so a
+    # spammer cannot exhaust the budget for everybody else on a popular episode.
+    #
+    # 200 is far above real use: the longest episode in the catalogue is under
+    # three hours, which is a moment every 50 seconds.
+    mine = Moment.objects.filter(episode=episode, user=request.auth).count()
+    if mine >= MAX_MOMENTS_PER_EPISODE_PER_USER:
+        raise HttpError(
+            429,
+            f"You have already added the maximum of "
+            f"{MAX_MOMENTS_PER_EPISODE_PER_USER} moments to this episode.",
+        )
 
     with transaction.atomic():
         moment = Moment.objects.create(
@@ -479,6 +500,20 @@ def reject_proposal(request, proposal_id: int, payload: ProposalReviewIn):
 # ---------------------------------------------------------------------------
 
 
+def _checked_avatar(raw: str) -> str:
+    """🔒 A persona's picture is rendered on every episode they appear in.
+
+    Moderator-supplied rather than public input, so this is not the same threat
+    as the profile field - but it is the same UNCHECKED WRITE. `Person.avatar_url`
+    is a `URLField` and Django does not run field validators on `save()`, so a
+    pasted `data:` blob or a typo'd scheme reached the column and then the page.
+    """
+    try:
+        return clean_avatar_url(raw)
+    except LinkError as exc:
+        raise HttpError(422, str(exc)) from exc
+
+
 @router.post("/moderation/people", response=PersonOut)
 def create_person(request, payload: PersonIn):
     """🔒 Moderators and admins. Mint a canonical persona.
@@ -503,7 +538,7 @@ def create_person(request, payload: PersonIn):
         raise HttpError(409, f"A person with the slug {slug!r} already exists")
 
     person = Person.objects.create(
-        name=name, bio=payload.bio.strip(), avatar_url=payload.avatar_url.strip()
+        name=name, bio=payload.bio.strip(), avatar_url=_checked_avatar(payload.avatar_url)
     )
     person._appearance_count = 0
     return person_out(person)
@@ -527,7 +562,7 @@ def update_person(request, slug: str, payload: PersonIn):
 
     person.name = name
     person.bio = payload.bio.strip()
-    person.avatar_url = payload.avatar_url.strip()
+    person.avatar_url = _checked_avatar(payload.avatar_url)
     person.save(update_fields=["name", "bio", "avatar_url"])
 
     # Their name is in the search document of every episode they appear in.

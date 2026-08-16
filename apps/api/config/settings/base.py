@@ -148,6 +148,11 @@ API_WRITE_RATE_LIMIT = env_str("API_WRITE_RATE_LIMIT", "60/min")
 # prod.py refuses to boot with anything but "clerk". See docs/03-auth-decisions.md.
 AUTH_BACKEND = env_str("AUTH_BACKEND", "dev")
 
+# 🔒 Serve `/api/docs` and `/api/openapi.json`? On locally, OFF in production -
+# see the comment in config/api.py. `packages/api-types` is generated from a
+# local dev server, so turning these off in production costs nothing.
+API_DOCS_ENABLED = env_bool("API_DOCS_ENABLED", True)
+
 # Clerk (wave 8). Django only VERIFIES tokens; it never issues them.
 CLERK_SECRET_KEY = env_str("CLERK_SECRET_KEY", "")
 CLERK_JWKS_URL = env_str("CLERK_JWKS_URL", "")

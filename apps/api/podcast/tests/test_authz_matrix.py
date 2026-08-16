@@ -464,7 +464,15 @@ def test_14_3_ordinary_write_endpoints_are_open_to_every_role(
             ),
             client.patch(
                 f"{BASE}/me",
-                data={"display_name": role},
+                # 🚨 NOT `role`, which is what this used to send. Two of the
+                # three role names ("moderator", "admin") are now reserved
+                # display names - see services/display_names.py - so the loop
+                # was asserting a 200 on a payload the API is supposed to
+                # reject. The role was only ever an arbitrary string in scope;
+                # this test is about whether every role may WRITE, not about
+                # what a name may contain, so it uses an ordinary name and
+                # keeps asserting exactly what it always did.
+                data={"display_name": f"Иван {role}ов"},
                 content_type="application/json",
                 **headers,
             ),

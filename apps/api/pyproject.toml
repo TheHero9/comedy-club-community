@@ -19,6 +19,7 @@ dependencies = [
     "pyjwt[crypto]>=2.10",
     "meilisearch>=0.33",
     "gunicorn>=23.0",
+    "sentry-sdk[django]>=2.20",
 ]
 
 [dependency-groups]

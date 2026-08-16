@@ -29,6 +29,16 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def env_float(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
 def env_list(name: str, default: list[str] | None = None) -> list[str]:
     value = os.environ.get(name)
     if value is None or value.strip() == "":

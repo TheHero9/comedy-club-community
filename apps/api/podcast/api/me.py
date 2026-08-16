@@ -32,7 +32,9 @@ from podcast.models import (
 )
 from podcast.services import memberships as membership_math
 from podcast.services import scoring
+from podcast.services.display_names import DisplayNameError, clean_display_name
 from podcast.services.handles import HandleError, clean_handle
+from podcast.services.links import LinkError, clean_avatar_url
 
 from .schemas import (
     AvatarIconOut,
@@ -136,12 +138,26 @@ def get_me(request):
 @router.patch("/me", response=MeOut)
 def update_me(request, payload: ProfileIn):
     profile = _profile(request.auth)
-    for field in ("display_name", "bio", "avatar_url"):
-        value = getattr(payload, field)
-        if value is not None:
-            setattr(profile, field, value)
+
+    if payload.bio is not None:
+        profile.bio = payload.bio
+
+    # 🔒 Both of these used to be written through unvalidated. `avatar_url` is a
+    # `URLField`, but Django does not run field validators on `save()`, so any
+    # 200-char string reached the column and then a public page; `display_name`
+    # is published as `author_name` under every comment, so `Admin` was a name
+    # anyone could take. See services/links.py and services/display_names.py.
+    if payload.avatar_url is not None:
+        try:
+            profile.avatar_url = clean_avatar_url(payload.avatar_url)
+        except LinkError as exc:
+            raise HttpError(422, str(exc)) from exc
 
     if payload.display_name is not None:
+        try:
+            profile.display_name = clean_display_name(payload.display_name)
+        except DisplayNameError as exc:
+            raise HttpError(422, str(exc)) from exc
         # 🚨 THIS FLAG IS WHAT MAKES THE SAVE STICK. `provision_user` refreshes
         # display_name from Clerk on every authenticated request, so without it
         # the row below is reverted before the member gets back to the profile
@@ -150,7 +166,11 @@ def update_me(request, payload: ProfileIn):
         # Clearing the field un-sets it, so "" means "go back to my Google name"
         # rather than "leave me permanently nameless" - a member who wipes the
         # box by accident gets their name back instead of a dead end.
-        profile.display_name_is_custom = bool(payload.display_name.strip())
+        #
+        # Read off the CLEANED value, not the raw payload: `clean_display_name`
+        # normalises whitespace, so a name of "   " is empty here and must
+        # un-set the flag exactly like "" does.
+        profile.display_name_is_custom = bool(profile.display_name)
 
     if payload.handle is not None:
         try:

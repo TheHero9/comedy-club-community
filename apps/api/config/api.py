@@ -46,11 +46,25 @@ def _write_throttle():
     return [WriteThrottle()]
 
 
+# 🔒 The interactive docs and the raw schema are DEV-ONLY (`prod.py` turns them
+# off). Neither is a hole on its own - every endpoint behind them re-checks
+# authorization, which was verified by probing production directly - but
+# `/api/openapi.json` is an 86 KB map of the entire moderation surface, served
+# to anyone who asks. There is no reason a public visitor needs it: the only
+# legitimate consumer is `packages/api-types`, which is generated from the LOCAL
+# dev server at build time and never reads production.
+#
+# ⚠️ `openapi_url` must be turned off too, not just `docs_url`. Disabling the UI
+# alone leaves the schema itself served, which is the half that actually carries
+# the information.
+_DOCS_ENABLED = getattr(settings, "API_DOCS_ENABLED", True)
+
 api = NinjaAPI(
     title="Comedy Club Community API",
     version="0.1.0",
     description="Searchable community hub for Bulgarian YouTube podcast channels.",
-    docs_url="/docs",
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
     throttle=_write_throttle(),
     renderer=CompactUnicodeJSONRenderer(),
 )

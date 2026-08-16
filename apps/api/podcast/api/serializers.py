@@ -229,7 +229,12 @@ def moment_out(moment, viewer=None) -> dict:
         "label": moment.label,
         "score": moment.score,
         "created_at": moment.created_at,
-        "author": (profile.display_name if profile else None),
+        # 🔒 `humanize` for the same reason `comment_out` uses it: this is a
+        # PUBLIC field, and a profile provisioned before the display-name guard
+        # existed carries the raw Clerk `sub`. Printing it raw here published an
+        # identity-provider id under every moment while the comment right below
+        # it on the same page was correctly guarded.
+        "author": humanize(profile.display_name if profile else "") or None,
         "is_mine": bool(viewer_id and moment.user_id == viewer_id),
     }
 
@@ -247,13 +252,15 @@ def proposal_out(proposal, viewer=None) -> dict:
         "role": proposal.role,
         "status": proposal.status,
         "created_at": proposal.created_at,
-        "proposed_by": (profile.display_name if profile else None),
+        # 🔒 Same guard as `moment_out` and `comment_out` - these two strings are
+        # shown to a moderator and to the member who filed the proposal.
+        "proposed_by": humanize(profile.display_name if profile else "") or None,
         "note": proposal.note,
         "verified_at": proposal.verified_at,
         # ⚠️ Reads the PROFILE name, never `user.get_username()` - for a
         # Clerk-provisioned account that IS the raw `sub`, and this string is
         # rendered to other people.
-        "reviewed_by": (reviewer.display_name if reviewer else None) or None,
+        "reviewed_by": humanize(reviewer.display_name if reviewer else "") or None,
         "is_mine": bool(viewer_id and proposal.proposed_by_id == viewer_id),
     }
 
