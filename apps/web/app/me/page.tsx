@@ -9,6 +9,7 @@ import {
   Heart,
   History,
   Pencil,
+  ShieldCheck,
   Star,
   Tags,
   UserRound,
@@ -126,6 +127,19 @@ export default function ProfilePage() {
       key: null,
       value: me ? String(me.memberships.length) : "",
     },
+    // 🔒 Staff only - but that is PRESENTATION. The page itself and every
+    // endpoint behind it re-check the role, because a hidden tile is not a
+    // permission.
+    ...(me?.role === "admin" || me?.role === "moderator"
+      ? [
+          {
+            href: "/me/people",
+            label: copy.manage.title,
+            icon: ShieldCheck,
+            key: null as null,
+          },
+        ]
+      : []),
   ];
 
   return (

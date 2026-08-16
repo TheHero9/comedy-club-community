@@ -106,6 +106,22 @@ def as_moderator():
 
 
 @pytest.fixture
+def admin_user(db):
+    """🔒 Distinct from `moderator`: some actions are admin-only on purpose.
+
+    `require_moderator` passes for BOTH roles, so a test that only ever uses a
+    moderator cannot tell an admin-only endpoint from a moderator one - it
+    would pass either way and prove nothing.
+    """
+    return make_user("boss", role=UserProfile.Role.ADMIN)
+
+
+@pytest.fixture
+def as_admin():
+    return auth_header("boss")
+
+
+@pytest.fixture
 def verify_membership():
     """Verify a user on a channel, the way the admin action does."""
 

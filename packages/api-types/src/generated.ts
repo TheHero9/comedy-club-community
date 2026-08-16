@@ -924,6 +924,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/moderation/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Person
+         * @description 🔒 Moderators and admins. Mint a canonical persona.
+         *
+         *     🚨 This is the ONLY way a `Person` comes into existence from the app. A
+         *     member's typed name never reaches here - it stays free text on a proposal
+         *     until someone with this permission maps it onto a persona. That asymmetry
+         *     is the entire defence against Тонката / Тони / Донката becoming three
+         *     people.
+         */
+        post: operations["podcast_api_community_create_person"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/people/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Person
+         * @description 🔒 ADMINS ONLY - stricter than creating one, because this cascades.
+         *
+         *     Deleting a persona removes every `EpisodeParticipant` row for them and
+         *     every proposal that resolved onto them. Creating a wrong persona is a typo;
+         *     deleting a real one silently rewrites history on every episode they were in.
+         */
+        delete: operations["podcast_api_community_delete_person"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Person
+         * @description 🔒 Moderators and admins.
+         *
+         *     ⚠️ The SLUG DOES NOT CHANGE when the name does. `Person.save` only assigns
+         *     a slug when there is none, and that is deliberate: the slug is in
+         *     `/episodes?person=`, in the Meilisearch `participant_slugs` facet and in
+         *     every link already shared. Renaming a typo should not break those.
+         */
+        patch: operations["podcast_api_community_update_person"];
+        trace?: never;
+    };
     "/api/reports": {
         parameters: {
             query?: never;
@@ -1011,6 +1070,55 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users
+         * @description 🔒 ADMINS ONLY - not moderators.
+         *
+         *     A moderator being able to see and change roles would let them promote
+         *     themselves to admin, which makes the distinction between the two roles
+         *     decorative. Only an admin grants permissions.
+         */
+        get: operations["podcast_api_moderation_list_users"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set User Role
+         * @description 🔒 ADMINS ONLY. Promote to moderator/admin, or demote to member.
+         *
+         *     🚨 AN ADMIN CANNOT CHANGE THEIR OWN ROLE. Not a nicety - it is the only
+         *     thing standing between a mis-click and a site with no administrator at all,
+         *     which is unrecoverable from the app and would need a shell on production to
+         *     fix. Demoting someone else is fine; there is always you left.
+         */
+        patch: operations["podcast_api_moderation_set_user_role"];
         trace?: never;
     };
 }
@@ -2086,6 +2194,24 @@ export interface components {
              */
             note: string;
         };
+        /**
+         * PersonIn
+         * @description Creating or editing a canonical persona. Admin-curated, never user text.
+         */
+        PersonIn: {
+            /** Name */
+            name: string;
+            /**
+             * Bio
+             * @default
+             */
+            bio: string;
+            /**
+             * Avatar Url
+             * @default
+             */
+            avatar_url: string;
+        };
         /** ReportOut */
         ReportOut: {
             /** Id */
@@ -2149,6 +2275,43 @@ export interface components {
              * @default
              */
             resolution_note: string;
+        };
+        /**
+         * UserAdminOut
+         * @description A person's account, as the role panel sees it.
+         *
+         *     🔒 Deliberately NO email. The panel exists to grant permissions, and that
+         *     does not require exposing everyone's address to every admin session.
+         */
+        UserAdminOut: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
+            /** Display Name */
+            display_name: string;
+            /** Handle */
+            handle?: string | null;
+            /** Role */
+            role: string;
+            /**
+             * Date Joined
+             * Format: date-time
+             */
+            date_joined: string;
+            /**
+             * Is Me
+             * @default false
+             */
+            is_me: boolean;
+        };
+        /** UserRoleIn */
+        UserRoleIn: {
+            /**
+             * Role
+             * @description member | moderator | admin
+             */
+            role: string;
         };
     };
     responses: never;
@@ -3447,6 +3610,78 @@ export interface operations {
             };
         };
     };
+    podcast_api_community_create_person: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+        };
+    };
+    podcast_api_community_delete_person: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    podcast_api_community_update_person: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonOut"];
+                };
+            };
+        };
+    };
     podcast_api_moderation_list_reports: {
         parameters: {
             query?: {
@@ -3560,6 +3795,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportOut"][];
+                };
+            };
+        };
+    };
+    podcast_api_moderation_list_users: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminOut"][];
+                };
+            };
+        };
+    };
+    podcast_api_moderation_set_user_role: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserRoleIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminOut"];
                 };
             };
         };

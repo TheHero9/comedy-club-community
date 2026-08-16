@@ -6,6 +6,7 @@ a rating. Resolution happens here or in Django Admin - both write the same field
 
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
@@ -14,8 +15,16 @@ from ninja import Query, Router
 from ninja.errors import HttpError
 
 from podcast.auth import get_auth
-from podcast.auth.permissions import require_moderator
-from podcast.models import Comment, Episode, EpisodeTopic, Moment, Rating, Report
+from podcast.auth.permissions import require_admin, require_moderator
+from podcast.models import (
+    Comment,
+    Episode,
+    EpisodeTopic,
+    Moment,
+    Rating,
+    Report,
+    UserProfile,
+)
 
 from .schemas import (
     LeaderboardOut,
@@ -23,6 +32,8 @@ from .schemas import (
     ReportIn,
     ReportOut,
     ReportResolveIn,
+    UserAdminOut,
+    UserRoleIn,
 )
 from .serializers import episode_brief, episode_list_queryset
 
@@ -244,3 +255,96 @@ def get_leaderboard(
 def _leaderboard_value(episode: Episode, field: str) -> float | None:
     value = getattr(episode, field, None)
     return float(value) if value is not None else None
+
+
+# ---------------------------------------------------------------------------
+# Roles (spec 14) - granting moderator, without Django Admin
+# ---------------------------------------------------------------------------
+
+
+@router.get("/moderation/users", response=list[UserAdminOut])
+def list_users(
+    request,
+    q: str = Query(""),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """🔒 ADMINS ONLY - not moderators.
+
+    A moderator being able to see and change roles would let them promote
+    themselves to admin, which makes the distinction between the two roles
+    decorative. Only an admin grants permissions.
+    """
+    require_admin(request.auth)
+
+    User = get_user_model()
+    queryset = User.objects.select_related("profile").order_by("-date_joined")
+    if q.strip():
+        term = q.strip()
+        queryset = queryset.filter(
+            Q(username__icontains=term)
+            | Q(profile__display_name__icontains=term)
+            | Q(profile__handle__icontains=term)
+        )
+
+    return [
+        {
+            "id": user.id,
+            "username": user.get_username(),
+            "display_name": getattr(user.profile, "display_name", "") or "",
+            "handle": getattr(user.profile, "handle", None),
+            "role": getattr(user.profile, "role", UserProfile.Role.MEMBER),
+            "date_joined": user.date_joined,
+            "is_me": user.id == request.auth.id,
+        }
+        for user in queryset[:limit]
+        if getattr(user, "profile", None) is not None
+    ]
+
+
+@router.patch("/moderation/users/{user_id}", response=UserAdminOut)
+def set_user_role(request, user_id: int, payload: UserRoleIn):
+    """🔒 ADMINS ONLY. Promote to moderator/admin, or demote to member.
+
+    🚨 AN ADMIN CANNOT CHANGE THEIR OWN ROLE. Not a nicety - it is the only
+    thing standing between a mis-click and a site with no administrator at all,
+    which is unrecoverable from the app and would need a shell on production to
+    fix. Demoting someone else is fine; there is always you left.
+    """
+    actor = require_admin(request.auth)
+
+    if payload.role not in UserProfile.Role.values:
+        raise HttpError(422, f"Role must be one of {sorted(UserProfile.Role.values)}")
+
+    User = get_user_model()
+    user = get_object_or_404(User.objects.select_related("profile"), id=user_id)
+
+    if user.id == actor.user_id:
+        raise HttpError(
+            409,
+            "You cannot change your own role. Ask another admin, so the site "
+            "can never be left without one.",
+        )
+
+    profile = getattr(user, "profile", None)
+    if profile is None:
+        raise HttpError(404, "That account has no profile yet")
+
+    profile.role = payload.role
+    profile.save(update_fields=["role"])
+
+    # 🔒 Django's admin site is a SEPARATE switch from UserProfile.role: the
+    # role governs this API, is_staff/is_superuser govern /admin/. Keeping them
+    # in step here means "admin" means one thing rather than two.
+    user.is_staff = payload.role == UserProfile.Role.ADMIN
+    user.is_superuser = payload.role == UserProfile.Role.ADMIN
+    user.save(update_fields=["is_staff", "is_superuser"])
+
+    return {
+        "id": user.id,
+        "username": user.get_username(),
+        "display_name": profile.display_name or "",
+        "handle": profile.handle,
+        "role": profile.role,
+        "date_joined": user.date_joined,
+        "is_me": False,
+    }

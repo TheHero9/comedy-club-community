@@ -484,6 +484,34 @@ class PersonDetailOut(PersonOut):
 # ---------------------------------------------------------------------------
 
 
+class UserAdminOut(Schema):
+    """A person's account, as the role panel sees it.
+
+    🔒 Deliberately NO email. The panel exists to grant permissions, and that
+    does not require exposing everyone's address to every admin session.
+    """
+
+    id: int
+    username: str
+    display_name: str
+    handle: str | None = None
+    role: str
+    date_joined: datetime
+    is_me: bool = False
+
+
+class UserRoleIn(Schema):
+    role: str = Field(..., description="member | moderator | admin")
+
+
+class PersonIn(Schema):
+    """Creating or editing a canonical persona. Admin-curated, never user text."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    bio: str = Field("", max_length=2000)
+    avatar_url: str = Field("", max_length=200)
+
+
 class ParticipantProposeIn(Schema):
     """Exactly one of `person_slug` / `name`.
 

@@ -38,6 +38,7 @@ export type Proposal = Schema<"ProposalOut">;
 export type ProposalQueueItem = Schema<"ProposalQueueOut">;
 export type Report = Schema<"ReportOut">;
 export type PersonBrief = Schema<"PersonBriefOut">;
+export type AdminUser = Schema<"UserAdminOut">;
 
 /**
  * Public content changes at most once a day (the ingestion sync), so a short

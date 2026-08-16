@@ -17,12 +17,14 @@ from ninja.errors import HttpError
 from podcast.auth import get_auth
 from podcast.auth.permissions import (
     is_moderator,
+    require_admin,
     require_moderator,
     require_self_or_moderator,
 )
 from podcast.models import (
     Comment,
     Episode,
+    EpisodeParticipant,
     EpisodeTopic,
     EpisodeTopicVote,
     Moment,
@@ -33,6 +35,7 @@ from podcast.services import participants as participant_service
 from podcast.services import topics as topic_service
 from podcast.services.indexing import schedule_episode_reindex
 from podcast.services.timestamps import TimestampError, resolve_timestamp
+from podcast.slugs import bg_slugify
 
 from .schemas import (
     CommentIn,
@@ -44,6 +47,8 @@ from .schemas import (
     MomentIn,
     MomentOut,
     ParticipantProposeIn,
+    PersonIn,
+    PersonOut,
     ProposalOut,
     ProposalQueueOut,
     ProposalReviewIn,
@@ -54,6 +59,7 @@ from .serializers import (
     comment_out,
     moment_out,
     paginated_meta,
+    person_out,
     proposal_out,
     proposal_queue_out,
 )
@@ -406,3 +412,96 @@ def reject_proposal(request, proposal_id: int, payload: ProposalReviewIn):
         raise HttpError(422, str(exc)) from exc
 
     return proposal_out(proposal, viewer=request.auth)
+
+
+# ---------------------------------------------------------------------------
+# Persona curation (spec 14) - the in-app replacement for Django Admin
+# ---------------------------------------------------------------------------
+
+
+@router.post("/moderation/people", response=PersonOut)
+def create_person(request, payload: PersonIn):
+    """🔒 Moderators and admins. Mint a canonical persona.
+
+    🚨 This is the ONLY way a `Person` comes into existence from the app. A
+    member's typed name never reaches here - it stays free text on a proposal
+    until someone with this permission maps it onto a persona. That asymmetry
+    is the entire defence against Тонката / Тони / Донката becoming three
+    people.
+    """
+    require_moderator(request.auth)
+
+    name = " ".join(payload.name.split())
+    if not name:
+        raise HttpError(422, "A name is required")
+
+    slug = bg_slugify(name, max_length=220)
+    if Person.objects.filter(slug=slug).exists():
+        # By SLUG, not name: that is what collapses casing and spacing variants,
+        # the same rule topics follow. Refusing here is the point - a duplicate
+        # persona is the failure this whole feature exists to prevent.
+        raise HttpError(409, f"A person with the slug {slug!r} already exists")
+
+    person = Person.objects.create(
+        name=name, bio=payload.bio.strip(), avatar_url=payload.avatar_url.strip()
+    )
+    person._appearance_count = 0
+    return person_out(person)
+
+
+@router.patch("/moderation/people/{slug}", response=PersonOut)
+def update_person(request, slug: str, payload: PersonIn):
+    """🔒 Moderators and admins.
+
+    ⚠️ The SLUG DOES NOT CHANGE when the name does. `Person.save` only assigns
+    a slug when there is none, and that is deliberate: the slug is in
+    `/episodes?person=`, in the Meilisearch `participant_slugs` facet and in
+    every link already shared. Renaming a typo should not break those.
+    """
+    require_moderator(request.auth)
+    person = get_object_or_404(Person, slug=slug)
+
+    name = " ".join(payload.name.split())
+    if not name:
+        raise HttpError(422, "A name is required")
+
+    person.name = name
+    person.bio = payload.bio.strip()
+    person.avatar_url = payload.avatar_url.strip()
+    person.save(update_fields=["name", "bio", "avatar_url"])
+
+    # Their name is in the search document of every episode they appear in.
+    for episode_id in EpisodeParticipant.objects.filter(person=person).values_list(
+        "episode_id", flat=True
+    ):
+        schedule_episode_reindex(episode_id)
+
+    person._appearance_count = person.appearances.count()
+    return person_out(person)
+
+
+@router.delete("/moderation/people/{slug}", response=MessageOut)
+def delete_person(request, slug: str):
+    """🔒 ADMINS ONLY - stricter than creating one, because this cascades.
+
+    Deleting a persona removes every `EpisodeParticipant` row for them and
+    every proposal that resolved onto them. Creating a wrong persona is a typo;
+    deleting a real one silently rewrites history on every episode they were in.
+    """
+    require_admin(request.auth)
+    person = get_object_or_404(Person, slug=slug)
+
+    episode_ids = list(
+        EpisodeParticipant.objects.filter(person=person).values_list(
+            "episode_id", flat=True
+        )
+    )
+    name = person.name
+    person.delete()
+
+    # Those episodes just lost a cast member; their documents must stop
+    # matching on the name rather than wait for the nightly rebuild.
+    for episode_id in episode_ids:
+        schedule_episode_reindex(episode_id)
+
+    return {"detail": f"Deleted {name} and {len(episode_ids)} appearance(s)"}
