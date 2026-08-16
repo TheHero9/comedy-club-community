@@ -692,6 +692,9 @@ describe("4.41-4.43 getHealthResult", () => {
         status: "ok",
         database: { ok: true, detail: "" },
         redis: { ok: true, detail: "" },
+        // The deployed commit. Present but irrelevant here - health is about
+        // dependencies, and a version string must never sway the verdict.
+        version: "73c700f",
       }),
     ).toBe(true);
 
@@ -700,6 +703,7 @@ describe("4.41-4.43 getHealthResult", () => {
         status: "ok",
         database: { ok: true, detail: "" },
         redis: { ok: false, detail: "connection refused" },
+        version: "73c700f",
       }),
     ).toBe(false);
   });

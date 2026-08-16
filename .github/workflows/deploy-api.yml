@@ -12,13 +12,21 @@ name: Deploy API
 # old schema. This closes it from the CI side, so "push to main" ships the
 # whole app rather than half of it.
 #
-# ⚠️ THIS IS THE FALLBACK, NOT THE IDEAL FIX. The services are already
-# repo-sourced (`TheHero9/comedy-club-community`, rootDirectory `/apps/api`,
-# watchPatterns `apps/api/**`) - the ONLY missing piece is the GitHub App that
-# delivers the push webhook. Installing it is a one-click job in the Railway
-# dashboard, needs no token and no workflow, and is strictly better than this.
-# If you do that, DELETE this file - otherwise every push deploys twice.
-# Setup notes and the comparison: specs/10-deployment/02-auto-deploy.md
+# 🚨 WHY THIS AND NOT THE RAILWAY GITHUB APP.
+#
+# Installing the app is one click and needs no token, and it was the obvious
+# answer - but it deploys on the PUSH, with nothing in between. This repo has
+# standing authorization to commit straight to `main` with no PR and no review,
+# and the api service's preDeployCommand is `migrate --noinput`. Together those
+# mean a typo in a model would run an unreviewed schema change against
+# production Postgres seconds after being typed, and `makemigrations --check`
+# would find out about it afterwards.
+#
+# Gating on CI is worth the one secret it costs. See
+# specs/10-deployment/02-auto-deploy.md for the full comparison.
+#
+# 🚨 If the GitHub App is ever installed as well, DELETE this file - otherwise
+# every push deploys twice and the two race each other.
 #
 # ⚠️ REQUIRES ONE SECRET: `RAILWAY_TOKEN`, a PROJECT token for
 # comedy-club-community / production. Without it the job fails loudly rather
@@ -82,6 +90,21 @@ jobs:
 
       - run: npm install -g @railway/cli
 
+      # 🚨 Stamp the commit INTO the image, so the running container can be
+      # asked what it is. `railway up` uploads a source snapshot and carries no
+      # git metadata, so Railway's own deployment list cannot answer "is the new
+      # code live?" - and that question going unanswered for days is the whole
+      # reason this workflow exists. `/api/health` returns this as `version`.
+      #
+      # BUILD_SHA is tracked (holding the placeholder "dev") rather than
+      # generated, because a gitignored file would be excluded from the upload.
+      - name: Stamp the build
+        run: |
+          set -euo pipefail
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "$SHA" > apps/api/BUILD_SHA
+          echo "Deploying ${SHA:0:7}"
+
       # 🚨 `railway up`, never `railway redeploy`. Redeploy re-runs the most
       # recent deployment REUSING that deployment's build and config, so it
       # ships the OLD commit - and any service-config change made since is
@@ -119,15 +142,30 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: What to check
-        if: always()
+      # 🚨 The job does not pass until the deployed code ANSWERS. A built
+      # container is not a serving one, and every incident in this project's
+      # history is some version of "it reported success and served the old
+      # thing". This asks the live API what commit it is running.
+      - name: Verify the new code is actually serving
         run: |
-          echo "🚨 A green job means the deployments were CREATED and built."
-          echo "Confirm the API is actually serving the new code - the site can"
-          echo "look fine while running an old schema:"
-          echo "  curl -s https://api.comedycommunity.club/api/health"
-          echo "and check the deploy logs for the 'migrate --noinput' output."
-          echo ""
-          echo "⚠️ 'railway up' uploads a source snapshot, so the deployment may"
-          echo "carry no commitHash in the Railway UI. Verify by BEHAVIOUR (a"
-          echo "new field on a response) rather than by looking for the hash."
+          set -euo pipefail
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          WANT="${SHA:0:7}"
+          echo "Waiting for https://api.comedycommunity.club to report $WANT"
+
+          for attempt in $(seq 1 40); do
+            GOT=$(curl -fsS --max-time 10 https://api.comedycommunity.club/api/health \
+                  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' \
+                  2>/dev/null || true)
+            if [ "$GOT" = "$WANT" ]; then
+              echo "✅ serving $GOT"
+              exit 0
+            fi
+            echo "  attempt $attempt: serving '${GOT:-unreachable}'"
+            sleep 15
+          done
+
+          echo "::error::The API never reported $WANT. It built but is not serving."
+          echo "Check the deploy logs for the 'migrate --noinput' output - a failed"
+          echo "migration fails the release and Railway keeps the old container."
+          exit 1

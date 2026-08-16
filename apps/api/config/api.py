@@ -9,8 +9,10 @@ import logging
 
 from django.conf import settings
 from django.db import connection
-from ninja import NinjaAPI, Schema
+from ninja import Field, NinjaAPI, Schema
 from ninja.renderers import JSONRenderer
+
+from config.version import DEPLOYED_SHA
 
 logger = logging.getLogger("podcast")
 
@@ -63,6 +65,16 @@ class HealthOut(Schema):
     status: str
     database: DependencyStatus
     redis: DependencyStatus
+    version: str = Field(
+        "",
+        description=(
+            "Short SHA of the commit this process is RUNNING, or '' locally. "
+            "🚨 This is how a deploy is verified. Railway's own deployment list "
+            "says what it was asked to build; this says what is actually "
+            "serving - and on 2026-08-15 those differed silently for days. "
+            "See config/version.py."
+        ),
+    )
 
 
 def _check_database() -> DependencyStatus:
@@ -97,6 +109,7 @@ def health(request):
         status="ok" if (database.ok and cache.ok) else "degraded",
         database=database,
         redis=cache,
+        version=DEPLOYED_SHA,
     )
 
 

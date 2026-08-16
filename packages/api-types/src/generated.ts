@@ -888,6 +888,12 @@ export interface components {
             status: string;
             database: components["schemas"]["DependencyStatus"];
             redis: components["schemas"]["DependencyStatus"];
+            /**
+             * Version
+             * @description Short SHA of the commit this process is RUNNING, or '' locally. 🚨 This is how a deploy is verified. Railway's own deployment list says what it was asked to build; this says what is actually serving - and on 2026-08-15 those differed silently for days. See config/version.py.
+             * @default
+             */
+            version: string;
         };
         /** ChannelOut */
         ChannelOut: {

@@ -34,36 +34,45 @@ configuration you can inspect in Railway looks right.
 
 ---
 
-## Option A - install the GitHub App (recommended, ~1 minute)
+## The decision: CI-gated GitHub Actions, not the Railway GitHub App
 
-This is what the service config already expects, and it is strictly better than
-anything CI can do: no token to rotate, no workflow to maintain, and Railway
-handles the `watchPatterns` filtering itself so a docs-only commit does not
-rebuild three containers.
+Both were on the table. The app is one click and needs no token; the workflow
+needs a secret and some YAML. **The workflow won anyway**, for one reason:
 
-1. Railway dashboard → project **comedy-club-community** → service **api**
-2. **Settings → Source**, next to the connected repo choose **Configure** /
-   reconnect. GitHub prompts to install the **Railway** app.
-3. Grant it access to `TheHero9/comedy-club-community`.
-4. Repeat if `celery-worker` / `celery-beat` do not pick it up automatically -
-   they share the repo, so usually one install covers all three.
+> This repo has standing authorization to commit straight to `main` with no PR
+> and no review, and the api service's `preDeployCommand` is
+> `migrate --noinput`.
 
-**Verify it, do not assume it.** Push a trivial commit touching `apps/api/**`
-and confirm a deployment appears whose `commitHash` is that commit. A green
-Vercel deploy proves nothing about Railway - that is the whole lesson of
-2026-08-15.
+Put together, the GitHub App means a typo in a model runs an **unreviewed schema
+change against production Postgres** seconds after being typed - and
+`makemigrations --check`, the gate that exists precisely to catch that, finds
+out afterwards. On a repo with PR review that trade is fine. Here there is
+nothing between the keyboard and the database.
 
-🚨 **If you do this, delete `.github/workflows/deploy-api.yml`** or every push
-will deploy twice.
+| | GitHub App | **Actions workflow (chosen)** |
+| --- | --- | --- |
+| Setup | one click | one secret |
+| Runs ruff / pytest / migration-drift first | ❌ | ✅ |
+| Skips docs-only commits | ✅ `watchPatterns` | ❌ deploys anyway |
+| Deployment carries a commitHash | ✅ | ❌ (upload-sourced) |
+| Proves the new code is **serving** | ❌ | ✅ polls `/api/health` |
+
+The two ❌ in the chosen column are real, and the second one mattered enough to
+fix rather than accept - see "Verification" below. The first is deliberate: a
+path filter that silently skips is the same class of bug as the missing
+webhook, and an unnecessary rolling restart is much cheaper than a missed
+schema change.
+
+### Rejected alternative, for the record
+
+Installing the app *and* adding branch protection with required status checks
+would give gating and a real commitHash. It does not work for a solo developer
+pushing directly: required checks run **after** the push, so protection would
+reject every push rather than gate the deploy.
 
 ---
 
-## Option B - the GitHub Actions workflow (shipped, needs one secret)
-
-`.github/workflows/deploy-api.yml`. Use this if you would rather deploys were
-gated on CI than fired by a webhook.
-
-### Setup
+## Setup (one time)
 
 1. Railway → project **comedy-club-community** → **Settings → Tokens** → create
    a **project token** scoped to the **production** environment.
@@ -95,29 +104,38 @@ gated on CI than fired by a webhook.
 - **No `--detach`.** The command waits, so a failed build or a failed migration
   fails the job instead of being reported as a deploy that never served.
 
-### Known cost of Option B
-
-⚠️ `railway up` uploads a **source snapshot**, so the resulting deployment may
-carry no `commitHash` in the Railway UI. The usual verification ("`list-deployments`
-must show a deployment whose commitHash is your commit") does not apply - verify
-by **behaviour** instead, e.g. that a response carries a field only the new code
-returns.
-
-⚠️ Every successful CI run on `main` deploys, including commits that touched no
-API code. That is deliberate: a path filter that silently skips is the same
-class of bug as the missing webhook, and over-deploying costs a rolling restart
-while under-deploying costs a schema mismatch.
-
 ---
 
-## Either way: what "deployed" means
+## Verification: the API reports its own commit
 
-A created deployment is not a serving one.
+🚨 **`railway up` uploads a source snapshot, so the deployment carries no
+`commitHash`.** The project's documented check - "`list-deployments` must show a
+deployment whose commitHash is your commit" - simply does not work on this path.
+
+Rather than accept a weaker check, the commit is stamped **into the image** and
+the running process reports it:
 
 ```bash
 curl -s https://api.comedycommunity.club/api/health
+# {"status":"ok","database":{...},"redis":{...},"version":"73c700f"}
 ```
 
-and read the deploy log for the `migrate --noinput` output. 🚨 The Railway MCP
-agent reports success for config it silently fails to apply - only believe a
-read-back.
+- `apps/api/BUILD_SHA` is a **tracked** file holding the placeholder `dev`. The
+  workflow overwrites it with the commit being shipped, just before
+  `railway up`. Tracked rather than generated because a gitignored file would
+  be left out of the upload.
+- `config/version.py` reads it at import, falling back to Railway's own
+  `RAILWAY_GIT_COMMIT_SHA` (so this keeps working if the GitHub App is ever
+  installed) and then to `""` locally.
+- The workflow's last step **polls `/api/health` until it reports the new SHA**,
+  for up to ten minutes, and fails if it never does.
+
+That last point is the one that matters. Every incident in this project's
+history is a version of *"it reported success and served the old thing"*: the
+2026-08-15 phantom deploys, the `redeploy` that silently reused an old config,
+the Railway MCP agent reporting success for volumes it never attached. A green
+deploy job now means the new code **answered**, not that a container was built.
+
+⚠️ It also means a failed migration fails the workflow loudly. Railway keeps the
+old container when a `preDeployCommand` exits non-zero, so `/api/health` would
+keep reporting the previous SHA - which is exactly the signal you want.

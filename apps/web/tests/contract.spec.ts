@@ -361,6 +361,7 @@ const health: Schema<"HealthOut"> = {
   status: "ok",
   database: { ok: true, detail: "select 1" },
   redis: { ok: true, detail: "PONG" },
+  version: "73c700f",
 };
 
 const fromOperation: OperationResponse<"config_api_health"> = health;
