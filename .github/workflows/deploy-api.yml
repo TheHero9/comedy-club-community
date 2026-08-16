@@ -119,14 +119,19 @@ jobs:
       # No `--detach`: we want the command to wait, so a failed build or a
       # failed migration fails this job instead of being reported as a
       # successful deploy that never served.
+      # 🚨 Run `railway up` from the REPO ROOT, never from apps/api. The
+      # services' `rootDirectory: /apps/api` is applied INSIDE the uploaded
+      # archive, so uploading apps/api itself makes Railway look for
+      # apps/api/apps/api and railpack's prepare step fails on an empty
+      # directory (proven by deployment c565b019, 2026-08-16). The docs are
+      # explicit: the archive root is the project root, and the service's
+      # root-directory setting selects the subdirectory.
       - name: Deploy api (runs the migration)
-        working-directory: apps/api # matches the services' rootDirectory
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service api --environment production --ci
 
       - name: Deploy celery-worker and celery-beat
-        working-directory: apps/api
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
