@@ -1,6 +1,7 @@
 # 14 - Community participants & moments
 
-**Status:** 📋 Design, awaiting schema approval. Nothing built, no migration generated.
+**Status:** ✅ **BUILT and deployed 2026-08-16** (`c8be8c0`). Migration `0008` applied to
+production. Schema approved by the owner before the build.
 **Date:** 2026-08-16
 
 ---

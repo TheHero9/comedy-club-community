@@ -1,6 +1,6 @@
 # 14.2 - Reporting, the feedback loop, and admin activity visibility
 
-**Status:** 📋 Design, awaiting schema approval. Nothing built.
+**Status:** ✅ **BUILT and deployed 2026-08-16** (`c8be8c0`).
 **Date:** 2026-08-16
 **Follows:** [`01-design.md`](01-design.md) - participants & moments
 
@@ -32,12 +32,12 @@ Checked against the code on 2026-08-16, not assumed.
 | Claim | Verdict |
 | ----- | ------- |
 | `Report` model with reason, status, `resolution_note`, `resolved_by`, `resolved_at` | ✅ True |
-| `POST /api/moderation/reports`, duplicate-protected with a 409 | ✅ True - `get_or_create` on (reporter, target, pending) |
+| `POST /api/reports`, duplicate-protected with a 409 | ✅ True - `get_or_create` on (reporter, target, pending) |
 | Rate-limited | ✅ True - `WriteThrottle` covers the whole `NinjaAPI` |
 | Django Admin queue with bulk resolve/dismiss | ✅ True - `ReportAdmin.mark_resolved` / `mark_dismissed` |
 | Only comment / moment / episodetopic / rating are reportable | ✅ True - the `REPORTABLE` dict in `podcast/api/moderation.py` |
 | No web UI for reporting | ✅ True |
-| Users cannot see what happened to their report | ✅ True - `GET /api/moderation/reports` is `require_moderator`; a user can only `DELETE` their own pending one |
+| Users cannot see what happened to their report | ✅ True - `GET /api/reports` is `require_moderator`; a user can only `DELETE` their own pending one |
 
 ### 🚨 Two gaps the earlier summary missed
 
@@ -153,11 +153,11 @@ Activity visibility is an admin display change, not a data change.
 
 | Method | Path | Auth | Notes |
 | ------ | ---- | ---- | ----- |
-| `POST` | `/api/moderation/reports` | user | gains `category`, and `target_type`/`target_id` become optional |
+| `POST` | `/api/reports` | user | gains `category`, and `target_type`/`target_id` become optional |
 | `GET` | `/api/me/reports` | user | 🆕 your own reports with status + resolution note |
-| `DELETE` | `/api/moderation/reports/{id}` | self | ✅ exists - withdraw your own pending report |
-| `GET` | `/api/moderation/reports` | `require_moderator` | ✅ exists |
-| `POST` | `/api/moderation/reports/{id}/resolve` | `require_moderator` | ✅ exists, already writes the note |
+| `DELETE` | `/api/reports/{id}` | self | ✅ exists - withdraw your own pending report |
+| `GET` | `/api/reports` | `require_moderator` | ✅ exists |
+| `POST` | `/api/reports/{id}/resolve` | `require_moderator` | ✅ exists, already writes the note |
 
 🔒 The actor is always `request.auth`. `GET /api/me/reports` filters on the authenticated user and
 never accepts a user id from the client.
