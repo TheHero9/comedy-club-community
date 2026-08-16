@@ -66,11 +66,32 @@ export default function ManagePeoplePage() {
 
   const people = useQuery({
     queryKey: ["manage", "people", term, pages],
-    queryFn: () =>
-      viewerApi.get<Person[]>("/api/people", {
-        query: { limit: PEOPLE_PAGE * pages, ...(term.trim() ? { q: term.trim() } : {}) },
-        cache: "no-store",
-      }),
+    /**
+     * 🚨 PARALLEL OFFSET PAGES, never one growing `limit`. This used to ask for
+     * `PEOPLE_PAGE * pages` in a single call, which is 150 on the third "load
+     * more" click - and `/api/people` caps `limit` at `MAX_LIMIT` (100), so
+     * that click answered **422** and the list simply stopped loading. The same
+     * class of drift `MAX_API_LIMIT` in `filter-model.ts` exists to prevent,
+     * and the same shape `/search` already uses for the same reason: an ask
+     * larger than the API's per-request ceiling becomes N offset pages.
+     *
+     * The accumulation still happens inside ONE queryFn, so the design note
+     * above holds - one query key still holds one visible list, and an approval
+     * that renames a persona re-fetches every page rather than leaving a stale
+     * earlier one on screen.
+     */
+    queryFn: async () => {
+      const search = term.trim() ? { q: term.trim() } : {};
+      const batches = await Promise.all(
+        Array.from({ length: pages }, (_, index) =>
+          viewerApi.get<Person[]>("/api/people", {
+            query: { limit: PEOPLE_PAGE, offset: index * PEOPLE_PAGE, ...search },
+            cache: "no-store",
+          }),
+        ),
+      );
+      return batches.flat();
+    },
     enabled: Boolean(isStaff),
   });
 
