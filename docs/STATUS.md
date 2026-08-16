@@ -81,6 +81,32 @@ migration drift, and all 35 perf budgets pass - `web:search-broad` came back
 inside budget at 170.6 KB (was a waived 193.1 KB against 180 KB), so its waiver
 was deleted per the ratchet rule.
 
+### 🚀 Deployed to production 2026-08-16, commit `94247cc`
+
+All three Railway services rebuilt from that commit by hand (`api` first, then
+`celery-worker`, then `celery-beat` - the workers bake code into their own
+images, and only `api` carries the migration). Migration `0007` applied cleanly:
+`Applying podcast.0007_channelmembership_renewal_day_userprofile_avatar_key... OK`.
+
+**The API now reports which commit it is running**, which is how this was
+verified and how every future deploy should be:
+
+```
+$ curl -s https://api.comedycommunity.club/api/health
+{"status":"ok", ..., "version":"94247cc"}
+```
+
+Production smoke test, all green: exact search counts (`царичи` → 2 labelled,
+13 spoken episodes, all 13 reachable), loose matching labelled correctly
+(`историята с колата` → 4 full + 11 partial), all 20 avatar images served,
+`/me/avatars` 401s rather than 500s, the fullscreen grid renders 1,225 cells
+with zero inner scroll, and no console errors.
+
+⚠️ **Automatic API deploys are written but NOT armed.** `.github/workflows/deploy-api.yml`
+is `workflow_dispatch`-only until a `RAILWAY_TOKEN` secret exists, so **a push
+to `main` still deploys the web only** and the API needs a manual trigger. See
+[`specs/10-deployment/02-auto-deploy.md`](../specs/10-deployment/02-auto-deploy.md).
+
 ---
 
 ## ✅ Verification evidence
