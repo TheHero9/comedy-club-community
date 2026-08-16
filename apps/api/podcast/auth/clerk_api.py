@@ -101,6 +101,14 @@ def fetch_user(clerk_user_id: str) -> dict | None:
         headers={
             "Authorization": f"Bearer {secret}",
             "Accept": "application/json",
+            # 🚨 Cloudflare fronts api.clerk.com and bans urllib's default
+            # "Python-urllib/3.12" User-Agent outright (403, plain-text
+            # "error code: 1010" - not a Clerk response at all). That block
+            # is what every "Clerk 403" in production actually was: the key
+            # never reached Clerk. Proven 2026-08-16 by requesting the same
+            # URL with both agents: curl-UA got Clerk's 401 JSON, urllib-UA
+            # got Cloudflare's 1010.
+            "User-Agent": "comedy-club-community/1.0 (+https://comedycommunity.club)",
         },
     )
 
