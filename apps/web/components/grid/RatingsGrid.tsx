@@ -4,8 +4,9 @@ import { GridInteraction } from "@/components/grid/GridInteraction";
 import {
   cellDataAttributes,
   cellLabel,
-  DENSE_HEADER_EVERY,
-  isRoomy,
+  hasMobileTranspose,
+  printsScores,
+  seasonCells,
   TIGHT_FROM_SEASONS,
   type Grid,
   type GridCell,
@@ -19,25 +20,36 @@ import { cn } from "@/lib/utils";
 /**
  * The ratings grid. One calendar year is one season.
  *
- * 🚨 THE MOBILE GRID IS TRANSPOSED, and that is the single most important
- * structural decision in the redesign.
+ * 🚨 THE GRID WRAPS. IT DOES NOT SCROLL SIDEWAYS. (Owner call, 2026-08-16.)
  *
- * Years-as-rows at 390px makes a 2,100px strip for three years. Reaching
- * episode 30 of 2025 means scrolling sideways past 29 cells with no landmarks,
- * the sticky year column eats 90px of a 390px screen, and cells have to shrink
- * to about 56x36 to feel worth scrolling - which fails the 44px touch target,
- * and then three markers have to stack in the corners of a chip smaller than a
- * fingertip.
+ * Every earlier version was a MATRIX - years down one axis, position-in-the-year
+ * along the other - and every one of them was wider than the screen. The
+ * flagship channel's busiest year has 183 episodes, so at 20px a cell that axis
+ * was 3,913px inside a 1,150px card: on a laptop you saw columns 1 to 52 of 183
+ * and the other 71% of the catalogue was behind a horizontal scroll with no
+ * scrollbar in sight. The owner's report was "I only see a bit of the
+ * episodes", and it was literally true.
  *
- * Transposing turns the wide axis into the short one. Three years is three
- * columns of about 98px, so the grid fits with NO horizontal scroll at all and
- * the long axis becomes ordinary vertical page scroll. Cells get 44px of
- * height and enough width for the score plus all three markers in a row.
+ * The fix is not a smaller cell - that was tried twice and rejected, because
+ * 1,225 cells squeezed into one frame read as noise rather than as a chart (see
+ * the block comment on the channel page). The fix is to stop pretending the
+ * year is one line. `FlowGrid` renders each year as its own wrapped run of
+ * full-size cells, so the browser lays out as many per line as the container
+ * has room for and the long axis becomes ordinary vertical page scroll. Nothing
+ * shrinks, nothing is hidden, nothing scrolls sideways.
+ *
+ * What that costs: cells at the same position in different years no longer line
+ * up in a column. That comparison was already unavailable to anyone who could
+ * only see the first 52 of 183.
+ *
+ * The transposed mobile table survives for channels with at most 4 years - see
+ * `hasMobileTranspose`. It is the better shape at that size, and at 390px it is
+ * the only one that keeps a 44px touch target.
  *
  * Server Component: it renders from data the page already fetched, so the grid
  * is in the initial HTML and every cell is a crawlable link to its episode.
  * `GridInteraction` layers the preview on top by event delegation rather than
- * by making 2,024 cells into client components.
+ * by making 1,225 cells into client components.
  */
 interface RatingsGridProps {
   grid: Grid;
@@ -49,18 +61,29 @@ export async function RatingsGrid({ grid }: RatingsGridProps) {
     return <p className="text-small text-subtle-foreground">{copy.channel.empty}</p>;
   }
 
-  const roomy = isRoomy(grid);
+  const transposed = hasMobileTranspose(grid);
 
   return (
     <GridInteraction>
-      {roomy ? (
+      {/* The hints live here, not on the page, because only this component
+          knows which of the two layouts a given channel actually gets. */}
+      {transposed ? (
         <>
+          <p className="mt-2 text-[12.5px] text-subtle-foreground md:hidden">
+            {copy.channel.hintMobile}
+          </p>
           <MobileGrid grid={grid} />
-          <DesktopGrid grid={grid} />
         </>
-      ) : (
-        <DenseGrid grid={grid} />
-      )}
+      ) : null}
+      <p
+        className={cn(
+          "mt-2 text-[12.5px] text-subtle-foreground",
+          transposed && "hidden md:block",
+        )}
+      >
+        {copy.channel.hintFlow}
+      </p>
+      <FlowGrid grid={grid} transposed={transposed} />
       <GridLegend grid={grid} />
     </GridInteraction>
   );
@@ -150,91 +173,95 @@ async function MobileGrid({ grid }: { grid: Grid }) {
 }
 
 /* -------------------------------------------------------------------------
-   Roomy: desktop. Years are rows, position in the year is the column.
+   The flow grid: every episode, wrapped. One block per year.
+
+   🚨 THIS IS THE ONLY LAYOUT THAT SHOWS THE WHOLE CHANNEL. It replaced two
+   matrices (a 54px "roomy" desktop table and a 20px "dense" one) that were
+   identical in the way that mattered: both put a whole year on one horizontal
+   line, so both were wider than the page and both hid most of the catalogue
+   behind a scroll container. Measured on the flagship channel at 1440px before
+   this change: 3,913px of table in a 1,150px card, 52 of 183 columns visible.
+
+   `flex-wrap` on a fixed-size cell is the whole mechanism. The browser fits as
+   many per line as the container allows, at every width, with no measurement
+   and no pixel constant - which is the lesson the removed fullscreen overlay
+   paid for twice (never size cells with a number you computed yourself).
    ------------------------------------------------------------------------- */
 
-async function DesktopGrid({ grid }: { grid: Grid }) {
+async function FlowGrid({
+  grid,
+  transposed,
+}: {
+  grid: Grid;
+  transposed: boolean;
+}) {
   const copy = await getCopy();
-  return (
-    <div className="mt-4 hidden rounded-3xl border border-border bg-card-2 py-4 md:block">
-      {/* 🚨 THE STICKY YEAR COLUMN'S MASK IS A BORDER, NEVER A BOX-SHADOW.
-          It was `shadow-[4px_0_0_0_var(--card-2)]`, and a box-shadow paints
-          OUTSIDE the element and occupies no layout space - so those 4px sat
-          permanently on top of the first data column, clipping the left edge
-          off every episode-1 cell at every scroll position. On the dense grid
-          that is 3 of a 20px cell, which reads exactly like the first column
-          being cut off. `border-r-4` in the same colour looks identical and
-          pushes the cells clear instead of covering them. */}
-      {/* 🚨 The only overflow-x container on the page. `relative` is
-          load-bearing: Tailwind's `sr-only` is `position: absolute`, so without
-          a positioned ancestor those spans resolve their containing block above
-          this scroller, escape its overflow and stretch the document instead.
-          Measured once at documentElement.scrollWidth 4121 on a 390px screen. */}
-      {/* 🚨 `px-4` moved OFF this element and onto the table.
-          `position: sticky; left: 0` resolves against the scrollport's padding
-          box, so with padding here the year column parked 16px in and the
-          scrolling cells slid through the gap beside it - which is the
-          "it's fixed but buggy when you scroll" the owner saw. The gutter is
-          now the table's margin, so the sticky edge is the real edge.
+  const scores = printsScores(grid);
 
-          `relative` stays load-bearing: Tailwind's `sr-only` is
-          `position: absolute`, so without a positioned ancestor those spans
-          resolve above this scroller, escape its overflow and stretch the
-          document. Measured once at documentElement.scrollWidth 4121 on a
-          390px screen. */}
-      <div className="relative overflow-x-auto">
-        <table data-grid="desktop" className="mx-4 w-max border-separate border-spacing-1">
-          <caption className="sr-only">
-            {copy.channel.gridLabel(grid.channel_name)}
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col" className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 w-[88px]">
-                <span className="sr-only">{copy.channel.yearColumn}</span>
-              </th>
-              {grid.rows.map((row) => (
-                <th
-                  key={row.index}
-                  scope="col"
-                  className="w-[54px] pb-1 text-center font-mono text-[10.5px] font-normal text-faint-foreground tabular"
-                >
-                  {row.index}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {grid.seasons.map((season, seasonIndex) => (
-              <tr key={season.year}>
-                <th
-                  scope="row"
-                  className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 w-[88px] pr-3 text-left align-middle"
-                >
-                  <span className="flex flex-col">
-                    <span className="font-display text-[15px] font-bold text-foreground">
-                      {season.label}
-                    </span>
-                    <span className="font-mono text-[11px] font-normal text-subtle-foreground tabular">
-                      {season.average === null
-                        ? ""
-                        : copy.channel.seasonAverage(season.average.toFixed(1))}
-                    </span>
-                  </span>
-                </th>
-                {grid.rows.map((row) => (
-                  <td key={row.index} className="p-0">
-                    <RoomyCell
-                      cell={row.cells[seasonIndex] ?? null}
-                      season={season}
-                      index={row.index}
-                      orientation="desktop"
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  return (
+    <div
+      data-grid="flow"
+      data-density={scores ? "roomy" : "dense"}
+      // The table it replaced carried its name in a <caption>. A wrapped run of
+      // links has nowhere to put one, so the region is named directly - without
+      // this the grid is an unlabelled pile of 1,225 links to a screen reader.
+      role="group"
+      aria-label={copy.channel.gridLabel(grid.channel_name)}
+      className={cn(
+        "mt-3.5 rounded-3xl border border-border bg-card-2 p-4 md:p-5",
+        // Channels that transpose already showed their grid on mobile; this one
+        // is the laptop half for them. Everyone else gets it at every width.
+        transposed && "hidden md:block",
+      )}
+    >
+      <div className="flex flex-col gap-4 md:gap-5">
+        {grid.seasons.map((season, seasonIndex) => (
+          <section key={season.year} data-year={season.year}>
+            <h3 className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+              <span className="font-display text-[15px] font-bold text-foreground">
+                {season.label}
+              </span>
+              <span className="font-mono text-[11.5px] font-normal text-subtle-foreground tabular">
+                {copy.channels.episodeCount(season.episode_count)}
+              </span>
+              {season.average === null ? null : (
+                <span className="font-mono text-[11.5px] font-normal text-muted-foreground tabular">
+                  {copy.channel.seasonAverage(season.average.toFixed(1))}
+                </span>
+              )}
+            </h3>
+            {/* 🚨 `items-start`, not the default `stretch`. A wrapped flex line
+                stretches its items to the tallest one, and the roomy cell sets
+                its height with `h-11` on a flex child - which loses to stretch
+                on any line whose neighbours grew. */}
+            <div
+              data-year-cells
+              className={cn(
+                "mt-2 flex flex-wrap items-start",
+                scores ? "gap-1" : "gap-px",
+              )}
+            >
+              {seasonCells(grid, seasonIndex).map(({ cell, index }) =>
+                scores ? (
+                  <RoomyCell
+                    key={cell.youtube_id}
+                    cell={cell}
+                    season={season}
+                    index={index}
+                    orientation="desktop"
+                  />
+                ) : (
+                  <DenseCell
+                    key={cell.youtube_id}
+                    cell={cell}
+                    season={season}
+                    index={index}
+                  />
+                ),
+              )}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );
@@ -333,103 +360,26 @@ function RoomyCell({
 }
 
 /* -------------------------------------------------------------------------
-   Dense: one orientation at every width, colour only.
+   The dense cell: colour only, for channels too large to print every score.
    ------------------------------------------------------------------------- */
-
-async function DenseGrid({ grid }: { grid: Grid }) {
-  const copy = await getCopy();
-  return (
-    <div className="mt-4 rounded-3xl border border-border bg-card-2 py-4">
-      {/* Same fix as the roomy grid: the gutter is the table's margin, so the
-          sticky year column parks against the real scroll edge. */}
-      <div className="relative overflow-x-auto">
-        <table data-grid="dense" className="mx-4 w-max border-separate border-spacing-px">
-          <caption className="sr-only">
-            {copy.channel.gridLabel(grid.channel_name)}
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col" className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 pr-3">
-                <span className="sr-only">{copy.channel.yearColumn}</span>
-              </th>
-              {grid.rows.map((row) => (
-                <th
-                  key={row.index}
-                  scope="col"
-                  className="pb-1 text-center font-mono text-[9px] font-normal text-faint-foreground tabular"
-                >
-                  {/* A 3-digit number does not fit a 20px column, so every
-                      tenth is printed and the rest stay for screen readers.
-                      Every column still announces its position. */}
-                  {row.index % DENSE_HEADER_EVERY !== 0 ? (
-                    <span className="sr-only">{row.index}</span>
-                  ) : (
-                    row.index
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {grid.seasons.map((season, seasonIndex) => (
-              <tr key={season.year}>
-                <th
-                  scope="row"
-                  className="sticky left-0 z-30 bg-card-2 border-r-4 border-card-2 pr-3 text-left align-middle"
-                >
-                  <span className="flex items-baseline gap-1.5 leading-tight">
-                    <span className="font-display text-[13px] font-bold">
-                      {season.label}
-                    </span>
-                    <span className="font-mono text-[10px] font-normal text-subtle-foreground tabular">
-                      {season.average === null
-                        ? ""
-                        : season.average.toFixed(1)}
-                    </span>
-                  </span>
-                </th>
-                {grid.rows.map((row) => (
-                  // Padding comes from the dense descendant rule - "p-0" alone
-                  // was 24 KB across 2,024 cells, twice over with the flight.
-                  <td key={row.index}>
-                    <DenseCell
-                      cell={row.cells[seasonIndex] ?? null}
-                      season={season}
-                      index={row.index}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-3 px-4 text-[12px] text-subtle-foreground">
-        {copy.channel.hintDesktop}
-      </p>
-    </div>
-  );
-}
 
 function DenseCell({
   cell,
   season,
   index,
 }: {
-  cell: GridCell | null;
+  cell: GridCell;
   season: GridSeason;
   index: number;
 }) {
-  if (!cell) return <span aria-hidden />;
-
   const label = cellLabel(cell);
 
   // 🚨 NO className at all, deliberately. Size, radius, the unrated treatment
   // and all seven band colours live in one set of descendant rules in
-  // globals.css keyed on `data-band`, because this element renders 1,318 times
+  // globals.css keyed on `data-band`, because this element renders 1,225 times
   // and the class string was identical on every one of them - 138 KB of HTML,
-  // charged again in the RSC flight payload. Hover and focus already worked
-  // this way. If you need to restyle a dense cell, edit globals.css.
+  // charged again in the RSC flight payload. If you need to restyle a dense
+  // cell, edit globals.css - the selector is `[data-density="dense"]`.
   //
   // 🚨 No `title` attribute, deliberately. It used to carry the same string as
   // `aria-label`, which cost a second full copy of the episode title on every

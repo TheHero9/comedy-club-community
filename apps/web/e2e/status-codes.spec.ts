@@ -44,6 +44,21 @@ const MISSING_EPISODE = "/e/BADIDBADID";
 /** A path with no matching route at all, handled by Next itself. */
 const UNROUTED_PATH = "/nope";
 
+/** A profile list slug that is not one of the four, so `/me/[list]` 404s. */
+const MISSING_LIST = "/me/not-a-list";
+
+/**
+ * Segments that must never carry a loading boundary of their own.
+ *
+ * 🚨 A `loading.tsx` covers its segment AND EVERY CHILD, so one at
+ * `app/channels/` or `app/me/` would wrap `/channels/[slug]` and `/me/[list]`
+ * and turn both of their `notFound()` calls into soft 404s. That is why those
+ * two index pages were moved into `(index)` / `(overview)` route groups on
+ * 2026-08-16 - the group is what scopes the boundary to the listing alone,
+ * and moving the file back up would silently undo it.
+ */
+const SEGMENTS_THAT_CANNOT_TAKE_A_BOUNDARY = ["channels", "me"];
+
 /**
  * File names Next treats as a route-level loading boundary. Any of these at the
  * app root reintroduces the soft-404 bug.
@@ -201,7 +216,20 @@ test.describe("hard 404s", () => {
       ).toBe(false);
     }
 
-    const badRoutes = [MISSING_CHANNEL, MISSING_EPISODE];
+    // 🚨 Not just the root. A boundary one level down covers every child of
+    // that segment, which is the same bug with a smaller blast radius.
+    for (const segment of SEGMENTS_THAT_CANNOT_TAKE_A_BOUNDARY) {
+      for (const file of LOADING_FILES) {
+        expect(
+          existsSync(path.join(appDir, segment, file)),
+          `app/${segment}/${file} exists. A loading boundary covers its segment ` +
+            `AND every child, so this one wraps the notFound() route beneath it. ` +
+            `Put the skeleton inside the index route group instead.`,
+        ).toBe(false);
+      }
+    }
+
+    const badRoutes = [MISSING_CHANNEL, MISSING_EPISODE, MISSING_LIST];
     for (const route of badRoutes) {
       const response = await page.goto(route);
       expect(

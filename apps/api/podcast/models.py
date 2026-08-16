@@ -411,7 +411,15 @@ class EpisodeParticipant(models.Model):
     class Role(models.TextChoices):
         HOST = "host", "Host"
         COHOST = "cohost", "Co-host"
+        # A recurring member of the show who is NOT a guest. Owner's words:
+        # "for the people that participate that are part of the community - we
+        # won't allow for guests". Calling a regular a guest every episode is
+        # wrong in the one place the label is supposed to carry meaning.
+        REGULAR = "regular", "Regular"
         GUEST = "guest", "Guest"
+        # The voice off-camera: heard, never seen. Distinct from PRODUCER,
+        # which is a job rather than a presence in the episode.
+        OFFCAMERA = "offcamera", "Off-camera"
         PRODUCER = "producer", "Producer"
 
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="participants")
@@ -866,21 +874,43 @@ class Moment(models.Model):
 
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE, related_name="moments")
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    timestamp_sec = models.PositiveIntegerField()
+    # 🚨 NULLABLE since 2026-08-16 (owner ruling: "for some things we don't
+    # want to have a timestamp, it should be optional"). A moment without one
+    # is a NOTE ABOUT THE EPISODE rather than a point inside it - still
+    # searchable text, just not a deep link.
+    #
+    # NULL is the right shape and 0 is not: 0 is a real timestamp meaning "the
+    # very start", so reusing it would make every note deep-link to 0:00 and
+    # would be impossible to tell apart from a genuine cold-open label.
+    timestamp_sec = models.PositiveIntegerField(null=True, blank=True)
     label = models.CharField(max_length=200)
     score = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        # ⚠️ Postgres sorts ASC as NULLS LAST, which is exactly what we want:
+        # timestamped moments in episode order, notes after them. Stated here
+        # because it is load-bearing, not incidental - flipping to DESC or
+        # adding `nulls_first` would scatter notes through the timeline.
         ordering = ["timestamp_sec"]
         indexes = [models.Index(fields=["episode", "timestamp_sec"])]
 
     def __str__(self):
+        if self.timestamp_sec is None:
+            return f"(no time) - {self.label}"
         minutes, seconds = divmod(self.timestamp_sec, 60)
         return f"{minutes}:{seconds:02d} - {self.label}"
 
     @property
-    def deep_link(self) -> str:
+    def deep_link(self) -> str | None:
+        """The YouTube deep link, or None for a moment with no timestamp.
+
+        🚨 Returns None rather than the plain episode URL. A link that silently
+        drops the `&t=` looks like a working deep link and lands at 0:00, which
+        is worse than offering no link at all.
+        """
+        if self.timestamp_sec is None:
+            return None
         return f"https://www.youtube.com/watch?v={self.episode.youtube_id}&t={self.timestamp_sec}"
 
 

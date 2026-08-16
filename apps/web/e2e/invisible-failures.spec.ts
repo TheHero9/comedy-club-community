@@ -174,29 +174,33 @@ test.describe("8. mobile + layout", () => {
     );
   });
 
-  test("8.3 the desktop grid is the only thing that scrolls sideways", async ({
-    page,
-    viewport,
-  }) => {
-    test.skip(
-      (viewport?.width ?? 0) < 768,
-      "the mobile grid is transposed precisely so that nothing scrolls sideways; 3.10 pins that",
-    );
-
+  /**
+   * 🚨 THIS TEST USED TO ASSERT THE OPPOSITE, and that is the point.
+   *
+   * Until 2026-08-16 it required the grid container to be WIDER than its
+   * viewport ("the grid must actually be wider than its container, or this test
+   * proves nothing"), because the grid was a matrix with one column per episode
+   * and the sideways scroll was the design. It was also the bug: on the
+   * flagship channel that matrix was 3,913px inside a 1,150px card, so a laptop
+   * showed 52 of 183 columns and the catalogue looked a quarter of its size.
+   *
+   * The grid wraps now, so the new invariant is the inverse - nothing scrolls
+   * sideways, at any width, on any channel. 3.12 pins the same thing on the
+   * biggest channel, which is where it actually mattered.
+   */
+  test("8.3 the ratings grid does not scroll sideways either", async ({ page }) => {
     await page.goto("/channels/ivan-kirkov");
-    const container = page
-      .locator("div.overflow-x-auto")
-      .filter({ has: page.locator("table[data-grid='desktop']") });
-    await expect(container).toBeVisible();
+    const grid = visibleGrid(page);
+    await expect(grid).toBeVisible();
 
-    const box = await container.evaluate((el) => ({
+    const box = await grid.evaluate((el) => ({
       scrollWidth: el.scrollWidth,
       clientWidth: el.clientWidth,
     }));
     expect(
-      box.scrollWidth,
-      "the grid must actually be wider than its container, or this test proves nothing",
-    ).toBeGreaterThan(box.clientWidth);
+      box.scrollWidth - box.clientWidth,
+      "the grid scrolls sideways, so most of it is off screen",
+    ).toBeLessThanOrEqual(1);
     expect(await hasHorizontalOverflow(page), "the page itself must not scroll").toBe(
       false,
     );
@@ -400,7 +404,7 @@ test.describe("9. theme + fonts", () => {
     // Scores, timestamps, counts and dates are JetBrains Mono and tabular, so a
     // column of grid numbers cannot wobble.
     await page.goto("/channels/ivan-kirkov");
-    const meta = page.locator("table[data-grid] a[data-cell] span").first();
+    const meta = page.locator("[data-grid] a[data-cell] span").first();
     const style = await meta.evaluate((element) => {
       const computed = getComputedStyle(element);
       return {

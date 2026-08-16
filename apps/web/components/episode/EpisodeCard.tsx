@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+import { NavProgress } from "@/components/shared/NavProgress";
+
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { ChannelAvatar } from "@/components/shared/ChannelAvatar";
 import { ScoreChip } from "@/components/shared/ScoreChip";
@@ -108,6 +110,7 @@ export function EpisodeCard({
       <p className="mt-1 text-[11.5px] text-subtle-foreground">
         {showRatingCount && date ? `${date} / ${ratings}` : date || ratings}
       </p>
+      <NavProgress />
     </Link>
   );
 }
@@ -164,6 +167,7 @@ export function EpisodeRow({
         size="lg"
         className="shrink-0"
       />
+      <NavProgress />
     </Link>
   );
 }
@@ -203,6 +207,7 @@ export function EpisodeRailCard({
         {episode.title}
       </p>
       <p className="mt-1 text-[11px] text-subtle-foreground">{reason}</p>
+      <NavProgress />
     </Link>
   );
 }

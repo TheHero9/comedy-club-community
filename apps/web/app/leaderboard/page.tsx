@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import { NavProgress } from "@/components/shared/NavProgress";
 import type { Metadata } from "next";
 
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -83,6 +85,7 @@ export default async function LeaderboardPage({
               )}
             >
               {tab.label}
+              <NavProgress />
             </Link>
           );
         })}
@@ -135,7 +138,8 @@ export default async function LeaderboardPage({
                     band={entry.episode.band}
                     size="lg"
                   />
-                </Link>
+                  <NavProgress />
+            </Link>
               </li>
             ))}
           </ol>
@@ -186,6 +190,7 @@ function PodiumBlock({
       <p className="line-clamp-2 h-[30px] text-center text-[11.5px] leading-snug text-muted-foreground">
         {episode.title}
       </p>
-    </Link>
+      <NavProgress />
+            </Link>
   );
 }

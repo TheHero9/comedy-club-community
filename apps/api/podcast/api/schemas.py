@@ -94,7 +94,11 @@ class ChapterOut(Schema):
 
 class MomentOut(Schema):
     id: int
-    timestamp_sec: int
+    # 🚨 Nullable, and REQUIRED in the schema (no `= None` default). A moment
+    # with no timestamp is a note about the episode rather than a point inside
+    # it, and the client renders it differently - so one forgotten assignment
+    # must fail loudly here, not silently default every note to "no time".
+    timestamp_sec: int | None
     label: str
     score: int
     created_at: datetime
@@ -451,9 +455,16 @@ class VoteIn(Schema):
 
 
 class MomentIn(Schema):
-    """Either form of timestamp. `timestamp` is what a human typed ("1:30:29");
-    `timestamp_sec` is kept so existing callers keep working. The string wins
-    when both arrive - see services/timestamps.resolve_timestamp."""
+    """Either form of timestamp, or NEITHER.
+
+    `timestamp` is what a human typed ("1:30:29"); `timestamp_sec` is kept so
+    existing callers keep working. The string wins when both arrive - see
+    services/timestamps.resolve_timestamp.
+
+    Both absent is legal and means "a note about this episode, not a point in
+    it" (owner ruling 2026-08-16). A malformed string is still a 422 - leaving
+    the field blank is a decision, mistyping it is not.
+    """
 
     timestamp: str | None = Field(None, max_length=12, description="e.g. 1:30:29")
     timestamp_sec: int | None = Field(None, ge=0)

@@ -30,6 +30,54 @@ def kirkov(db):
     return Person.objects.create(name="Иван Кирков")
 
 
+class TestRoles:
+    """The role vocabulary, and the fact that only it reaches the column."""
+
+    @pytest.mark.parametrize(
+        "role", ["host", "cohost", "regular", "guest", "offcamera", "producer"]
+    )
+    def test_every_role_is_accepted_end_to_end(
+        self, client, episode, alice, as_alice, moderator, kirkov, role
+    ):
+        """🚨 `regular` and `offcamera` were added 2026-08-16. A regular is a
+        recurring member of the show who is NOT a guest, and off-camera is the
+        voice heard but never seen - which PRODUCER (a job) did not cover."""
+        proposal = participant_service.propose(
+            episode=episode, user=alice, person=kirkov, role=role
+        )
+        participant = participant_service.approve(proposal=proposal, moderator=moderator)
+        assert participant.role == role
+
+    def test_an_unknown_role_is_refused_when_proposing(self, episode, alice, kirkov):
+        with pytest.raises(participant_service.ProposalError):
+            participant_service.propose(
+                episode=episode, user=alice, person=kirkov, role="supreme-leader"
+            )
+
+    def test_an_unknown_role_is_refused_when_APPROVING(
+        self, episode, alice, moderator, kirkov
+    ):
+        """🚨 The gap this closes: Django does not enforce `choices` at the DB
+        level, and approve took the moderator's role straight to
+        `update_or_create`. So the unvalidated path was the privileged one, and
+        the web would have rendered the raw key as the person's role."""
+        proposal = participant_service.propose(episode=episode, user=alice, person=kirkov)
+        with pytest.raises(participant_service.ProposalError):
+            participant_service.approve(
+                proposal=proposal, moderator=moderator, role="supreme-leader"
+            )
+
+    def test_approving_without_a_role_keeps_the_proposed_one(
+        self, episode, alice, moderator, kirkov
+    ):
+        """Not silently reset to `guest` - the member already answered this."""
+        proposal = participant_service.propose(
+            episode=episode, user=alice, person=kirkov, role="offcamera"
+        )
+        participant = participant_service.approve(proposal=proposal, moderator=moderator)
+        assert participant.role == "offcamera"
+
+
 class TestProposing:
     def test_a_member_can_propose_an_existing_person(self, client, episode, alice, as_alice, kirkov):
         response = client.post(

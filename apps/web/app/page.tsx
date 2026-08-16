@@ -1,4 +1,6 @@
 import Link from "next/link";
+
+import { NavProgress } from "@/components/shared/NavProgress";
 import { ChevronRight, Mic, Star, Trophy } from "lucide-react";
 
 import { SearchTrigger } from "@/components/search/SearchTrigger";
@@ -105,7 +107,8 @@ export default async function HomePage() {
                 className="text-[13.5px] font-semibold text-primary-text hover:text-primary-hover"
               >
                 {copy.home.seeAll}
-              </Link>
+                <NavProgress />
+            </Link>
             }
           />
           <ol className="mt-3.5 flex flex-col gap-2">
@@ -156,6 +159,7 @@ export default async function HomePage() {
                 aria-hidden
                 strokeWidth={2.2}
               />
+              <NavProgress />
             </Link>
           ))}
         </div>
@@ -223,6 +227,7 @@ async function TopRatedRow({
           {formatScore(episode.public_score)}
         </span>
       </span>
-    </Link>
+      <NavProgress />
+            </Link>
   );
 }

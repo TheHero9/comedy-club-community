@@ -112,13 +112,15 @@ test.describe("12. accessibility", () => {
     const table = visibleGrid(page);
     await expect(table).toBeVisible();
 
-    // The caption is visually hidden but is what a screen reader announces, so
-    // assert on the accessible name rather than on visible text.
+    // The name is never visible text, so assert on the accessible name itself.
+    // 🚨 Read BOTH sources: the transposed mobile grid is a <table> named by its
+    // <caption>, the flow grid is a labelled region named by `aria-label`.
+    // Checking only one passes vacuously on whichever layout it does not cover.
     const accessibleName = await table.evaluate((el) => {
-      const caption = el.querySelector("caption");
-      return caption?.textContent?.trim() ?? "";
+      const caption = el.querySelector("caption")?.textContent?.trim();
+      return caption || el.getAttribute("aria-label")?.trim() || "";
     });
-    expect(accessibleName.length, "the grid table has no caption").toBeGreaterThan(0);
+    expect(accessibleName.length, "the grid has no accessible name").toBeGreaterThan(0);
     expect(
       accessibleName,
       "the caption must name the channel, or it is useless out of context",
@@ -210,7 +212,7 @@ test.describe("12. accessibility", () => {
     await page.goto(`/channels/${CHANNEL_SLUG}`);
     await expect(visibleGrid(page)).toBeVisible();
 
-    const firstCell = visibleGrid(page).locator("tbody a").first();
+    const firstCell = visibleGrid(page).locator("a[data-cell]").first();
     await firstCell.focus();
 
     const before = await page.evaluate(() => (document.activeElement as HTMLAnchorElement).href);
@@ -220,12 +222,12 @@ test.describe("12. accessibility", () => {
       return {
         tag: active?.tagName ?? "",
         href: active?.href ?? "",
-        insideTable: Boolean(active?.closest("table")),
+        insideGrid: Boolean(active?.closest("[data-grid]")),
       };
     });
 
     expect(after.tag, "Tab did not land on a link").toBe("A");
-    expect(after.insideTable, "Tab left the grid after one cell").toBe(true);
+    expect(after.insideGrid, "Tab left the grid after one cell").toBe(true);
     expect(after.href, "Tab did not move to a different cell").not.toBe(before);
   });
 
@@ -261,9 +263,10 @@ test.describe("12. accessibility", () => {
     /**
      * Takes a LOCATOR, not a selector.
      *
-     * Both grid orientations are always in the DOM and CSS hides one of them,
-     * so `document.querySelector("table ... a")` resolves to whichever comes
-     * first - which on desktop is the hidden mobile grid. Focusing a
+     * Both grid layouts are in the DOM on a channel that has both and CSS hides
+     * one of them, so `document.querySelector("[data-grid] a")` resolves to
+     * whichever comes first - which on desktop is the hidden mobile grid.
+     * Focusing a
      * `display: none` element never matches `:focus-visible`, so the test
      * failed for a reason that had nothing to do with focus styling.
      */
@@ -300,7 +303,7 @@ test.describe("12. accessibility", () => {
 
     await page.goto(`/channels/${CHANNEL_SLUG}`);
     await expect(visibleGrid(page)).toBeVisible();
-    const cell = await focusStyles(visibleGrid(page).locator("tbody a").first());
+    const cell = await focusStyles(visibleGrid(page).locator("a[data-cell]").first());
     expect(cell.isFocusVisible, "the grid cell link never matched :focus-visible").toBe(
       true,
     );

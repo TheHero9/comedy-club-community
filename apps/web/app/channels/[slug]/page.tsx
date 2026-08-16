@@ -204,13 +204,6 @@ export default async function ChannelPage({
           </div>
         </div>
 
-        <p className="mt-2 text-[12.5px] text-subtle-foreground md:hidden">
-          {copy.channel.hintMobile}
-        </p>
-        <p className="mt-2 hidden text-[12.5px] text-subtle-foreground md:block">
-          {copy.channel.hintDesktop}
-        </p>
-
         {/* 🚨 There is NO "fit to screen" and NO "full view" button here, and
             both were tried (owner calls, 2026-08-16 and again the same day).
 
@@ -222,9 +215,12 @@ export default async function ChannelPage({
             cells collapse to a few pixels and the result reads as noise
             rather than as a chart. The owner's word was "awful".
 
-            So the grid on this page is the only grid. If a screenshottable
-            whole-channel view is wanted again, the thing to fix is the cell
-            count, not the viewport it is squeezed into. */}
+            The answer that stuck (2026-08-16, same day) was to stop squeezing
+            the channel into one frame at all: `RatingsGrid` WRAPS each year
+            across the available width, so the whole catalogue is on the page
+            at full cell size and the long axis is ordinary page scroll. The
+            hint copy lives inside that component, because only it knows which
+            of its two layouts a given channel gets. */}
         <RatingsGrid grid={grid} />
       </section>
 

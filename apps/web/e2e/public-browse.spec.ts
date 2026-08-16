@@ -179,13 +179,13 @@ test("1.3 channel page renders name, episode count and the ratings grid", async 
   ).toBeVisible();
 
 
-  // Grid presence only - every cell value is cross-checked in section 3. Both
-  // orientations are always in the HTML, so this asserts on the one CSS shows.
-  const grid = page.locator("table[data-grid]").locator("visible=true");
+  // Grid presence only - every cell value is cross-checked in section 3. A
+  // channel with at most 4 years ships both layouts, so this asserts on the one
+  // CSS shows. The name used to be a <caption>; the flow grid is not a table,
+  // so it carries the same string as the labelled region's accessible name.
+  const grid = page.locator("[data-grid]").locator("visible=true");
   await expect(grid).toHaveCount(1);
-  await expect(grid.locator("caption")).toHaveText(
-    copy.channel.gridLabel(channel.name),
-  );
+  await expect(grid).toHaveAccessibleName(copy.channel.gridLabel(channel.name));
 });
 
 test("1.4 episodes page renders one card per episode, each linking to /e/", async ({
@@ -268,7 +268,7 @@ test("1.4c every episode of a channel is a crawlable link on its grid page", asy
   await page.goto(`/channels/${channel.slug}`);
   const hrefs = new Set(
     await page
-      .locator("table[data-grid] a[href^='/e/']")
+      .locator("[data-grid] a[href^='/e/']")
       .evaluateAll((elements) =>
         elements.map((element) => element.getAttribute("href") ?? ""),
       ),

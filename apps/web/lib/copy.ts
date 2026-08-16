@@ -314,7 +314,7 @@ const en = {
   channel: {
     gridTitle: "Ratings grid",
     hintMobile: "Rows are episodes, columns are years.",
-    hintDesktop: "Rows are years, columns are the position within the year.",
+    hintFlow: "Every episode, grouped by year, oldest first.",
     publicScore: "Public",
     eliteScore: "Elite",
     scoreModeLabel: "Score type",
@@ -329,7 +329,6 @@ const en = {
     recent: "Recent episodes",
     gridLabel: (channel: string) => `Ratings grid for ${channel}`,
     episodeColumn: "Episode",
-    yearColumn: "Year",
     cellLabel: (title: string, score: string) => `${title}, score ${score}`,
     empty: "This channel has no dated episodes yet, so there is nothing to show.",
     legendToggle: "Legend",
@@ -378,7 +377,9 @@ const en = {
     cast: "Cast",
     roleHost: "host",
     roleCohost: "co-host",
+    roleRegular: "regular",
     roleGuest: "guest",
+    roleOffcamera: "off-camera",
     roleProducer: "producer",
     /**
      * `EpisodeParticipant.role` is a semantic key, which is the project rule:
@@ -387,9 +388,20 @@ const en = {
      * ⚠️ This used to be `key === "host" ? "host" : "guest"`, so a co-host and
      * a producer both rendered as "guest". Harmless while no participant
      * existed; wrong the moment the proposal form let members pick a role.
+     *
+     * 🚨 The `?? guest` fallback is why the API validates roles against the
+     * model's own choices on BOTH the propose and the approve path: anything
+     * it does not recognise silently reads as "guest" here, which is a wrong
+     * answer rather than a missing one.
      */
     role: (key: string): string =>
-      ({ host: "host", cohost: "co-host", producer: "producer" })[key] ?? "guest",
+      ({
+        host: "host",
+        cohost: "co-host",
+        regular: "regular",
+        offcamera: "off-camera",
+        producer: "producer",
+      })[key] ?? "guest",
     moments: "Moments",
     momentsEmptyTitle: "Nothing labelled yet",
     momentsEmptyBody:
@@ -460,7 +472,7 @@ const en = {
     allRatingsHint: "Opens the channel's full ratings grid.",
     /** The moments section explains itself; an empty list otherwise says nothing. */
     momentsHowTo:
-      "A moment is a timestamp plus a few words, added by the community. Tapping one opens the video at that second.",
+      "A moment is a few words about what happens, added by the community. Add a time and tapping it opens the video at that second - or leave the time out for a note about the whole episode.",
     yourScore2: "Yours",
     communityScore: "Community",
     /* --- Moments: adding (spec 14) --- */
@@ -476,11 +488,21 @@ const en = {
     momentAdded: "Moment added",
     momentDeleted: "Moment deleted",
     momentSignedOut: "Sign in to add a moment",
-    momentTimeEmpty: "Enter a time",
     momentTimeMalformed: "Use a time like 1:30:29",
     momentTimeOverSixty: "Minutes and seconds must be under 60",
     momentTimeTooLong: "Use at most hours:minutes:seconds",
     momentTimePastEnd: "That is past the end of this episode",
+    /* --- Moments: sections and the optional time (2026-08-16) --- */
+    momentTimeOptional: "optional",
+    momentTimeHint: "Leave blank for a note about the whole episode",
+    momentsYours: "Your moments",
+    momentsOthers: "From everyone else",
+    momentNote: "Note",
+    momentNoteHint: "About the whole episode",
+    /** Sits above the tick bar so the bar is readable as a timeline, not decor. */
+    momentsTimeline: "Timeline",
+    momentsShowAll: (n: number) => `Show all ${n}`,
+    momentsShowFewer: "Show fewer",
     /* --- Cast: proposing (spec 14) --- */
     castAdd: "Add someone",
     castAddTitle: "Who else is in this episode?",
@@ -1015,7 +1037,7 @@ const bg: Copy = {
   channel: {
     gridTitle: "Решетка на оценките",
     hintMobile: "Редовете са епизоди, колоните са години.",
-    hintDesktop: "Редовете са години, колоните са позицията в годината.",
+    hintFlow: "Всички епизоди, групирани по година, от най-стария.",
     publicScore: "Public",
     eliteScore: "Elite",
     scoreModeLabel: "Вид оценка",
@@ -1030,7 +1052,6 @@ const bg: Copy = {
     recent: "Скорошни епизоди",
     gridLabel: (channel: string) => `Решетка на оценките за ${channel}`,
     episodeColumn: "Епизод",
-    yearColumn: "Година",
     cellLabel: (title: string, score: string) => `${title}, оценка ${score}`,
     empty: "Този канал още няма епизоди с дата, така че няма какво да се покаже.",
     legendToggle: "Легенда",
@@ -1070,10 +1091,18 @@ const bg: Copy = {
     cast: "Участници",
     roleHost: "домакин",
     roleCohost: "съводещ",
+    roleRegular: "редовен",
     roleGuest: "гост",
+    roleOffcamera: "зад кадър",
     roleProducer: "продуцент",
     role: (key: string): string =>
-      ({ host: "домакин", cohost: "съводещ", producer: "продуцент" })[key] ?? "гост",
+      ({
+        host: "домакин",
+        cohost: "съводещ",
+        regular: "редовен",
+        offcamera: "зад кадър",
+        producer: "продуцент",
+      })[key] ?? "гост",
     moments: "Моменти",
     momentsEmptyTitle: "Още нищо не е отбелязано",
     momentsEmptyBody:
@@ -1131,7 +1160,7 @@ const bg: Copy = {
     allRatings: "Виж всички оценки",
     allRatingsHint: "Отваря пълната решетка на оценките за канала.",
     momentsHowTo:
-      "Моментът е час плюс няколко думи, добавени от общността. Натискането отваря видеото на тази секунда.",
+      "Моментът е няколко думи за това какво се случва, добавени от общността. Добави час и натискането отваря видеото на тази секунда - или остави часа празен за бележка за целия епизод.",
     yourScore2: "Твоята",
     communityScore: "Общността",
     /* --- Moments: adding (spec 14) --- */
@@ -1147,11 +1176,20 @@ const bg: Copy = {
     momentAdded: "Моментът е добавен",
     momentDeleted: "Моментът е изтрит",
     momentSignedOut: "Влез, за да добавиш момент",
-    momentTimeEmpty: "Въведи час",
     momentTimeMalformed: "Използвай формат като 1:30:29",
     momentTimeOverSixty: "Минутите и секундите трябва да са под 60",
     momentTimeTooLong: "Най-много часове:минути:секунди",
     momentTimePastEnd: "Това е след края на епизода",
+    /* --- Moments: sections and the optional time (2026-08-16) --- */
+    momentTimeOptional: "по избор",
+    momentTimeHint: "Остави празно за бележка за целия епизод",
+    momentsYours: "Твоите моменти",
+    momentsOthers: "От всички останали",
+    momentNote: "Бележка",
+    momentNoteHint: "За целия епизод",
+    momentsTimeline: "Времева линия",
+    momentsShowAll: (n: number) => `Покажи всички ${n}`,
+    momentsShowFewer: "Покажи по-малко",
     /* --- Cast: proposing (spec 14) --- */
     castAdd: "Добави човек",
     castAddTitle: "Кой друг е в този епизод?",

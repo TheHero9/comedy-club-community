@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Clock, Search, X } from "lucide-react";
+import { ArrowRight, Clock, Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -43,6 +43,7 @@ export function SearchOverlay({
   const copy = useCopy();
   const router = useRouter();
   const [value, setValue] = useState(initialQuery);
+  const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
   /**
@@ -76,13 +77,54 @@ export function SearchOverlay({
     return () => window.clearTimeout(id);
   }, [open]);
 
+  /**
+   * 🚨 THE SHEET STAYS OPEN UNTIL THE SEARCH PAGE IS ACTUALLY THERE.
+   *
+   * It used to call `onOpenChange(false)` and then `router.push`, in that
+   * order. `/search` is `force-dynamic` and fires two Meilisearch round trips,
+   * so the push took roughly two seconds - during which the sheet was already
+   * gone and the page underneath was back on screen. The owner read that
+   * exactly as written: "I click search and it goes back to the home page for
+   * a second, and I need to wait like 2 seconds to actually go to the search
+   * page".
+   *
+   * Wrapping the push in a transition makes `pending` true for the whole
+   * navigation, so the sheet can hold with a spinner and close only when the
+   * new route commits. `router.push` runs in a transition internally either
+   * way; calling it inside `startTransition` is what lets US see the state.
+   *
+   * `app/search/loading.tsx` shortens that wait a lot on its own - this is
+   * what makes the remaining wait legible rather than invisible.
+   */
   function go(query: string) {
     const next = query.trim();
-    if (next.length === 0) return;
+    if (next.length === 0 || pending) return;
     rememberSearch(next);
-    onOpenChange(false);
-    router.push(`/search?q=${encodeURIComponent(next)}`);
+    startTransition(() => {
+      router.push(`/search?q=${encodeURIComponent(next)}`);
+    });
   }
+
+  /**
+   * Close on the transition SETTLING, not on the click.
+   *
+   * ⚠️ An effect rather than the adjust-during-render pattern used for
+   * `wasOpen` above: `onOpenChange` belongs to the PARENT, and calling a
+   * parent's setter while this component renders is the "cannot update a
+   * component while rendering a different component" warning. The navigation
+   * completing is an external event, which is what effects are actually for,
+   * and this one cannot cascade - `pending` only falls once per query.
+   *
+   * Most of the time the point is moot, because arriving at `/search` unmounts
+   * whatever page held the trigger. It matters when the search is run FROM
+   * `/search`, where the trigger survives the navigation and the sheet would
+   * otherwise stay open over the new results.
+   */
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !pending) onOpenChange(false);
+    wasPending.current = pending;
+  }, [pending, onOpenChange]);
 
   return (
     <Sheet
@@ -153,10 +195,16 @@ export function SearchOverlay({
           size="icon"
           shape="pill"
           aria-label={copy.search.submit}
-          disabled={trimmed.length === 0}
+          disabled={trimmed.length === 0 || pending}
           className="size-10"
         >
-          <ArrowRight className="size-[18px]" aria-hidden strokeWidth={2.6} />
+          {/* The one place a spinner is right: the sheet is deliberately still
+              on screen, so the button has to say why nothing has moved yet. */}
+          {pending ? (
+            <Loader2 className="size-[18px] animate-spin" aria-hidden strokeWidth={2.6} />
+          ) : (
+            <ArrowRight className="size-[18px]" aria-hidden strokeWidth={2.6} />
+          )}
         </Button>
       </form>
 

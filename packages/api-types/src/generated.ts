@@ -2031,7 +2031,7 @@ export interface components {
             /** Id */
             id: number;
             /** Timestamp Sec */
-            timestamp_sec: number;
+            timestamp_sec: number | null;
             /** Label */
             label: string;
             /** Score */
@@ -2051,9 +2051,15 @@ export interface components {
         };
         /**
          * MomentIn
-         * @description Either form of timestamp. `timestamp` is what a human typed ("1:30:29");
-         *     `timestamp_sec` is kept so existing callers keep working. The string wins
-         *     when both arrive - see services/timestamps.resolve_timestamp.
+         * @description Either form of timestamp, or NEITHER.
+         *
+         *     `timestamp` is what a human typed ("1:30:29"); `timestamp_sec` is kept so
+         *     existing callers keep working. The string wins when both arrive - see
+         *     services/timestamps.resolve_timestamp.
+         *
+         *     Both absent is legal and means "a note about this episode, not a point in
+         *     it" (owner ruling 2026-08-16). A malformed string is still a 422 - leaving
+         *     the field blank is a decision, mistyping it is not.
          */
         MomentIn: {
             /**

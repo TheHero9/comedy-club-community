@@ -173,11 +173,13 @@ export async function hasHorizontalOverflow(page: Page): Promise<boolean> {
 /**
  * The ratings grid the current viewport can actually see.
  *
- * Both orientations are always in the HTML - CSS decides which one renders -
- * so a hardcoded `table[data-grid="desktop"]` passes on one project and fails
- * on the other. Every test that does not care WHICH orientation it got should
- * use this.
+ * A channel with at most 4 years ships BOTH layouts in the HTML - the
+ * transposed mobile table and the wrapped flow grid - and CSS decides which one
+ * renders, so a hardcoded selector for either passes on one project and fails
+ * on the other. Every test that does not care WHICH layout it got should use
+ * this. Note the selector is attribute-only: the flow grid is a `div`, not a
+ * `table`.
  */
 export function visibleGrid(page: Page) {
-  return page.locator("table[data-grid]").locator("visible=true");
+  return page.locator("[data-grid]").locator("visible=true");
 }

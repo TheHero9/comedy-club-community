@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 
+import { NavProgress } from "@/components/shared/NavProgress";
 import { cn } from "@/lib/utils";
 
 /**
@@ -106,6 +107,7 @@ function LinkButton({
   size,
   shape,
   block,
+  children,
   ...props
 }: React.ComponentProps<typeof Link> & ButtonStyleProps) {
   return (
@@ -113,7 +115,13 @@ function LinkButton({
       data-slot="link-button"
       className={cn(buttonVariants({ variant, size, shape, block }), className)}
       {...props}
-    />
+    >
+      {children}
+      {/* Every link-styled CTA on the site confirms its own click. Free to put
+          here because `useLinkStatus` only reports for the link actually
+          navigating - see components/shared/NavProgress.tsx. */}
+      <NavProgress />
+    </Link>
   );
 }
 

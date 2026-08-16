@@ -25,7 +25,19 @@ interface Props {
   onProposed: () => void | Promise<void>;
 }
 
-const ROLES = ["host", "cohost", "guest", "producer"] as const;
+/**
+ * 🚨 WIRE VALUES, so they stay at module scope and must NOT change with the
+ * language - `copy.episode.role()` maps each to a label at render time. They
+ * mirror `EpisodeParticipant.Role` in the API, which validates against its own
+ * choices on both the propose AND the approve path.
+ *
+ * `regular` and `offcamera` were added 2026-08-16. A regular is a recurring
+ * member of the show who is NOT a guest ("we won't allow for guests"), and
+ * off-camera is the voice heard but never seen - which `producer`, a job
+ * rather than a presence, did not cover. Ordered by how visible the person is
+ * in the episode, not alphabetically.
+ */
+const ROLES = ["host", "cohost", "regular", "guest", "offcamera", "producer"] as const;
 
 /**
  * Suggest who took part in an episode.

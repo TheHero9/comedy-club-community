@@ -105,6 +105,7 @@ function resultLinks(page: Page) {
  * here, because the whole point of the split is that it reorders.
  */
 async function renderedResultIds(page: Page): Promise<string[]> {
+  await waitForResults(page);
   return [
     ...(await regionIds(page, "results-title")),
     ...(await regionIds(page, "results-elsewhere")),
@@ -114,7 +115,34 @@ async function renderedResultIds(page: Page): Promise<string[]> {
 
 /** Episodes that matched ONLY in the transcript, in render order. */
 async function spokenResultIds(page: Page): Promise<string[]> {
+  await waitForResults(page);
   return regionIds(page, "results-spoken");
+}
+
+/**
+ * Block until the page has actually rendered its answer.
+ *
+ * 🚨 REQUIRED SINCE `app/search/loading.tsx` EXISTED (2026-08-16). With a
+ * Suspense boundary the route streams: Next flushes the shell and the skeleton
+ * first, and `page.goto` resolves on that. `regionIds` then reads a DOM with no
+ * result regions in it yet and returns `[]` - a silent empty answer, not a
+ * failure, which is the worst shape a race can take in a test.
+ *
+ * The `<h1>` is the right thing to wait on because it renders for EVERY query,
+ * including one that matches nothing. Waiting on a result region instead would
+ * hang forever on the no-results case.
+ *
+ * 🚨 AND THE ASSERTION IS `toHaveCount(1)`, NOT `toBeVisible()`. React streams
+ * a completed Suspense boundary into a `<div hidden>` at the end of `<body>`
+ * and moves it into place with an inline script, so for a few milliseconds the
+ * document genuinely contains the results TWICE. Playwright caught that window
+ * and reported it as a doubled result id and a strict-mode violation on
+ * `getByText` - two failures that read like product bugs and are neither.
+ * Waiting for exactly one heading waits out the swap.
+ */
+async function waitForResults(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 }
 
 async function regionIds(page: Page, testId: string): Promise<string[]> {
@@ -460,7 +488,9 @@ test.describe("search", () => {
     await page.goto(searchPagePath(QUERY_NO_MATCH));
 
     // Page still renders, and renders nothing pretending to be a result.
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // The wait is shared with the other DOM readers - see waitForResults for
+    // why a bare toBeVisible() is not enough on a streamed route.
+    await waitForResults(page);
     await expect(resultLinks(page)).toHaveCount(0);
     await expect(page.getByText(copy.search.zeroTitle)).toBeVisible();
     // Never blame the speller: the engine already tolerates typos, so the

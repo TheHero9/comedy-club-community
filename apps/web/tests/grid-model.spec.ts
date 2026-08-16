@@ -14,9 +14,14 @@ import {
   cellLabel,
   FLAG_MEMBERS_ONLY,
   FLAG_STREAM,
+  hasMobileTranspose,
   positionLabel,
+  printsScores,
+  ROOMY_MAX_EPISODES,
+  seasonCells,
   titleFromCellLabel,
   type CellLabelFlags,
+  type Grid,
   type GridCell,
   type GridSeason,
 } from "@/components/grid/grid-model";
@@ -172,5 +177,76 @@ describe("positionLabel", () => {
     for (const raw of ["", "2021", "2021:", ":14", "2021:x", "abc:14", "1:2:3"]) {
       expect(positionLabel(raw), `positionLabel(${JSON.stringify(raw)})`).toBe("");
     }
+  });
+});
+
+/**
+ * 🚨 The payload is a MATRIX padded to the tallest year; the flow grid is not.
+ * Everything below is about that mismatch, which is where a year silently
+ * renders short or gains a phantom episode.
+ */
+describe("seasonCells", () => {
+  /** Two seasons: 2020 has 3 episodes, 2021 has 1, so 2021 carries 2 holes. */
+  function grid(): Grid {
+    const at = (id: string) => cell({ youtube_id: id });
+    return {
+      rows: [
+        { index: 1, cells: [at("a"), at("x")] },
+        { index: 2, cells: [at("b"), null] },
+        { index: 3, cells: [at("c"), null] },
+      ],
+    } as unknown as Grid;
+  }
+
+  it("returns a season's real cells, oldest first, with holes dropped", () => {
+    expect(seasonCells(grid(), 0).map((entry) => entry.cell.youtube_id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(seasonCells(grid(), 1).map((entry) => entry.cell.youtube_id)).toEqual(["x"]);
+  });
+
+  it("keeps the API's own row index, never the position in the returned array", () => {
+    // A leading hole is not a shape the API produces today, but deriving the
+    // index from the array would renumber the whole year the day it does.
+    const leading = {
+      rows: [
+        { index: 1, cells: [null] },
+        { index: 2, cells: [cell({ youtube_id: "b" })] },
+      ],
+    } as unknown as Grid;
+    expect(seasonCells(leading, 0)).toEqual([
+      { cell: expect.objectContaining({ youtube_id: "b" }), index: 2 },
+    ]);
+  });
+
+  it("returns nothing for a season index that does not exist", () => {
+    expect(seasonCells(grid(), 9)).toEqual([]);
+  });
+});
+
+describe("the two density decisions are independent", () => {
+  const shaped = (seasons: number, rows: number, total: number) =>
+    ({
+      seasons: Array.from({ length: seasons }, (_, i) => ({ year: 2016 + i })),
+      rows: Array.from({ length: rows }, (_, i) => ({ index: i + 1, cells: [] })),
+      total_count: total,
+    }) as unknown as Grid;
+
+  it("transposes on mobile only up to 4 years and 48 episodes in the tallest", () => {
+    expect(hasMobileTranspose(shaped(4, 48, 100))).toBe(true);
+    expect(hasMobileTranspose(shaped(5, 48, 100))).toBe(false);
+    expect(hasMobileTranspose(shaped(4, 49, 100))).toBe(false);
+  });
+
+  it("decides printed scores on the EPISODE count, not the year count", () => {
+    // The flagship channel: 11 years, 1,225 episodes. Colour only.
+    expect(printsScores(shaped(11, 183, 1225))).toBe(false);
+    // A many-year channel that is still small prints its scores. Under the old
+    // single `isRoomy` the year count alone would have denied it.
+    expect(printsScores(shaped(11, 30, 243))).toBe(true);
+    expect(printsScores(shaped(1, 400, ROOMY_MAX_EPISODES))).toBe(true);
+    expect(printsScores(shaped(1, 401, ROOMY_MAX_EPISODES + 1))).toBe(false);
   });
 });

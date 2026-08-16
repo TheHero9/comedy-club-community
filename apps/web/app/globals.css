@@ -456,19 +456,19 @@
    Verified 2026-08-14 by diffing getComputedStyle before and after in both
    colour schemes: display, size, radius, background, colour, border and
    box-sizing all byte-identical.
-   --------------------------------------------------------------------------- */
-table[data-grid="dense"] td {
-  padding: 0;
-}
 
-table[data-grid="dense"] a[data-cell],
-table[data-grid="dense"] td > span[aria-hidden] {
+   🚨 The selector moved from `table[data-grid="dense"]` to the flow grid's
+   `[data-density="dense"]` on 2026-08-16, when the dense TABLE was deleted in
+   favour of a wrapped run of cells. `flex-shrink: 0` is new and load-bearing:
+   these are flex children now, and a flex line will happily squeeze a 20px
+   cell to fit rather than wrap it - which would silently reintroduce the
+   "cells are a few pixels of colour" failure the wrap exists to avoid.
+   --------------------------------------------------------------------------- */
+[data-grid="flow"][data-density="dense"] a[data-cell] {
   display: block;
+  flex: 0 0 auto;
   width: 1.25rem; /* w-5 */
   height: 1.5rem; /* h-6 */
-}
-
-table[data-grid="dense"] a[data-cell] {
   border-radius: 3px;
   /* 🚨 Unrated is NOT a band: --card-ish neutral with a DASHED border, never a
      filled colour and never the garbage band. Rated cells override below. */
@@ -477,30 +477,30 @@ table[data-grid="dense"] a[data-cell] {
   border: 1px dashed var(--unrated-border);
 }
 
-table[data-grid="dense"] a[data-band] {
+[data-grid="flow"][data-density="dense"] a[data-band] {
   border: 0;
   color: var(--ink);
 }
 
-table[data-grid="dense"] a[data-band="masterpiece"] {
+[data-grid="flow"][data-density="dense"] a[data-band="masterpiece"] {
   background-color: var(--band-masterpiece);
 }
-table[data-grid="dense"] a[data-band="awesome"] {
+[data-grid="flow"][data-density="dense"] a[data-band="awesome"] {
   background-color: var(--band-awesome);
 }
-table[data-grid="dense"] a[data-band="great"] {
+[data-grid="flow"][data-density="dense"] a[data-band="great"] {
   background-color: var(--band-great);
 }
-table[data-grid="dense"] a[data-band="good"] {
+[data-grid="flow"][data-density="dense"] a[data-band="good"] {
   background-color: var(--band-good);
 }
-table[data-grid="dense"] a[data-band="regular"] {
+[data-grid="flow"][data-density="dense"] a[data-band="regular"] {
   background-color: var(--band-regular);
 }
-table[data-grid="dense"] a[data-band="bad"] {
+[data-grid="flow"][data-density="dense"] a[data-band="bad"] {
   background-color: var(--band-bad);
 }
-table[data-grid="dense"] a[data-band="garbage"] {
+[data-grid="flow"][data-density="dense"] a[data-band="garbage"] {
   background-color: var(--band-garbage);
 }
 
@@ -518,6 +518,52 @@ table[data-grid="dense"] a[data-band="garbage"] {
 
 @utility skeleton-pulse {
   animation: skeleton-pulse 1200ms ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   Navigation progress bar (components/shared/NavProgress.tsx)
+
+   🚨 Starts at zero width and zero opacity with a 120ms animation DELAY, so a
+   navigation that resolves quickly shows nothing at all. Without the delay the
+   bar flashes on every prefetched link and reads as jank rather than feedback.
+
+   It stops at 92%, never 100%: the bar is not measuring anything, and running
+   it to the end would promise a completion it cannot know about. The route
+   swap is what removes it.
+
+   `position: fixed` because this is rendered INSIDE whichever link was
+   clicked - an episode card, a nav row - and must not affect that card's
+   layout. `pointer-events: none` so it can never intercept a click.
+--------------------------------------------------------------------------- */
+@keyframes nav-progress {
+  0% {
+    opacity: 0;
+    width: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    width: 92%;
+  }
+}
+
+.nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  height: 3px;
+  width: 0;
+  opacity: 0;
+  border-end-end-radius: 99px;
+  background: var(--primary);
+  pointer-events: none;
+}
+
+.nav-progress[data-pending] {
+  animation: nav-progress 2400ms cubic-bezier(0.16, 1, 0.3, 1) 120ms forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

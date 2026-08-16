@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+
+import { NavProgress } from "@/components/shared/NavProgress";
 import { useQuery } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -262,7 +264,8 @@ export default function ProfilePage() {
                   aria-hidden
                   strokeWidth={2.2}
                 />
-              </Link>
+                <NavProgress />
+            </Link>
             ))}
           </nav>
 

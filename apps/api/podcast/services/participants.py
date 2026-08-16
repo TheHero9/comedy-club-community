@@ -34,6 +34,24 @@ class ProposalError(Exception):
     """Something about the proposal itself is wrong. Routers map this to a 4xx."""
 
 
+def _checked_role(role: str | None, *, fallback: str) -> str:
+    """A role from the model's own choices, or a ProposalError.
+
+    🚨 Django does NOT enforce `choices` at the database level, so an unchecked
+    string reaches the column intact and the web renders the raw key as the
+    person's role. The propose endpoint always validated; approve did not, and
+    approve is the one a moderator drives - so the gap was on the privileged
+    path. Derived from the model rather than restated, so adding a role in one
+    place is the whole change.
+    """
+    if role is None or role == "":
+        return fallback
+    valid = {choice[0] for choice in EpisodeParticipant.Role.choices}
+    if role not in valid:
+        raise ProposalError(f"Role must be one of {sorted(valid)}")
+    return role
+
+
 def propose(
     *,
     episode: Episode,
@@ -43,6 +61,7 @@ def propose(
     role: str = EpisodeParticipant.Role.GUEST,
 ) -> ParticipantProposal:
     """Record a member's suggestion. Creates NO Person and NO participant."""
+    role = _checked_role(role, fallback=EpisodeParticipant.Role.GUEST)
     name = " ".join((name or "").split())
     if person is None and not name:
         raise ProposalError("Pick a person or type a name")
@@ -93,6 +112,8 @@ def approve(
     """
     if proposal.status != ParticipantProposal.Status.PENDING:
         raise ProposalError(f"This proposal is already {proposal.get_status_display().lower()}")
+
+    role = _checked_role(role, fallback=proposal.role)
 
     target = person or proposal.person
     if target is None:

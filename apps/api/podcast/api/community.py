@@ -9,6 +9,7 @@ This is the actual product. Everything here is user-generated and PUBLIC, so:
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Query, Router
@@ -218,7 +219,13 @@ def list_moments(request, youtube_id: str):
     """Public read. With no creator chapters on these channels, this IS the
     in-episode structure."""
     episode = get_object_or_404(Episode, youtube_id=youtube_id)
-    moments = episode.moments.select_related("user", "user__profile").order_by("timestamp_sec")
+    # `nulls_last` stated explicitly rather than relying on Postgres' ASC
+    # default: timestamp-less moments are notes about the episode and belong
+    # after the timeline, and the client renders them as a separate group. If
+    # they sorted first the two lists would interleave.
+    moments = episode.moments.select_related("user", "user__profile").order_by(
+        F("timestamp_sec").asc(nulls_last=True), "id"
+    )
     # Public and cached, so there is no actor here and `is_mine` is always
     # false. The signed-in view gets `my_moment_ids` from
     # GET /episodes/{id}/me and marks its own rows from that.
@@ -234,14 +241,20 @@ def add_moment(request, youtube_id: str, payload: MomentIn):
     # 🚨 Parsed HERE, from what the member typed. The web form parses the same
     # grammar for instant feedback, but a client is never an authority on its
     # own input - same rule as never trusting a client-supplied user id.
+    #
+    # `required=False`: leaving the field blank is a supported choice here, and
+    # means "a note about this episode" rather than a point inside it. A
+    # MALFORMED value is still a 422 - the two are not the same input.
     try:
         timestamp_sec = resolve_timestamp(
-            timestamp=payload.timestamp, timestamp_sec=payload.timestamp_sec
+            timestamp=payload.timestamp,
+            timestamp_sec=payload.timestamp_sec,
+            required=False,
         )
     except TimestampError as exc:
         raise HttpError(422, str(exc)) from exc
 
-    if episode.duration_sec and timestamp_sec > episode.duration_sec:
+    if timestamp_sec is not None and episode.duration_sec and timestamp_sec > episode.duration_sec:
         raise HttpError(
             422,
             f"Timestamp {timestamp_sec}s is past the end of this episode "

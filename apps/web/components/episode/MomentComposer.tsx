@@ -10,7 +10,7 @@ import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { viewerApi } from "@/lib/auth";
 import { isApiError } from "@/lib/api/client";
 import type { Moment } from "@/lib/api/podcast";
-import { parseTimestamp } from "@/lib/timestamp";
+import { maskTimestampInput, parseTimestamp } from "@/lib/timestamp";
 
 interface Props {
   youtubeId: string;
@@ -50,7 +50,6 @@ export function MomentComposer({
 
   const errorFor = (key: NonNullable<ReturnType<typeof parseTimestamp>["errorKey"]>) =>
     ({
-      empty: copy.episode.momentTimeEmpty,
       malformed: copy.episode.momentTimeMalformed,
       overSixty: copy.episode.momentTimeOverSixty,
       tooLong: copy.episode.momentTimeTooLong,
@@ -74,7 +73,9 @@ export function MomentComposer({
       setError(errorFor(parsed.errorKey!));
       return;
     }
-    if (durationSec && parsed.seconds > durationSec) {
+    // `parsed.seconds === null` is the blank field, which is allowed and means
+    // "a note about the whole episode". Only a real number can be past the end.
+    if (parsed.seconds !== null && durationSec && parsed.seconds > durationSec) {
       setError(copy.episode.momentTimePastEnd);
       return;
     }
@@ -120,16 +121,26 @@ export function MomentComposer({
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1">
           <span className="text-[12px] text-subtle-foreground">
-            {copy.episode.momentTimeLabel}
+            {copy.episode.momentTimeLabel}{" "}
+            <span className="text-muted-foreground">
+              ({copy.episode.momentTimeOptional})
+            </span>
           </span>
           <span className="relative">
             <Clock className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-subtle-foreground" />
             <input
               value={time}
-              onChange={(event) => setTime(event.target.value)}
+              // 🚨 The colon is INSERTED, never typed. `inputMode="numeric"`
+              // gives a digits-only keypad on a phone, so ":" was unreachable
+              // on the device most of this audience uses. Keeping the numeric
+              // keypad and punctuating for them is better than widening the
+              // keyboard and leaving the key two taps deep. See
+              // lib/timestamp.ts maskTimestampInput.
+              onChange={(event) => setTime(maskTimestampInput(event.target.value))}
               placeholder={copy.episode.momentTimePlaceholder}
               inputMode="numeric"
               autoFocus
+              aria-describedby="moment-time-hint"
               className="w-[124px] rounded-pill border border-border bg-background py-2 pr-3 pl-8 font-mono text-small tabular"
             />
           </span>
@@ -166,8 +177,15 @@ export function MomentComposer({
         </div>
       </div>
 
+      {/* Always rendered, so the field never changes height when an error
+          appears or clears - and so "you may leave this blank" is visible
+          BEFORE someone gives up on the field, not after they submit. */}
+      <p id="moment-time-hint" className="mt-2 text-[12px] text-subtle-foreground">
+        {copy.episode.momentTimeHint}
+      </p>
+
       {error ? (
-        <p role="alert" className="mt-2 text-[12.5px] text-primary-text">
+        <p role="alert" className="mt-1 text-[12.5px] text-primary-text">
           {error}
         </p>
       ) : null}

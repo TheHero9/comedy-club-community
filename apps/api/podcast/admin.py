@@ -634,6 +634,11 @@ class MomentAdmin(admin.ModelAdmin):
 
     @admin.display(description="At", ordering="timestamp_sec")
     def timestamp_display(self, obj):
+        # A moment with no timestamp is a note about the episode, not a point
+        # inside it. `divmod(None, 60)` is a TypeError, which in a list_display
+        # takes down the whole changelist page rather than one cell.
+        if obj.timestamp_sec is None:
+            return "-"
         minutes, seconds = divmod(obj.timestamp_sec, 60)
         return f"{minutes}:{seconds:02d}"
 

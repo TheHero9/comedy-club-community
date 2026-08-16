@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { NavProgress } from "@/components/shared/NavProgress";
+
 import { ScoreChip } from "@/components/shared/ScoreChip";
 import { Thumbnail } from "@/components/shared/Thumbnail";
 import type { SearchHit, TranscriptMatch } from "@/lib/api/podcast";
@@ -93,7 +95,8 @@ export async function SearchResultCard({
             </span>
           </div>
         </div>
-      </Link>
+        <NavProgress />
+    </Link>
 
       {hasReasons ? (
         <div className="flex flex-col gap-2 border-t border-border bg-card-2 px-3 py-2.5">

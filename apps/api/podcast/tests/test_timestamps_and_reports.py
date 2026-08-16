@@ -2,6 +2,7 @@
 
 import pytest
 
+from podcast.models import Moment
 from podcast.services.timestamps import (
     TimestampError,
     format_timestamp,
@@ -66,8 +67,23 @@ class TestTimestampGrammar:
         assert resolve_timestamp(timestamp=None, timestamp_sec=42) == 42
 
     def test_neither_is_an_error(self):
+        """The DEFAULT stays strict, so a caller that has not thought about the
+        absent case keeps the old behaviour rather than silently accepting it."""
         with pytest.raises(TimestampError):
             resolve_timestamp(timestamp=None, timestamp_sec=None)
+
+    def test_neither_is_allowed_only_when_the_caller_opts_in(self):
+        assert resolve_timestamp(timestamp=None, timestamp_sec=None, required=False) is None
+        assert resolve_timestamp(timestamp="", timestamp_sec=None, required=False) is None
+        assert resolve_timestamp(timestamp="   ", timestamp_sec=None, required=False) is None
+
+    def test_optional_does_not_mean_forgiving(self):
+        """🚨 Blank is a decision; malformed is a typo. `required=False` must
+        not turn "4:75" into "no timestamp" - that would store a note where the
+        member meant a point in the episode, and lose their input silently."""
+        for text in ("4:75", "abc", "1:2:3:4", "-5"):
+            with pytest.raises(TimestampError):
+                resolve_timestamp(timestamp=text, timestamp_sec=None, required=False)
 
 
 class TestMomentApi:
@@ -94,6 +110,63 @@ class TestMomentApi:
             **as_alice,
         )
         assert response.status_code == 422
+
+    def test_a_moment_can_be_logged_with_no_timestamp_at_all(
+        self, client, episode, alice, as_alice
+    ):
+        """A note about the episode rather than a point inside it."""
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/moments",
+            data={"label": "Целият епизод е за храна"},
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 200, response.content
+        assert response.json()["timestamp_sec"] is None
+
+    def test_an_empty_timestamp_string_is_the_same_as_omitting_it(
+        self, client, episode, alice, as_alice
+    ):
+        """The web form sends "" for an untouched field, not `undefined`."""
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/moments",
+            data={"timestamp": "", "label": "бележка"},
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 200, response.content
+        assert response.json()["timestamp_sec"] is None
+
+    def test_timestampless_moments_sort_after_the_timeline(
+        self, client, episode, alice, as_alice
+    ):
+        """🚨 Postgres' ASC default is NULLS LAST and the endpoint states it
+        explicitly. If notes sorted first they would interleave with the
+        timeline the client renders above them."""
+        for payload in (
+            {"label": "бележка"},
+            {"timestamp": "10:00", "label": "късно"},
+            {"timestamp": "1:00", "label": "рано"},
+        ):
+            assert (
+                client.post(
+                    f"/api/episodes/{episode.youtube_id}/moments",
+                    data=payload,
+                    content_type="application/json",
+                    **as_alice,
+                ).status_code
+                == 200
+            )
+
+        listed = client.get(f"/api/episodes/{episode.youtube_id}/moments").json()
+        assert [row["timestamp_sec"] for row in listed] == [60, 600, None]
+
+    def test_a_moment_with_no_timestamp_has_no_deep_link(self, episode, alice):
+        """🚨 None, never the bare episode URL. A link that quietly drops `&t=`
+        looks like a working deep link and lands at 0:00."""
+        note = Moment.objects.create(episode=episode, user=alice, label="бележка")
+        assert note.deep_link is None
+        assert "(no time)" in str(note)
 
     def test_a_timestamp_past_the_end_is_refused(self, client, episode, alice, as_alice):
         assert episode.duration_sec, "fixture needs a duration for this to mean anything"

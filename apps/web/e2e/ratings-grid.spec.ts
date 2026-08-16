@@ -1,23 +1,28 @@
 /**
  * The ratings grid (matrix section 3). The signature screen.
  *
- * 🚨 IT IS RENDERED TWICE, IN TWO DIFFERENT ORIENTATIONS, and getting either
- * direction wrong would still typecheck, lint and build.
+ * 🚨 IT IS RENDERED IN TWO DIFFERENT SHAPES, and getting either one wrong would
+ * still typecheck, lint and build.
  *
- *   DESKTOP (`[data-grid="desktop"]`)  years are ROWS, positions are COLUMNS
- *     rendered tbody rows    === grid.seasons.length
- *     rendered columns       === grid.rows.length
- *     rendered[season][col]  === grid.rows[col].cells[season]
+ *   FLOW    (`[data-grid="flow"]`)     one block per year; inside a block the
+ *                                      year's episodes WRAP across the width,
+ *                                      oldest first. This is the only layout
+ *                                      that shows a whole channel - the matrix
+ *                                      it replaced was 3,913px wide inside a
+ *                                      1,150px card on the flagship channel.
+ *     year blocks             === grid.seasons.length
+ *     cells in block[season]  === that season's non-null cells, in row order
  *
- *   MOBILE  (`[data-grid="mobile"]`)   TRANSPOSED: positions are ROWS, years
- *                                       are COLUMNS
- *     rendered tbody rows    === grid.rows.length
- *     rendered columns       === grid.seasons.length
- *     rendered[row][season]  === grid.rows[row].cells[season]
+ *   MOBILE  (`[data-grid="mobile"]`)   TRANSPOSED table, kept for channels with
+ *                                      at most 4 years: positions are ROWS,
+ *                                      years are COLUMNS
+ *     rendered tbody rows     === grid.rows.length
+ *     rendered columns        === grid.seasons.length
+ *     rendered[row][season]   === grid.rows[row].cells[season]
  *
- * Both are in the HTML at every width; CSS decides which one is visible. Each
- * test below walks the FULL matrix of the orientation its project can see,
- * rather than eyeballing a couple of cells.
+ * On a channel that has both, both are in the HTML at every width and CSS
+ * decides which one is visible. Each test below walks the FULL set of cells of
+ * the shape it reads, rather than eyeballing a couple of them.
  *
  * Nothing here hardcodes a score. Ratings change; the invariant under test is
  * "the rendered grid matches GET /api/channels/{slug}/grid".
@@ -33,7 +38,7 @@ import { test, expect, apiJson, hasHorizontalOverflow } from "./fixtures";
 type Grid = Schema<"ChannelGridOut">;
 type GridCell = Schema<"GridCellOut">;
 
-/** The one channel small enough for the roomy grid. 74 episodes, 2024-2026. */
+/** The one channel small enough for the roomy grid. 71 episodes, 2024-2026. */
 const CHANNEL_SLUG = "ivan-kirkov";
 const CHANNEL_PATH = `/channels/${CHANNEL_SLUG}`;
 const GRID_API = `/api/channels/${CHANNEL_SLUG}/grid`;
@@ -50,21 +55,48 @@ interface RenderedCell {
   iconCount: number;
 }
 
-interface RenderedGrid {
+interface RenderedYear {
+  header: string;
+  cells: RenderedCell[];
+}
+
+interface RenderedTable {
   columnHeaders: string[];
   rowHeaders: string[];
   rows: RenderedCell[][];
 }
 
 /**
- * Read a whole rendered table in one round trip. 111 cells x a per-cell
- * Playwright locator call is slow enough to make the suite annoying to run, and
+ * Read the whole flow grid in one round trip. A per-cell Playwright locator
+ * call across 111 cells is slow enough to make the suite annoying to run, and
  * the comparison is pure data anyway.
  */
-async function readGrid(page: Page, which: "mobile" | "desktop"): Promise<RenderedGrid> {
-  return page.evaluate((selector) => {
-    const table = document.querySelector(`table[data-grid="${selector}"]`);
-    if (!table) throw new Error(`no ${selector} ratings grid was rendered`);
+async function readFlow(page: Page): Promise<RenderedYear[]> {
+  return page.evaluate(() => {
+    const root = document.querySelector('[data-grid="flow"]');
+    if (!root) throw new Error("no flow ratings grid was rendered");
+
+    return Array.from(root.querySelectorAll("section[data-year]")).map((section) => ({
+      header: (section.querySelector("h3")?.textContent ?? "").trim(),
+      cells: Array.from(
+        section.querySelectorAll("[data-year-cells] > a"),
+      ).map((link) => ({
+        hasLink: true,
+        text: (link.textContent ?? "").trim(),
+        href: link.getAttribute("href"),
+        className: link.getAttribute("class") ?? "",
+        ariaLabel: link.getAttribute("aria-label"),
+        iconCount: link.querySelectorAll("svg").length,
+      })),
+    }));
+  });
+}
+
+/** Read the transposed mobile table in one round trip. */
+async function readMobile(page: Page): Promise<RenderedTable> {
+  return page.evaluate(() => {
+    const table = document.querySelector('table[data-grid="mobile"]');
+    if (!table) throw new Error("no mobile ratings grid was rendered");
 
     const columnHeaders = Array.from(table.querySelectorAll("thead th"))
       // The first header is the sticky gutter, which has no value of its own.
@@ -88,12 +120,25 @@ async function readGrid(page: Page, which: "mobile" | "desktop"): Promise<Render
     });
 
     return { columnHeaders, rowHeaders, rows };
-  }, which);
+  });
 }
 
 /** The cell the API says belongs at a given (season, position). */
 function apiCell(grid: Grid, seasonIndex: number, rowIndex: number): GridCell | null {
   return grid.rows[rowIndex]?.cells[seasonIndex] ?? null;
+}
+
+/**
+ * The API's cells for one season, oldest first, holes dropped.
+ *
+ * 🚨 Written here a second time on purpose rather than imported from
+ * `grid-model`. If the app's own helper started dropping cells, importing it
+ * would make this suite agree with the bug.
+ */
+function apiSeasonCells(grid: Grid, seasonIndex: number): GridCell[] {
+  return grid.rows
+    .map((row) => row.cells[seasonIndex])
+    .filter((cell): cell is GridCell => cell !== null && cell !== undefined);
 }
 
 /** Same formatting rule as the app, written a second time on purpose. */
@@ -111,25 +156,40 @@ function markerCount(cell: GridCell): number {
 }
 
 test.describe("3. ratings grid", () => {
-  test("3.1 the desktop grid renders years as rows and positions as columns", async ({
+  test("3.1 the flow grid renders one block per year, holding that year's episodes", async ({
     page,
   }) => {
     const grid = await apiJson<Grid>(page, GRID_API);
     expect(grid.seasons.length, "the channel has no seasons to chart").toBeGreaterThan(0);
 
     await page.goto(CHANNEL_PATH);
-    const rendered = await readGrid(page, "desktop");
+    const rendered = await readFlow(page);
 
-    expect(rendered.rows).toHaveLength(grid.seasons.length);
-    expect(rendered.columnHeaders).toHaveLength(grid.rows.length);
-    expect(rendered.columnHeaders).toEqual(
-      grid.rows.map((row) => String(row.index)),
-    );
+    expect(rendered).toHaveLength(grid.seasons.length);
 
     for (const [seasonIndex, season] of grid.seasons.entries()) {
-      expect(rendered.rowHeaders[seasonIndex]).toContain(season.label);
-      expect(rendered.rows[seasonIndex]).toHaveLength(grid.rows.length);
+      expect(rendered[seasonIndex].header).toContain(season.label);
+      // 🚨 The count the API states for the year, not the count of cells the
+      // matrix happened to pad it to. A year rendered short is exactly the bug
+      // this whole layout exists to kill.
+      expect(
+        rendered[seasonIndex].cells,
+        `${season.label} rendered the wrong number of episodes`,
+      ).toHaveLength(season.episode_count);
     }
+  });
+
+  test("3.1b every episode of the channel is on the page, and nothing is duplicated", async ({
+    page,
+  }) => {
+    const grid = await apiJson<Grid>(page, GRID_API);
+
+    await page.goto(CHANNEL_PATH);
+    const rendered = await readFlow(page);
+
+    const hrefs = rendered.flatMap((year) => year.cells.map((cell) => cell.href));
+    expect(hrefs).toHaveLength(grid.total_count);
+    expect(new Set(hrefs).size, "a cell was rendered twice").toBe(grid.total_count);
   });
 
   test("3.2 the mobile grid is TRANSPOSED: positions are rows, years are columns", async ({
@@ -138,9 +198,9 @@ test.describe("3. ratings grid", () => {
     const grid = await apiJson<Grid>(page, GRID_API);
 
     await page.goto(CHANNEL_PATH);
-    const rendered = await readGrid(page, "mobile");
+    const rendered = await readMobile(page);
 
-    // This is the assertion that would catch a copy-paste of the desktop
+    // This is the assertion that would catch a copy-paste of the flow
     // orientation into the mobile markup.
     expect(rendered.rows).toHaveLength(grid.rows.length);
     expect(rendered.columnHeaders).toHaveLength(grid.seasons.length);
@@ -151,30 +211,23 @@ test.describe("3. ratings grid", () => {
     expect(rendered.rowHeaders).toEqual(grid.rows.map((row) => String(row.index)));
   });
 
-  test("3.3 every desktop cell matches the API cell for its coordinates", async ({
+  test("3.3 every flow cell matches the API cell for its position in the year", async ({
     page,
   }) => {
     const grid = await apiJson<Grid>(page, GRID_API);
 
     await page.goto(CHANNEL_PATH);
-    const rendered = await readGrid(page, "desktop");
+    const rendered = await readFlow(page);
 
     let checked = 0;
-    for (const [seasonIndex] of grid.seasons.entries()) {
-      for (let rowIndex = 0; rowIndex < grid.rows.length; rowIndex += 1) {
-        const cell = apiCell(grid, seasonIndex, rowIndex);
-        const node = rendered.rows[seasonIndex][rowIndex];
-
-        if (!cell) {
-          // A hole must read as absent: no link, no number, not clickable.
-          expect(node.hasLink, `hole at [${seasonIndex}][${rowIndex}] is a link`).toBe(
-            false,
-          );
-          expect(node.text).toBe("");
-          continue;
-        }
-
-        expect(node.hasLink).toBe(true);
+    for (const [seasonIndex, season] of grid.seasons.entries()) {
+      const expectedCells = apiSeasonCells(grid, seasonIndex);
+      for (const [position, cell] of expectedCells.entries()) {
+        const node = rendered[seasonIndex].cells[position];
+        expect(
+          node,
+          `${season.label} is missing the cell at position ${position + 1}`,
+        ).toBeDefined();
         expect(node.href).toBe(`/e/${cell.youtube_id}`);
         expect(node.text).toBe(expectedText(cell));
         expect(node.ariaLabel).toContain(cell.title);
@@ -192,7 +245,7 @@ test.describe("3. ratings grid", () => {
     const grid = await apiJson<Grid>(page, GRID_API);
 
     await page.goto(CHANNEL_PATH);
-    const rendered = await readGrid(page, "mobile");
+    const rendered = await readMobile(page);
 
     let checked = 0;
     for (let rowIndex = 0; rowIndex < grid.rows.length; rowIndex += 1) {
@@ -201,6 +254,7 @@ test.describe("3. ratings grid", () => {
         const node = rendered.rows[rowIndex][seasonIndex];
 
         if (!cell) {
+          // A hole must read as absent: no link, no number, not clickable.
           expect(node.hasLink).toBe(false);
           expect(node.text).toBe("");
           continue;
@@ -227,10 +281,12 @@ test.describe("3. ratings grid", () => {
     ).toBeGreaterThan(0);
 
     await page.goto(CHANNEL_PATH);
-    const rendered = await readGrid(page, "desktop");
+    const rendered = await readFlow(page);
 
     const garbage = bandStyle("garbage").cell.split(" ")[0];
-    const nodes = rendered.rows.flat().filter((node) => node.text === "?");
+    const nodes = rendered
+      .flatMap((year) => year.cells)
+      .filter((node) => node.text === "?");
     expect(nodes.length).toBe(unrated.length);
 
     for (const node of nodes) {
@@ -245,16 +301,14 @@ test.describe("3. ratings grid", () => {
     const grid = await apiJson<Grid>(page, GRID_API);
 
     await page.goto(CHANNEL_PATH);
-    const rendered = await readGrid(page, "desktop");
+    const rendered = await readFlow(page);
 
     let flagged = 0;
     for (const [seasonIndex] of grid.seasons.entries()) {
-      for (let rowIndex = 0; rowIndex < grid.rows.length; rowIndex += 1) {
-        const cell = apiCell(grid, seasonIndex, rowIndex);
-        if (!cell) continue;
+      for (const [position, cell] of apiSeasonCells(grid, seasonIndex).entries()) {
         const expectedMarkers = markerCount(cell);
         expect(
-          rendered.rows[seasonIndex][rowIndex].iconCount,
+          rendered[seasonIndex].cells[position].iconCount,
           `marker count wrong on ${cell.youtube_id}`,
         ).toBe(expectedMarkers);
         if (expectedMarkers > 0) flagged += 1;
@@ -325,7 +379,7 @@ test.describe("3. ratings grid", () => {
 
     // 🚨 `waitForURL` resolves on the History API update, which during a soft
     // navigation happens BEFORE the new RSC payload is applied. Reading the grid
-    // at that instant can capture the PUBLIC table still in the DOM, and the
+    // at that instant can capture the PUBLIC cells still in the DOM, and the
     // failure then looks like wrong scores rather than a mistimed read - which
     // is how this test spent a session logged as an unexplained flake.
     //
@@ -334,12 +388,10 @@ test.describe("3. ratings grid", () => {
     // additive: it pins the toggle's accessibility state as well.
     await expect(elite).toHaveAttribute("aria-current", "true");
 
-    const rendered = await readGrid(page, "desktop");
-    const renderedScores = rendered.rows.flat().map((node) => node.text);
+    const rendered = await readFlow(page);
+    const renderedScores = rendered.flatMap((year) => year.cells.map((c) => c.text));
     const expectedScores = eliteGrid.seasons.flatMap((_season, seasonIndex) =>
-      eliteGrid.rows.map((_row, rowIndex) =>
-        expectedText(apiCell(eliteGrid, seasonIndex, rowIndex)),
-      ),
+      apiSeasonCells(eliteGrid, seasonIndex).map(expectedText),
     );
 
     expect(renderedScores).toEqual(expectedScores);
@@ -347,9 +399,7 @@ test.describe("3. ratings grid", () => {
     // Proves the switch actually did something, rather than the two modes
     // happening to be identical.
     const publicScores = publicGrid.seasons.flatMap((_season, seasonIndex) =>
-      publicGrid.rows.map((_row, rowIndex) =>
-        expectedText(apiCell(publicGrid, seasonIndex, rowIndex)),
-      ),
+      apiSeasonCells(publicGrid, seasonIndex).map(expectedText),
     );
     if (JSON.stringify(publicScores) === JSON.stringify(expectedScores)) {
       // With zero community ratings (the state since the 2026-08-14 demo-data
@@ -374,19 +424,80 @@ test.describe("3. ratings grid", () => {
     }
   });
 
-  test("3.9 the season average under each year matches the API", async ({ page }) => {
+  test("3.9 each year block states its episode count and its average", async ({
+    page,
+  }) => {
     const grid = await apiJson<Grid>(page, GRID_API);
 
     await page.goto(CHANNEL_PATH);
-    const rendered = await readGrid(page, "desktop");
+    const rendered = await readFlow(page);
 
     for (const [seasonIndex, season] of grid.seasons.entries()) {
-      if (season.average === null) continue;
+      const header = rendered[seasonIndex].header;
       expect(
-        rendered.rowHeaders[seasonIndex],
-        `season ${season.label} shows the wrong average`,
-      ).toContain(season.average.toFixed(1));
+        header,
+        `season ${season.label} shows the wrong episode count`,
+      ).toContain(copy.channels.episodeCount(season.episode_count));
+      if (season.average === null) continue;
+      expect(header, `season ${season.label} shows the wrong average`).toContain(
+        season.average.toFixed(1),
+      );
     }
+  });
+});
+
+/**
+ * 🚨 THE REGRESSION THIS LAYOUT EXISTS FOR (2026-08-16).
+ *
+ * The grid used to be a matrix whose horizontal axis was "every episode of the
+ * busiest year". On the flagship channel that was 3,913px inside a 1,150px
+ * card, so a laptop showed 52 of 183 columns and the rest sat behind a scroll
+ * container with no visible scrollbar. It looked like the site only had a few
+ * hundred episodes.
+ *
+ * This runs against the BIGGEST channel deliberately - the small one fitted
+ * even under the old layout, so it could never have caught the bug.
+ */
+test.describe("3.12 the whole channel is on the page", () => {
+  const BIG_SLUG = encodeURIComponent("комеди-клуб-подкаст-comedy-club-podcast");
+  const BIG_PATH = `/channels/${BIG_SLUG}`;
+
+  test("3.12 nothing on the biggest channel scrolls sideways", async ({ page }) => {
+    await page.goto(BIG_PATH);
+
+    const overflow = await page.evaluate(() => {
+      const root = document.querySelector('[data-grid="flow"]');
+      if (!root) throw new Error("no flow ratings grid was rendered");
+      // Every element inside the grid, not just the root: the failure mode
+      // being pinned is an inner container that scrolls while the page does
+      // not, which is exactly what the deleted matrix did.
+      return Array.from(root.querySelectorAll("*"))
+        .concat(root)
+        .map((el) => el.scrollWidth - el.clientWidth)
+        .filter((delta) => delta > 1).length;
+    });
+
+    expect(overflow, "something inside the grid still scrolls sideways").toBe(0);
+    expect(await hasHorizontalOverflow(page), "the page itself must not scroll").toBe(
+      false,
+    );
+  });
+
+  test("3.12 every one of the biggest channel's episodes is rendered", async ({
+    page,
+  }) => {
+    const grid = await apiJson<Grid>(page, `/api/channels/${BIG_SLUG}/grid`);
+    expect(
+      grid.total_count,
+      "the big channel got small, so this test no longer proves anything",
+    ).toBeGreaterThan(1000);
+
+    await page.goto(BIG_PATH);
+    const rendered = await readFlow(page);
+
+    const hrefs = rendered.flatMap((year) => year.cells.map((cell) => cell.href));
+    expect(hrefs).toHaveLength(grid.total_count);
+    expect(new Set(hrefs).size).toBe(grid.total_count);
   });
 });
 

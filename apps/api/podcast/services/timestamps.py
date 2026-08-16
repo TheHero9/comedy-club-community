@@ -67,17 +67,28 @@ def format_timestamp(seconds: int) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def resolve_timestamp(*, timestamp: str | None, timestamp_sec: int | None) -> int:
+def resolve_timestamp(
+    *, timestamp: str | None, timestamp_sec: int | None, required: bool = True
+) -> int | None:
     """Accept either form, preferring the typed text when both are present.
 
     The string is what a human entered, so it wins over a number a client
     derived from it. Keeping `timestamp_sec` working means existing callers and
     tests do not break just because the form gained a nicer input.
+
+    🚨 `required` defaults to True so that a caller which forgets to think about
+    the absent case keeps the old, strict behaviour. Only the moment endpoint
+    passes False, and only because a moment without a timestamp is a defined
+    thing there (a note about the episode). An OMITTED value becomes None; a
+    MALFORMED one is still an error either way - "4:75" is a typo, not a
+    decision to leave the field blank.
     """
     if timestamp is not None and str(timestamp).strip():
         return parse_timestamp(timestamp)
     if timestamp_sec is None:
-        raise TimestampError("Enter a timestamp")
+        if required:
+            raise TimestampError("Enter a timestamp")
+        return None
     if timestamp_sec < 0:
         raise TimestampError("A timestamp cannot be negative")
     return int(timestamp_sec)
