@@ -89,6 +89,15 @@ class Command(BaseCommand):
             action="store_true",
             help="Take the access away again (role=member, staff/superuser off)",
         )
+        parser.add_argument(
+            "--diagnose",
+            action="store_true",
+            help=(
+                "Report this service's Clerk configuration and whether the lookup "
+                "works, then exit 0 - changes nothing. Safe to arm as a "
+                "preDeployCommand, which a failing verification is not."
+            ),
+        )
 
     def handle(self, *args, **options):
         if options["list"]:
@@ -130,6 +139,25 @@ class Command(BaseCommand):
 
         user = matches[0]
         self.stdout.write(f"before: {describe(user)}")
+
+        if options["diagnose"]:
+            from podcast.auth import clerk_api
+
+            profile = getattr(user, "profile", None)
+            clerk_id = getattr(profile, "clerk_user_id", None)
+            if not clerk_id:
+                self.stdout.write("no clerk_user_id on this account; nothing to ask Clerk")
+                return
+            fetched = clerk_api.fetch_user(clerk_id)
+            if fetched is None:
+                self._report_clerk_config(clerk_id)
+                self.stdout.write("RESULT: Clerk lookup FAILED (see the warning above)")
+            else:
+                self.stdout.write(
+                    f"RESULT: Clerk lookup OK - email={fetched.get('email') or '(none)'!r} "
+                    f"name={fetched.get('display_name') or '(none)'!r}"
+                )
+            return
 
         if options["verify_email"]:
             self._verify_against_clerk(user, options["verify_email"], options["dry_run"])
@@ -207,6 +235,7 @@ class Command(BaseCommand):
 
         fetched = clerk_api.fetch_user(clerk_id)
         if fetched is None:
+            self._report_clerk_config(clerk_id)
             # Fails CLOSED, unlike the sign-in path which fails soft. There the
             # token was already cryptographically verified so the user is
             # authentic regardless; here the lookup IS the verification.
@@ -231,6 +260,44 @@ class Command(BaseCommand):
             user.email = actual[:254]
             user.save(update_fields=["email"])
             self.stdout.write(f"backfilled the blank email to {user.email}")
+
+    def _report_clerk_config(self, clerk_id):
+        """Name the instance each side belongs to, without printing any secret.
+
+        🔒 Only the key TYPE is logged - `sk_live_` / `sk_test_` are fixed public
+        prefixes, not secret material, and the rest is replaced by its length.
+        That is enough to answer the only question that matters here: a
+        `sk_test_` key cannot read a user that lives in the production instance,
+        and Clerk answers that with 403 rather than 401, because the key itself
+        is perfectly valid - just not for that resource.
+        """
+        from django.conf import settings
+
+        secret = getattr(settings, "CLERK_SECRET_KEY", "") or ""
+        if not secret:
+            key_type = "MISSING"
+        elif secret.startswith("sk_live_"):
+            key_type = f"sk_live_… ({len(secret)} chars)"
+        elif secret.startswith("sk_test_"):
+            key_type = f"sk_test_… ({len(secret)} chars)"
+        else:
+            key_type = f"unrecognised prefix ({len(secret)} chars)"
+
+        issuer = getattr(settings, "CLERK_ISSUER", "") or "(unset)"
+        jwks = getattr(settings, "CLERK_JWKS_URL", "") or "(unset)"
+
+        self.stdout.write("")
+        self.stdout.write("Clerk configuration seen by THIS service:")
+        self.stdout.write(f"  CLERK_SECRET_KEY : {key_type}")
+        self.stdout.write(f"  CLERK_ISSUER     : {issuer}")
+        self.stdout.write(f"  CLERK_JWKS_URL   : {jwks}")
+        self.stdout.write(f"  looking up       : {clerk_id}")
+        self.stdout.write(
+            "  → A 403 with a VALID key means the key and the user are in "
+            "different Clerk instances. The issuer above names the instance the "
+            "user signed in to; the key must belong to that same instance."
+        )
+        self.stdout.write("")
 
     def _list(self):
         users = User.objects.select_related("profile").order_by("id")
