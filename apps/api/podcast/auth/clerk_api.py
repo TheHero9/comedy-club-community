@@ -54,6 +54,35 @@ def _primary_email(payload: dict) -> str:
     return (addresses[0].get("email_address") or "") if addresses else ""
 
 
+def _clerk_error_reason(exc: Exception) -> str:
+    """Clerk's own explanation for a failed call, from the ERROR body.
+
+    🔒 The success body is never logged - it is account data. An error body is
+    not: it is `{"errors":[{"code","message"}], "clerk_trace_id"}`, and the
+    `code` is the only thing that separates causes with opposite remedies.
+    Without it a 403 could be a key from another application, a restricted key
+    missing `users:read`, or an id that instance has never seen - and we spent
+    two deploys guessing between them on 2026-08-16.
+
+    Only `code` and `message` are read; the raw body is never logged, and this
+    never raises, because a diagnostic that can break the caller is worse than
+    no diagnostic.
+    """
+    reader = getattr(exc, "read", None)
+    if reader is None:
+        return ""
+    try:
+        body = json.loads(reader() or b"{}")
+        errors = body.get("errors") or []
+        parts = [
+            f"{error.get('code') or '?'}: {error.get('message') or ''}".strip()
+            for error in errors[:2]
+        ]
+        return f" - {'; '.join(parts)}" if parts else ""
+    except Exception:  # pragma: no cover - diagnostics must never throw
+        return ""
+
+
 def fetch_user(clerk_user_id: str) -> dict | None:
     """Identity fields for one Clerk user, or None if we cannot get them.
 
@@ -87,10 +116,11 @@ def fetch_user(clerk_user_id: str) -> dict | None:
         # remedies are opposite. Cost a diagnostic round trip on 2026-08-16.
         status = getattr(exc, "code", None)
         logger.warning(
-            "Clerk user lookup failed for %s: %s%s",
+            "Clerk user lookup failed for %s: %s%s%s",
             clerk_user_id,
             type(exc).__name__,
             f" (HTTP {status})" if status else "",
+            _clerk_error_reason(exc),
         )
         return None
 
