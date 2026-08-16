@@ -17,13 +17,36 @@ import { absoluteUrl } from "@/lib/site";
  * `meta.total` says how many more offset pages are needed, and they are then
  * fetched in parallel.
  *
- * ⚠️ This runs against the LIVE API at build time, like every other prerendered
- * page here, and it is deliberately NOT wrapped in a try/catch. A build that
- * silently shipped a sitemap containing only the six static routes would look
- * exactly like a working one while quietly de-listing the entire catalogue -
- * the "reports success, serves the old thing" failure this project has hit
- * repeatedly. If the API is down the build should fail and say so.
+ * 🚨 `force-dynamic`, AND THAT IS LOAD-BEARING - it is not a caching preference.
+ *
+ * A sitemap route is STATIC by default, so Next prerenders it during `next
+ * build`. Every page in this app is already dynamic (reading the locale cookie
+ * makes them so), which means this was the ONLY route that fetched the API at
+ * build time - and CI builds with no API running, because CI has no ingested
+ * corpus. So the first push broke the build outright:
+ *
+ *     Error: connect ECONNREFUSED 127.0.0.1:8000
+ *     Export encountered an error on /sitemap.xml/route, exiting the build.
+ *
+ * ⚠️ The original version of this comment argued the opposite - that it should
+ * throw, "like every other prerendered page here". There are no other
+ * prerendered pages here. The claim was wrong and CI caught it; a local build
+ * could not, because the API was up.
+ *
+ * Generating per-request is also simply more correct: the sitemap then reflects
+ * the catalogue as it is now rather than as it was at deploy time, so a newly
+ * ingested episode is listed without a redeploy. The ~19 API calls stay cheap
+ * because `PUBLIC_CACHE` keeps the underlying fetches in the data cache for 60s,
+ * so a burst of crawler hits shares one set of responses.
+ *
+ * ✅ Still deliberately NOT wrapped in a try/catch. If the API is down the
+ * sitemap should 500, not quietly serve six static routes - a response that
+ * looks healthy while de-listing the entire catalogue is the "reports success,
+ * serves the old thing" failure this project keeps hitting. The difference is
+ * that it now fails a REQUEST, which is recoverable, instead of a BUILD.
  */
+export const dynamic = "force-dynamic";
+
 
 /** The API's own per-request ceiling (`MAX_LIMIT` in `podcast/api/public.py`). */
 const API_MAX_LIMIT = 100;
