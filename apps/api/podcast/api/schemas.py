@@ -261,7 +261,14 @@ class MembershipIn(Schema):
 
     channel_id: int
     months: int | None = Field(
-        None, ge=1, le=600, description="Months held right now, as the user sees it."
+        None,
+        ge=0,
+        le=600,
+        description=(
+            "COMPLETED months held right now, as the user's badge shows them. "
+            "0 is valid and means 'new member' - the first rung of the icon "
+            "ladder."
+        ),
     )
     renewal_day: int | None = Field(
         None, ge=1, le=31, description="Day of the month it renews."
@@ -278,12 +285,29 @@ class AvatarIconOut(Schema):
     """One entry in the profile-icon catalogue, as this viewer sees it."""
 
     key: str
-    label: str
+    label: str = Field(
+        ...,
+        description=(
+            "The catalogue's own name, for the admin and this schema. ⚠️ NOT what "
+            "the picker renders - the UI composes a bilingual label from "
+            "min_months and channel_name instead."
+        ),
+    )
     image_url: str
     # Required and nullable, same reasoning as MembershipOut above: null means
     # "no membership needed", and the picker branches on exactly that.
     channel_slug: str | None = Field(...)
-    min_months: int = 0
+    channel_name: str | None = Field(
+        ..., description="Resolved from the slug so the picker can group by channel."
+    )
+    min_months: int = Field(
+        0,
+        description=(
+            "COMPLETED months required. 0 is the 'new member' rung and is a real "
+            "tier - it still requires a membership on the channel, just no "
+            "elapsed time."
+        ),
+    )
     unlocked: bool = Field(
         ...,
         description=(

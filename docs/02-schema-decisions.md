@@ -353,13 +353,22 @@ else is computed in `podcast/services/memberships.py` on read:
 
 ```
 months_held(member_since, renewal_day, today)
-    = full calendar months elapsed, + 1     # day one is month ONE
+    = full calendar months elapsed          # day one is month ZERO
 next_renewal(renewal_day, today)            # strictly after today
 ```
 
 Worked from the owner's own example: on 2026-08-16, "70 months, renews on the
-6th" → `member_since = 2020-11-06`. On 2026-09-06 the same row reads 71, with
+6th" → `member_since = 2020-10-06`. On 2026-09-06 the same row reads 71, with
 nothing having run in between.
+
+🚨 **Day one is month ZERO, not one.** `months` means COMPLETED months - the
+number a YouTube loyalty badge shows - so `MIN_MONTHS` is 0. That rung is real:
+"starting / new member" is the first icon on every channel's ladder (see
+deviation 15), and a floor of 1 would make it unreachable while silently handing
+every new member the one-month icon. This was 1-based for a few hours on
+2026-08-16, before the artwork arrived and named the rung; the correction is
+invisible to users, since "70 months" reads 70 either way - only what
+`member_since` means internally moved by one month.
 
 `test_memberships.py` proves this as a **round trip** across all 31 renewal days
 and six reference dates, rather than against hardcoded dates.
@@ -394,8 +403,17 @@ their standing, and only a new screenshot (fresh, unreviewed evidence) resets it
 
 `CharField(max_length=64, blank=True)`.
 
-Profile icons are earned by membership length per channel. The artwork does not
-exist yet (owner, 2026-08-16), so what shipped is the machinery.
+Profile icons are earned by membership length per channel. **The artwork landed
+the same day**: 20 icons across four channels, listed in
+`podcast/data/avatar_icons.py`.
+
+| Channel | Rungs (completed months) |
+| --- | --- |
+| Комеди Клуб Подкаст | 0, 1, 2, 6, 12, 24, 36, 48 |
+| Ivan Kirkov | 0, 1, 2 |
+| BFF с Пепи Кю | 0, 1, 3, 6 |
+| Дело 404 | 0, 1, 2, 6 |
+| *(no channel)* | the Comedy Club logo, free to everyone |
 
 **A key, not a URL.** The thing worth storing is *which* icon was picked; where
 its image lives, what it is called and what it costs to unlock are catalogue
@@ -410,6 +428,11 @@ Two rules the code enforces and a reader would otherwise get wrong:
 - 🚨 **A re-locked key is NOT erased.** It stops rendering, and renewing next
   month restores it. Deleting it would silently throw away something the user
   earned, with no way to explain where it went.
+- 🚨 **`min_months=0` still requires a membership on that channel.** The obvious
+  check, `months_by_channel.get(slug, 0) >= icon.min_months`, is true for
+  *everyone* when the threshold is 0 - so every channel's "new member" icon
+  would have been free to people who never joined. Absence is tested before the
+  threshold.
 
 Also: **months do not pool across channels.** 17 months on one channel unlocks
 nothing on another - that is the entire point - so the unlock check is keyed by

@@ -27,7 +27,13 @@ from datetime import date
 #: four-digit month count in the UI is a typo, not a subscription.
 MAX_MONTHS = 600
 
-MIN_MONTHS = 1
+#: 🚨 ZERO, not one. `months` means COMPLETED months - the number printed on a
+#: YouTube loyalty badge - so somebody who joined this week has 0 of them and is
+#: a "new member". That tier is real: it is the first rung of every channel's
+#: icon ladder (starting -> 1m -> 2m -> 6m -> 1y -> ...), and a floor of 1 would
+#: make it unreachable, silently handing every brand-new member the 1-month
+#: icon. Changed 2026-08-16 when the artwork arrived and named that rung.
+MIN_MONTHS = 0
 MIN_RENEWAL_DAY = 1
 MAX_RENEWAL_DAY = 31
 
@@ -92,24 +98,30 @@ def member_since_for(months: int, renewal_day: int, today: date) -> date:
 
     Worked example, from the request that produced this feature: on 2026-08-16 a
     user says 70 months renewing on the 6th. The last renewal was 2026-08-06 and
-    it took them TO 70, so 69 renewals have happened since they joined and they
-    joined on 2020-11-06. Come 2026-09-06 the count reads 71 on its own.
+    it was their 70th, so they joined 70 renewals earlier, on 2020-10-06. Come
+    2026-09-06 the count reads 71 on its own.
     """
     validate(months, renewal_day)
-    return _shift_months(last_renewal(renewal_day, today), -(months - 1), renewal_day)
+    return _shift_months(last_renewal(renewal_day, today), -months, renewal_day)
 
 
 def months_held(member_since: date, renewal_day: int, today: date) -> int:
-    """How many months the membership has run, counting the first one.
+    """COMPLETED months, which is the number a YouTube loyalty badge shows.
 
-    🚨 Day one is month ONE, not month zero - that is what the number on a
-    YouTube membership badge means, and it is what the user typed in. An
-    off-by-one here is invisible in testing and wrong on every profile.
+    🚨 Day one is month ZERO. Someone who joined this week has completed no
+    months and is a "new member" - and that is a real rung on every channel's
+    icon ladder, so an off-by-one here does not merely misprint a number, it
+    hands every new member the wrong icon and skips the first tier entirely.
+
+    ⚠️ This changed on 2026-08-16, when the artwork arrived and named that rung.
+    It is invisible to users: "70 months" still reads 70 today and 71 on the
+    next renewal. All that moved is what `member_since` means internally - the
+    join date rather than the date of the first renewal.
 
     Never negative: a `member_since` in the future (a typo, or a row from before
-    this field existed) reads as 1 rather than as a negative badge.
+    this field existed) reads as 0 rather than as a negative badge.
     """
     elapsed = (today.year - member_since.year) * 12 + (today.month - member_since.month)
     if today.day < clamp_day(renewal_day, today.year, today.month):
         elapsed -= 1
-    return max(1, elapsed + 1)
+    return max(0, elapsed)

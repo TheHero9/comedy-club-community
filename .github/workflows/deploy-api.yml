@@ -1,0 +1,133 @@
+name: Deploy API
+
+# 🚨 THE PROBLEM THIS SOLVES.
+#
+# A push to `main` deploys the WEB only. Vercel rebuilds on every push; Railway
+# never has, because the Railway GitHub App is not installed on this repo, so
+# its push trigger has simply never fired. That was believed to be working for
+# days and only surfaced on 2026-08-15, when two commits touching `apps/api/**`
+# produced ZERO Railway deployments - not queued, not failed, never created.
+#
+# That is the worst possible shape: the site looks deployed while serving an
+# old schema. This closes it from the CI side, so "push to main" ships the
+# whole app rather than half of it.
+#
+# ⚠️ THIS IS THE FALLBACK, NOT THE IDEAL FIX. The services are already
+# repo-sourced (`TheHero9/comedy-club-community`, rootDirectory `/apps/api`,
+# watchPatterns `apps/api/**`) - the ONLY missing piece is the GitHub App that
+# delivers the push webhook. Installing it is a one-click job in the Railway
+# dashboard, needs no token and no workflow, and is strictly better than this.
+# If you do that, DELETE this file - otherwise every push deploys twice.
+# Setup notes and the comparison: specs/10-deployment/02-auto-deploy.md
+#
+# ⚠️ REQUIRES ONE SECRET: `RAILWAY_TOKEN`, a PROJECT token for
+# comedy-club-community / production. Without it the job fails loudly rather
+# than skipping - a deploy step that quietly no-ops would recreate the exact
+# bug it exists to prevent.
+
+on:
+  # 🚨 Gated on CI, via workflow_run rather than a bare `push`. Railway runs
+  # `migrate --noinput` as the api service's preDeployCommand, so a deploy IS a
+  # schema change against production Postgres. It must not start until ruff,
+  # migration-drift and pytest have passed on that exact commit.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  # Always available by hand. A trigger you cannot fire manually is a deploy you
+  # cannot fix under pressure - and some redeploys are needed for reasons that
+  # are not in the diff at all (a changed service variable, a rolled-back image).
+  workflow_dispatch:
+
+concurrency:
+  # Never two deploys of the same service at once, and DO NOT cancel one in
+  # flight: a half-applied migration is much worse than a queued deploy.
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Railway - api, celery-worker, celery-beat
+    runs-on: ubuntu-latest
+    # A red CI run must never reach production. `workflow_dispatch` has no
+    # `workflow_run` payload, so that branch of the condition lets a manual run
+    # through deliberately.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 🚨 The commit CI actually passed on, not whatever `main` points at
+          # now. Without this, a push landing during the CI run would be
+          # deployed on the strength of the previous commit's green tick.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Fail early and loudly with no token
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::RAILWAY_TOKEN is not set, so the API was NOT deployed."
+            echo "Add it under Settings > Secrets and variables > Actions."
+            echo "Create it in Railway: project comedy-club-community >"
+            echo "Settings > Tokens > new PROJECT token for 'production'."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install -g @railway/cli
+
+      # 🚨 `railway up`, never `railway redeploy`. Redeploy re-runs the most
+      # recent deployment REUSING that deployment's build and config, so it
+      # ships the OLD commit - and any service-config change made since is
+      # silently ignored. `up` creates a genuinely new deployment from the
+      # checked-out source, which is this commit.
+      #
+      # 🚨 `api` FIRST, and not in parallel. It is the only service carrying
+      # `preDeployCommand: migrate --noinput`, so the schema has to land before
+      # the worker and beat start running task code against it. (Beat also
+      # fires overdue jobs immediately on container start.)
+      #
+      # No `--detach`: we want the command to wait, so a failed build or a
+      # failed migration fails this job instead of being reported as a
+      # successful deploy that never served.
+      - name: Deploy api (runs the migration)
+        working-directory: apps/api # matches the services' rootDirectory
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service api --environment production --ci
+
+      - name: Deploy celery-worker and celery-beat
+        working-directory: apps/api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          set -euo pipefail
+          # ⚠️ Both MUST be redeployed even when only the API "changed". They
+          # bake the code into their own image with no source mount, so a
+          # worker left on an old image runs old task code against a new
+          # schema - which is how the nightly sync degraded 1,171 rows on
+          # 2026-08-13.
+          for service in celery-worker celery-beat; do
+            echo "::group::$service"
+            railway up --service "$service" --environment production --ci
+            echo "::endgroup::"
+          done
+
+      - name: What to check
+        if: always()
+        run: |
+          echo "🚨 A green job means the deployments were CREATED and built."
+          echo "Confirm the API is actually serving the new code - the site can"
+          echo "look fine while running an old schema:"
+          echo "  curl -s https://api.comedycommunity.club/api/health"
+          echo "and check the deploy logs for the 'migrate --noinput' output."
+          echo ""
+          echo "⚠️ 'railway up' uploads a source snapshot, so the deployment may"
+          echo "carry no commitHash in the Railway UI. Verify by BEHAVIOUR (a"
+          echo "new field on a response) rather than by looking for the hash."

@@ -192,12 +192,25 @@ def list_avatars(request):
     """
     profile = _profile(request.auth)
     months = _viewer_months(request.auth)
+
+    # 🇧🇬 Channel NAMES come from the database, never from the catalogue - they
+    # are content and are rendered untranslated. One query for the handful of
+    # slugs the catalogue mentions, not one per icon.
+    slugs = {icon.channel_slug for icon in avatar_icons.CATALOGUE if icon.channel_slug}
+    names = dict(
+        Channel.objects.filter(slug__in=slugs).values_list("slug", "name")
+    )
+
     return [
         {
             "key": icon.key,
             "label": icon.label,
             "image_url": icon.image_url,
             "channel_slug": icon.channel_slug,
+            # ⚠️ None for a channel-free icon, and also for a slug that matches
+            # no channel - a typo in the catalogue makes an icon permanently
+            # locked rather than 500ing the picker.
+            "channel_name": names.get(icon.channel_slug) if icon.channel_slug else None,
             "min_months": icon.min_months,
             "unlocked": avatar_icons.unlocked_months(icon, months),
             "selected": profile.avatar_key == icon.key,

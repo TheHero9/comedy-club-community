@@ -28,8 +28,16 @@ import { viewerApi } from "@/lib/auth";
  * vote).
  */
 
-/** Mirrors `MAX_MONTHS` in `podcast/services/memberships.py`. */
+/** Mirror `MAX_MONTHS` / `MIN_MONTHS` in `podcast/services/memberships.py`. */
 const MAX_MONTHS = 600;
+
+/**
+ * 🚨 ZERO, not one. `months` is COMPLETED months - the number on the YouTube
+ * badge - so somebody who joined this week has 0, and "new member" is the first
+ * rung of every channel's icon ladder. A floor of 1 would make that rung
+ * unreachable and quietly hand every new member the one-month icon.
+ */
+const MIN_MONTHS = 0;
 
 export function MembershipEditor({
   open,
@@ -81,7 +89,7 @@ export function MembershipEditor({
   const valid =
     channelId !== null &&
     Number.isInteger(parsedMonths) &&
-    parsedMonths >= 1 &&
+    parsedMonths >= MIN_MONTHS &&
     parsedMonths <= MAX_MONTHS &&
     Number.isInteger(parsedDay) &&
     parsedDay >= 1 &&

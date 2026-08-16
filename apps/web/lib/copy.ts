@@ -571,11 +571,29 @@ const en = {
     savedToast: "Profile saved",
     handleTakenToast: "That handle is already taken",
     iconLabel: "Profile icon",
-    /** The catalogue is empty until the artwork lands. Say so rather than showing a void. */
+    iconHint: "Unlocked by how long you have been a member of each channel.",
+    /** Only reachable if the catalogue is empty - a failed fetch looks the same as a void. */
     iconsComingSoon:
       "Profile icons are on the way. They unlock with the months you have on each channel.",
-    iconLocked: (label: string, months: number) =>
-      `${label} - unlocks at ${months} months`,
+    /** Heading for the icons that need no membership at all. */
+    iconEveryone: "Everyone",
+    /**
+     * 🚨 Months are COMPLETED months, so 0 is a real tier - "new member", the
+     * first rung of every ladder - and must never render as "0 months".
+     */
+    iconTier: (months: number) => {
+      if (months === 0) return "New member";
+      if (months < 12) return months === 1 ? "1 month" : `${months} months`;
+      const years = Math.floor(months / 12);
+      const rest = months % 12;
+      const yearPart = years === 1 ? "1 year" : `${years} years`;
+      if (rest === 0) return yearPart;
+      return `${yearPart} ${rest === 1 ? "1 month" : `${rest} months`}`;
+    },
+    iconLocked: (tier: string, months: number) =>
+      months === 0
+        ? `${tier} - join this channel to unlock`
+        : `${tier} - unlocks at ${months === 1 ? "1 month" : `${months} months`}`,
   },
 
   /**
@@ -602,7 +620,7 @@ const en = {
     channelLocked: "To move a membership to another channel, remove it and add it again.",
     monthsLabel: "Months so far",
     monthsPlaceholder: "70",
-    monthsHint: "The number shown on your membership badge right now.",
+    monthsHint: "The number on your membership badge right now. Just joined? Enter 0.",
     renewalLabel: "Renews on day",
     renewalPlaceholder: "6",
     renewalHint: "The day of the month you get charged. Between 1 and 31.",
@@ -612,7 +630,9 @@ const en = {
      * meant 17, in a way that "17" sitting in a box is not.
      */
     preview: (months: number, next: number, day: number) =>
-      `You have ${months} months now, and ${next} from the ${ordinal(day)} of next month.`,
+      months === 0
+        ? `You are a new member now, and 1 month from the ${ordinal(day)} of next month.`
+        : `You have ${months === 1 ? "1 month" : `${months} months`} now, and ${next} from the ${ordinal(day)} of next month.`,
     monthsAndRenewal: (months: number, renews: string) =>
       `${months === 1 ? "1 month" : `${months} months`} - renews ${renews}`,
     needsDetails: "Add your month count",
@@ -1110,10 +1130,23 @@ const bg: Copy = {
     savedToast: "Профилът е запазен",
     handleTakenToast: "Този handle вече е зает",
     iconLabel: "Икона на профила",
+    iconHint: "Отключва се според това колко дълго си член на всеки канал.",
     iconsComingSoon:
       "Иконите за профил идват скоро. Отключват се според месеците, които имаш във всеки канал.",
-    iconLocked: (label: string, months: number) =>
-      `${label} - отключва се на ${months} месеца`,
+    iconEveryone: "За всички",
+    iconTier: (months: number) => {
+      if (months === 0) return "Нов член";
+      if (months < 12) return months === 1 ? "1 месец" : `${months} месеца`;
+      const years = Math.floor(months / 12);
+      const rest = months % 12;
+      const yearPart = years === 1 ? "1 година" : `${years} години`;
+      if (rest === 0) return yearPart;
+      return `${yearPart} и ${rest === 1 ? "1 месец" : `${rest} месеца`}`;
+    },
+    iconLocked: (tier: string, months: number) =>
+      months === 0
+        ? `${tier} - стани член на канала, за да я отключиш`
+        : `${tier} - отключва се на ${months === 1 ? "1 месец" : `${months} месеца`}`,
   },
 
   memberships: {
@@ -1134,14 +1167,17 @@ const bg: Copy = {
       "За да преместиш членство в друг канал, премахни го и го добави наново.",
     monthsLabel: "Месеци досега",
     monthsPlaceholder: "70",
-    monthsHint: "Числото, което пише на значката ти за членство в момента.",
+    monthsHint:
+      "Числото на значката ти за членство в момента. Тъкмо си станал член? Въведи 0.",
     renewalLabel: "Подновява се на",
     renewalPlaceholder: "6",
     renewalHint: "Денят от месеца, в който ти се таксува. Между 1 и 31.",
     // 🇧🇬 "на 6-о число", not an English-style ordinal suffix - Bulgarian
     // ordinals inflect and are never written "6th". See `ordinal` above.
     preview: (months: number, next: number, day: number) =>
-      `Сега имаш ${months} месеца, а от ${day}-о число на следващия месец - ${next}.`,
+      months === 0
+        ? `Сега си нов член, а от ${day}-о число на следващия месец - 1 месец.`
+        : `Сега имаш ${months === 1 ? "1 месец" : `${months} месеца`}, а от ${day}-о число на следващия месец - ${next}.`,
     monthsAndRenewal: (months: number, renews: string) =>
       `${months === 1 ? "1 месец" : `${months} месеца`} - подновява се на ${renews}`,
     needsDetails: "Добави броя месеци",

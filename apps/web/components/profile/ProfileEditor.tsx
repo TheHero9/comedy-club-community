@@ -130,6 +130,9 @@ export function ProfileEditor({
           could ride along with a name change. */}
       <div className="mt-4">
         <span className="text-eyebrow">{copy.profile.iconLabel}</span>
+        <p className="mt-1 text-[11.5px] text-subtle-foreground">
+          {copy.profile.iconHint}
+        </p>
         <AvatarPicker />
       </div>
 

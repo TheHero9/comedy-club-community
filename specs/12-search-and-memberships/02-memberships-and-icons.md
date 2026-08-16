@@ -24,10 +24,10 @@ So the two things the user *can* tell us - **"70 months"** and **"renews on the
 6th"** - collapse into **one stored anchor**, and the count is derived on read.
 
 ```
-member_since_for(70, 6, 2026-08-16)  ->  2020-11-06
-months_held(2020-11-06, 6, 2026-08-16)  ->  70
-months_held(2020-11-06, 6, 2026-09-05)  ->  70    # not yet
-months_held(2020-11-06, 6, 2026-09-06)  ->  71    # on its own
+member_since_for(70, 6, 2026-08-16)  ->  2020-10-06
+months_held(2020-10-06, 6, 2026-08-16)  ->  70
+months_held(2020-10-06, 6, 2026-09-05)  ->  70    # not yet
+months_held(2020-10-06, 6, 2026-09-06)  ->  71    # on its own
 ```
 
 No Celery task, no cron, no backfill, and correct at whatever instant it is
@@ -50,10 +50,16 @@ They agree 28 days out of 31. A membership renewing on the **31st** has a
 the date would move that user's renewal to the 30th permanently. `date(2026, 2,
 31)` is also a `ValueError` - every function clamps through `clamp_day`.
 
-### Day one is month ONE
+### 🚨 Day one is month ZERO
 
-Not month zero. That is what a YouTube badge means and what the user typed. An
-off-by-one here is invisible in testing and wrong on every profile.
+`months` means **completed** months - the number a YouTube loyalty badge shows -
+so `MIN_MONTHS` is 0 and a brand-new member has none.
+
+This was 1-based for a few hours, until the artwork arrived and named the rung:
+every channel's ladder opens with **"starting / new member"**, and a floor of 1
+would have made that icon unreachable while silently handing every new member
+the one-month one. The correction is invisible to users - "70 months" reads 70
+either way - and only moved what `member_since` means internally.
 
 ---
 
@@ -88,22 +94,42 @@ claim).
 
 ---
 
-## 3. Profile icons: the machinery, not the art
+## 3. Profile icons
 
-The artwork does not exist yet. What shipped is everything around it, so the drop
-is a data change:
+The artwork landed the same day - 20 icons, four channels, in
+`apps/api/podcast/data/avatar_icons.py` with the files in
+`apps/web/public/avatars/` (82 KB total).
+
+| Channel | Rungs, in completed months |
+| --- | --- |
+| Комеди Клуб Подкаст / Comedy Club Podcast | 0, 1, 2, 6, 12, 24, 36, 48 |
+| Ivan Kirkov | 0, 1, 2 |
+| BFF с Пепи Кю | 0, 1, 3, 6 |
+| Дело 404 Crime Podcast | 0, 1, 2, 6 |
+| *(none)* | the Comedy Club logo, free to everyone |
+
+⚠️ BFF с Пепи Кю's 3- and 6-month rungs reuse Ivan Kirkov's artwork, per the
+owner. The files are **copies** (`pepi-3m.png`, `pepi-6m.png`) rather than
+references to `ik-*`, so giving that channel its own art later is a file swap
+that cannot accidentally change Ivan Kirkov's ladder too.
+
+⚠️ Three channels have no icons yet (Sport, Клюки, News). They simply do not
+appear in the picker - no placeholder, no empty group.
+
+Adding more is a data change, no migration and no code:
 
 ```python
-# apps/api/podcast/data/avatar_icons.py
-AvatarIcon(key="bff-gold", label="BFF Gold",
-           image_url="/static/avatars/bff-gold.png",
-           channel_slug="bff-pepi-q", min_months=17),
+AvatarIcon("ccp-5y", "Comedy Club Podcast - 5 years",
+           "/avatars/ccp-5y.png", CCP, 60),
 ```
 
-No migration, no backfill, no code. `UserProfile.avatar_key` stores the **key**;
-where the image lives and what it costs are catalogue data.
+`UserProfile.avatar_key` stores the **key**; where the image lives and what it
+costs are catalogue data. Four rules the code enforces:
 
-Three rules the code enforces:
+- 🚨 **`min_months=0` still needs a membership on that channel.** The obvious
+  `months_by_channel.get(slug, 0) >= icon.min_months` is true for *everyone*
+  when the threshold is 0, so every channel's "new member" icon would have been
+  free to people who never joined. Caught before shipping; pinned by a test.
 
 - 🚨 **Months do not pool across channels.** 17 months on one channel unlocks
   nothing on another - that is the entire point - so the unlock check is keyed by

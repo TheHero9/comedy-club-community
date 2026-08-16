@@ -1507,14 +1507,23 @@ export interface components {
         AvatarIconOut: {
             /** Key */
             key: string;
-            /** Label */
+            /**
+             * Label
+             * @description The catalogue's own name, for the admin and this schema. ⚠️ NOT what the picker renders - the UI composes a bilingual label from min_months and channel_name instead.
+             */
             label: string;
             /** Image Url */
             image_url: string;
             /** Channel Slug */
             channel_slug: string | null;
             /**
+             * Channel Name
+             * @description Resolved from the slug so the picker can group by channel.
+             */
+            channel_name: string | null;
+            /**
              * Min Months
+             * @description COMPLETED months required. 0 is the 'new member' rung and is a real tier - it still requires a membership on the channel, just no elapsed time.
              * @default 0
              */
             min_months: number;
@@ -1660,7 +1669,7 @@ export interface components {
             channel_id: number;
             /**
              * Months
-             * @description Months held right now, as the user sees it.
+             * @description COMPLETED months held right now, as the user's badge shows them. 0 is valid and means 'new member' - the first rung of the icon ladder.
              */
             months?: number | null;
             /**

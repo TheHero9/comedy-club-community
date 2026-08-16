@@ -30,7 +30,7 @@ class TestMonthMaths:
         today = date(2026, 8, 16)
 
         member_since = m.member_since_for(70, 6, today)
-        assert member_since == date(2020, 11, 6)
+        assert member_since == date(2020, 10, 6)
         assert m.months_held(member_since, 6, today) == 70
         assert m.next_renewal(6, today) == date(2026, 9, 6)
 
@@ -41,7 +41,7 @@ class TestMonthMaths:
         assert m.months_held(member_since, 6, date(2027, 8, 6)) == 82
 
     @pytest.mark.parametrize("renewal_day", range(1, 32))
-    @pytest.mark.parametrize("months", [1, 2, 13, 70, 600])
+    @pytest.mark.parametrize("months", [0, 1, 2, 13, 70, 600])
     @pytest.mark.parametrize(
         "today",
         [
@@ -63,12 +63,21 @@ class TestMonthMaths:
         anchor = m.member_since_for(months, renewal_day, today)
         assert m.months_held(anchor, renewal_day, today) == months
 
-    def test_day_one_is_month_one(self):
-        """🚨 Not month zero. That is what a YouTube membership badge means."""
+    def test_day_one_is_month_zero(self):
+        """🚨 Zero, not one - a brand-new member has COMPLETED no months.
+
+        That is what a YouTube loyalty badge shows, and it is the first rung of
+        every channel's icon ladder ("starting"). If day one read as 1, that
+        rung would be unreachable and every new member would silently be handed
+        the one-month icon instead.
+        """
         today = date(2026, 6, 15)
-        anchor = m.member_since_for(1, 15, today)
+        anchor = m.member_since_for(0, 15, today)
         assert anchor == today
-        assert m.months_held(anchor, 15, today) == 1
+        assert m.months_held(anchor, 15, today) == 0
+        # ...and it becomes 1 on the first renewal, not before.
+        assert m.months_held(anchor, 15, date(2026, 7, 14)) == 0
+        assert m.months_held(anchor, 15, date(2026, 7, 15)) == 1
 
     def test_a_31st_renewal_survives_february(self):
         """The calendar edge that turns a bad implementation into a 500.
@@ -93,11 +102,11 @@ class TestMonthMaths:
     def test_a_future_start_never_reads_as_negative(self):
         """Typo-proofing. A negative month badge is worse than a wrong one."""
         future = date(2030, 1, 10)
-        assert m.months_held(future, 10, date(2026, 8, 16)) == 1
+        assert m.months_held(future, 10, date(2026, 8, 16)) == 0
 
     @pytest.mark.parametrize(
         "months,renewal_day",
-        [(0, 6), (-1, 6), (601, 6), (12, 0), (12, 32), (12, -3)],
+        [(-1, 6), (601, 6), (12, 0), (12, 32), (12, -3)],
     )
     def test_impossible_input_is_rejected(self, months: int, renewal_day: int):
         with pytest.raises(m.MembershipMathError):
@@ -214,7 +223,7 @@ class TestMembershipEndpoints:
     @pytest.mark.parametrize(
         "payload",
         [
-            {"months": 0, "renewal_day": 6},
+            {"months": -1, "renewal_day": 6},
             {"months": 9999, "renewal_day": 6},
             {"months": 12, "renewal_day": 0},
             {"months": 12, "renewal_day": 99},
@@ -258,13 +267,140 @@ class TestMembershipEndpoints:
 # ---------------------------------------------------------------------------
 
 
+class TestCatalogueIntegrity:
+    """The catalogue is data, and every one of its fields fails SILENTLY.
+
+    A wrong slug does not raise - it makes an icon permanently locked for
+    everyone. A wrong filename does not raise either - it renders a broken
+    image on somebody's profile. Neither shows up in any other test, so they
+    are checked here directly against the database and the filesystem.
+    """
+
+    def test_every_key_is_unique(self):
+        from podcast.data import avatar_icons
+
+        keys = [icon.key for icon in avatar_icons.CATALOGUE]
+        assert len(keys) == len(set(keys)), "a duplicate key silently shadows an icon"
+
+    @pytest.mark.django_db
+    def test_every_channel_slug_exists(self, channel):
+        """🚨 A typo here locks an icon forever, with no error anywhere."""
+        from podcast.data import avatar_icons
+        from podcast.models import Channel
+
+        referenced = {
+            icon.channel_slug
+            for icon in avatar_icons.CATALOGUE
+            if icon.channel_slug is not None
+        }
+        # The test database is not the real corpus, so this asserts the shape of
+        # the reference rather than its presence: a slug must be a non-empty
+        # string that Channel.slug could hold.
+        for slug in referenced:
+            assert slug and slug.strip() == slug
+            assert len(slug) <= Channel._meta.get_field("slug").max_length
+
+    def test_every_image_file_exists(self):
+        """🚨 A typo'd filename renders a broken image on a public profile.
+
+        The files live in the WEB app's `public/`, because `image_url` resolves
+        against the web origin, not the API's.
+        """
+        from pathlib import Path
+
+        from podcast.data import avatar_icons
+
+        # apps/api/podcast/tests -> repo root -> apps/web/public
+        public = Path(__file__).resolve().parents[3] / "web" / "public"
+        missing = []
+        for icon in avatar_icons.CATALOGUE:
+            if not icon.image_url:
+                continue
+            assert icon.image_url.startswith("/"), f"{icon.key} must be an absolute path"
+            if not (public / icon.image_url.lstrip("/")).is_file():
+                missing.append(f"{icon.key} -> {icon.image_url}")
+        assert not missing, f"catalogue points at files that do not exist: {missing}"
+
+    def test_each_channel_ladder_is_ordered_and_starts_at_zero(self):
+        """The picker renders CATALOGUE order, so the order is the ladder."""
+        from collections import defaultdict
+
+        from podcast.data import avatar_icons
+
+        by_channel = defaultdict(list)
+        for icon in avatar_icons.CATALOGUE:
+            if icon.channel_slug:
+                by_channel[icon.channel_slug].append(icon.min_months)
+
+        for slug, thresholds in by_channel.items():
+            assert thresholds == sorted(thresholds), f"{slug} ladder is out of order"
+            assert len(thresholds) == len(set(thresholds)), f"{slug} has a duplicate rung"
+            assert thresholds[0] == 0, f"{slug} has no new-member rung"
+
+
 @pytest.mark.django_db
 class TestAvatarIcons:
     def test_the_catalogue_lists_locked_icons_too(self, client, alice, as_alice):
         """🚨 The ladder is the feature; hiding its rungs removes the motivation."""
         response = client.get(f"{BASE}/me/avatars", **as_alice)
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        body = response.json()
+        assert len(body) > 1
+        # Somebody with no memberships at all sees the free icon unlocked and
+        # every channel icon locked - including the zero-month rungs.
+        free = [icon for icon in body if icon["channel_slug"] is None]
+        assert free and all(icon["unlocked"] for icon in free)
+        assert not any(icon["unlocked"] for icon in body if icon["channel_slug"])
+
+    def test_a_zero_month_icon_still_needs_a_membership(
+        self, client, channel, other_channel, alice, as_alice
+    ):
+        """🚨 The bug `.get(slug, 0) >= 0` would have shipped.
+
+        A "new member" rung is `min_months=0`, and a plain dict-get defaulting
+        to 0 satisfies `>= 0` for somebody who has never joined - so every
+        channel's starting icon would have been free to everyone. Membership
+        must be checked before the threshold.
+        """
+        from podcast.data import avatar_icons
+
+        icon = avatar_icons.AvatarIcon(
+            key="test-zero",
+            label="Zero",
+            image_url="/avatars/club.jpeg",
+            channel_slug=other_channel.slug,
+            min_months=0,
+        )
+        original = avatar_icons.CATALOGUE
+        avatar_icons.CATALOGUE = (*original, icon)
+        avatar_icons._BY_KEY[icon.key] = icon
+        try:
+            # A membership on a DIFFERENT channel must not unlock it.
+            _claim(client, as_alice, channel, months=50, renewal_day=5)
+            assert (
+                client.put(
+                    f"{BASE}/me/avatar",
+                    data={"avatar_key": icon.key},
+                    content_type="application/json",
+                    **as_alice,
+                ).status_code
+                == 403
+            )
+
+            # Joining that channel today - zero months completed - unlocks it.
+            _claim(client, as_alice, other_channel, months=0, renewal_day=5)
+            assert (
+                client.put(
+                    f"{BASE}/me/avatar",
+                    data={"avatar_key": icon.key},
+                    content_type="application/json",
+                    **as_alice,
+                ).status_code
+                == 200
+            )
+        finally:
+            avatar_icons.CATALOGUE = original
+            avatar_icons._BY_KEY.pop(icon.key, None)
 
     def test_a_locked_icon_cannot_be_selected(self, client, channel, alice, as_alice):
         """🔒 Enforced on the server. A greyed-out button is not authorization.
