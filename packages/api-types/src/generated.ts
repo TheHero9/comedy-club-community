@@ -1166,6 +1166,64 @@ export interface paths {
         patch: operations["podcast_api_moderation_set_user_role"];
         trace?: never;
     };
+    "/api/moderation/users/{user_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend User
+         * @description 🔒 ADMINS ONLY. Stop an account from acting, without destroying anything.
+         *
+         *     🚨 THIS IS THE ONLY WAY TO STOP A BAD ACTOR, and until 2026-08-16 there was
+         *     none. Moderators could hide a comment but could not stop the person writing
+         *     the next one, and deleting the account in Clerk did nothing here - Django
+         *     keeps its own row, and a session token that has not expired keeps working
+         *     against it. Suspension is enforced in the auth backend, so it applies to
+         *     every endpoint at once rather than per-route.
+         *
+         *     ⚠️ Content SURVIVES. Same principle as hiding a comment rather than deleting
+         *     it: the record is what a moderator needs later. Use the report queue to take
+         *     down individual rows.
+         *
+         *     🚨 Admin-only, not moderator - the same reasoning as role granting. A
+         *     moderator who could suspend accounts could suspend the admins.
+         */
+        post: operations["podcast_api_moderation_suspend_user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/moderation/users/{user_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore User
+         * @description 🔒 ADMINS ONLY. Lift a suspension.
+         *
+         *     Their existing ratings start counting again immediately, exactly as a
+         *     verified membership promotes existing ratings - nothing was deleted, so
+         *     nothing has to be rebuilt.
+         */
+        post: operations["podcast_api_moderation_restore_user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2370,6 +2428,11 @@ export interface components {
              * @default false
              */
             is_me: boolean;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
         };
         /** UserRoleIn */
         UserRoleIn: {
@@ -3927,6 +3990,50 @@ export interface operations {
                 "application/json": components["schemas"]["UserRoleIn"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminOut"];
+                };
+            };
+        };
+    };
+    podcast_api_moderation_suspend_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserAdminOut"];
+                };
+            };
+        };
+    };
+    podcast_api_moderation_restore_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

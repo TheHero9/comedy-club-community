@@ -20,6 +20,7 @@ dependencies = [
     "meilisearch>=0.33",
     "gunicorn>=23.0",
     "sentry-sdk[django]>=2.20",
+    "django-axes>=7.0",
 ]
 
 [dependency-groups]

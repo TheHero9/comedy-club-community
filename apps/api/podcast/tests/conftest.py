@@ -11,6 +11,42 @@ from django.contrib.auth.models import User
 from podcast.models import Channel, ChannelMembership, Episode, UserProfile
 
 
+@pytest.fixture(autouse=True)
+def isolated_cache(settings):
+    """🚨 Give every test its own in-memory cache instead of the dev Redis.
+
+    THE SUITE RUNS AGAINST `config.settings.dev` (see pyproject.toml), which
+    points `CACHES` at `redis://localhost:6379/0` - THE SAME REDIS THE LOCAL DEV
+    SERVER USES. So any live request served while pytest is running writes to
+    the very keys the tests are asserting on, and the tests write back.
+
+    That is not hypothetical. `test_label_provenance` failed exactly once during
+    a run where the E2E suite was hitting the dev API concurrently:
+    `auto_labeller_id()` caches for ten minutes, the test's own fixture deletes
+    that key on setup, and a request from the dev server repopulated it with the
+    DEV database's account id - which is a different row from the test
+    database's - in the window before the assertion. It then passed twice in a
+    row on its own, which is the signature of exactly this kind of shared-state
+    flake and the reason it is worth closing rather than re-running.
+
+    ⚠️ Per-test, not per-session: a leaked counter (the write throttle keys on
+    the actor) would otherwise make one test's writes count against the next.
+    LocMem is fast enough that this costs nothing measurable.
+    """
+    settings.CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            # Distinct per test, so nothing survives between them.
+            "LOCATION": "podcast-tests",
+        }
+    }
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def channel(db):
     return Channel.objects.create(

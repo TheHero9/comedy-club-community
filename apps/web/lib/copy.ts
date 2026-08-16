@@ -585,6 +585,16 @@ const en = {
       "You cannot change your own role - that is what stops the site being left with no admin.",
     rolesEmpty: "Nobody matches.",
     adminOnly: "This page is for moderators.",
+    suspend: "Suspend",
+    suspendConfirmAction: "Suspend them",
+    restore: "Restore",
+    suspended: "Suspended",
+    suspendConfirm:
+      "Suspend this account? They keep everything they have written - they just cannot sign in or post until you restore them.",
+    suspendDone: "Account suspended",
+    restoreDone: "Account restored",
+    suspendSelfBlocked:
+      "You cannot suspend your own account - it would sign you out with no way back in.",
   },
 
   report: {
@@ -1293,6 +1303,16 @@ const bg: Copy = {
       "Не можеш да смениш собствената си роля - това пази сайта да не остане без админ.",
     rolesEmpty: "Няма съвпадения.",
     adminOnly: "Тази страница е за модератори.",
+    suspend: "Блокирай",
+    suspendConfirmAction: "Блокирай го",
+    restore: "Възстанови",
+    suspended: "Блокиран",
+    suspendConfirm:
+      "Да блокираме ли този профил? Всичко написано остава - просто няма да може да влиза или да пише, докато не го възстановиш.",
+    suspendDone: "Профилът е блокиран",
+    restoreDone: "Профилът е възстановен",
+    suspendSelfBlocked:
+      "Не можеш да блокираш собствения си профил - това би те изхвърлило без връщане назад.",
   },
 
   report: {

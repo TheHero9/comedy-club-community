@@ -158,6 +158,26 @@ def provision_user(
     return user
 
 
+def is_active(user: User) -> bool:
+    """Is this account allowed to act?
+
+    🚨 SUSPENSION REUSES DJANGO'S `is_active`, and that is a decision rather
+    than a shortcut. The column already exists on every account, Django Admin
+    already renders and filters it, and `AuthenticationMiddleware` and the admin
+    login already honour it - so a suspended member is locked out of the Django
+    side for free and with no migration. A parallel `UserProfile.is_suspended`
+    would have been a second answer to the same question, and the two would
+    disagree the first time anyone touched one and not the other.
+
+    ⚠️ Deliberately NOT a delete. The account, its comments, its ratings and its
+    reports all survive; only the ability to authenticate stops. Moderation on
+    this project consistently hides rather than destroys (`Comment.is_hidden`,
+    a rejected `ParticipantProposal` that stays as the audit trail), because the
+    record of what happened is the thing a moderator needs later.
+    """
+    return bool(getattr(user, "is_active", True))
+
+
 def ensure_profile(user: User) -> UserProfile:
     """Every authenticated user must have a profile.
 
@@ -206,6 +226,10 @@ class DevAuth(HttpBearer):
             display_name=username,
         )
         ensure_profile(user)
+        # Same check as ClerkAuth. Both backends resolve to a User, so both owe
+        # the same answer - and the suspension tests run against this one.
+        if not is_active(user):
+            return None
         return user
 
 
@@ -281,6 +305,18 @@ class ClerkAuth(HttpBearer):
             avatar_url=identity["avatar_url"],
         )
         ensure_profile(user)
+
+        # 🔒 SUSPENSION IS CHECKED HERE, after the token verified and after the
+        # row exists. It has to be at the backend rather than per-endpoint for
+        # the same reason the throttle and the NUL-byte guard are global: a new
+        # endpoint must not be able to ship reachable-by-a-banned-user through
+        # nothing but forgetfulness.
+        #
+        # ⚠️ Provisioning still runs first, deliberately. A suspended account
+        # must keep its row and its content - the moderation trail is the point,
+        # and `Comment.is_hidden` already works this way. What stops is acting.
+        if not is_active(user):
+            return None
         return user
 
     @staticmethod

@@ -363,7 +363,7 @@ def list_users(
     themselves to admin, which makes the distinction between the two roles
     decorative. Only an admin grants permissions.
     """
-    require_admin(request.auth)
+    actor = require_admin(request.auth)
 
     User = get_user_model()
     queryset = User.objects.select_related("profile").order_by("-date_joined")
@@ -376,15 +376,7 @@ def list_users(
         )
 
     return [
-        {
-            "id": user.id,
-            "username": user.get_username(),
-            "display_name": getattr(user.profile, "display_name", "") or "",
-            "handle": getattr(user.profile, "handle", None),
-            "role": getattr(user.profile, "role", UserProfile.Role.MEMBER),
-            "date_joined": user.date_joined,
-            "is_me": user.id == request.auth.id,
-        }
+        _user_admin_out(user, user.profile, actor)
         for user in queryset[:limit]
         if getattr(user, "profile", None) is not None
     ]
@@ -428,12 +420,80 @@ def set_user_role(request, user_id: int, payload: UserRoleIn):
     user.is_superuser = payload.role == UserProfile.Role.ADMIN
     user.save(update_fields=["is_staff", "is_superuser"])
 
+    return _user_admin_out(user, profile, actor)
+
+
+def _user_admin_out(user, profile, actor) -> dict:
     return {
         "id": user.id,
         "username": user.get_username(),
-        "display_name": profile.display_name or "",
-        "handle": profile.handle,
-        "role": profile.role,
+        "display_name": getattr(profile, "display_name", "") or "",
+        "handle": getattr(profile, "handle", None),
+        "role": getattr(profile, "role", UserProfile.Role.MEMBER),
         "date_joined": user.date_joined,
-        "is_me": False,
+        "is_me": user.id == actor.user_id,
+        "is_active": bool(user.is_active),
     }
+
+
+@router.post("/moderation/users/{user_id}/suspend", response=UserAdminOut)
+def suspend_user(request, user_id: int):
+    """🔒 ADMINS ONLY. Stop an account from acting, without destroying anything.
+
+    🚨 THIS IS THE ONLY WAY TO STOP A BAD ACTOR, and until 2026-08-16 there was
+    none. Moderators could hide a comment but could not stop the person writing
+    the next one, and deleting the account in Clerk did nothing here - Django
+    keeps its own row, and a session token that has not expired keeps working
+    against it. Suspension is enforced in the auth backend, so it applies to
+    every endpoint at once rather than per-route.
+
+    ⚠️ Content SURVIVES. Same principle as hiding a comment rather than deleting
+    it: the record is what a moderator needs later. Use the report queue to take
+    down individual rows.
+
+    🚨 Admin-only, not moderator - the same reasoning as role granting. A
+    moderator who could suspend accounts could suspend the admins.
+    """
+    actor = require_admin(request.auth)
+    user, profile = _target_account(user_id)
+
+    # 🚨 The same self-lockout guard `set_user_role` carries, for a worse
+    # outcome: suspending yourself revokes your own token on the NEXT request,
+    # so there is no undo from inside the app at all.
+    if user.id == actor.user_id:
+        raise HttpError(
+            409,
+            "You cannot suspend your own account. Ask another admin, so the "
+            "site can never be left without one.",
+        )
+
+    if user.is_active:
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+    return _user_admin_out(user, profile, actor)
+
+
+@router.post("/moderation/users/{user_id}/restore", response=UserAdminOut)
+def restore_user(request, user_id: int):
+    """🔒 ADMINS ONLY. Lift a suspension.
+
+    Their existing ratings start counting again immediately, exactly as a
+    verified membership promotes existing ratings - nothing was deleted, so
+    nothing has to be rebuilt.
+    """
+    actor = require_admin(request.auth)
+    user, profile = _target_account(user_id)
+
+    if not user.is_active:
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+    return _user_admin_out(user, profile, actor)
+
+
+def _target_account(user_id: int):
+    User = get_user_model()
+    user = get_object_or_404(User.objects.select_related("profile"), id=user_id)
+    profile = getattr(user, "profile", None)
+    if profile is None:
+        raise HttpError(404, "That account has no profile yet")
+    return user, profile

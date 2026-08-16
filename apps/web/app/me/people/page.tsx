@@ -9,6 +9,7 @@ import { useCopy } from "@/components/i18n/LocaleProvider";
 import { ProposalQueue } from "@/components/manage/ProposalQueue";
 import { ReportQueue } from "@/components/manage/ReportQueue";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
+import { ConfirmButton } from "@/components/shared/ConfirmButton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Page, PageHeading } from "@/components/shell/Page";
@@ -220,6 +221,35 @@ function RolesPanel() {
     },
   });
 
+  /**
+   * 🚨 Suspension is a SEPARATE mutation from the role select, not a fourth
+   * role. A role says what someone may do; suspension says whether they may act
+   * at all, and folding it into the same dropdown would make "demote to member"
+   * and "ban" one control with no way to express the common case - a suspended
+   * moderator whose role should survive the suspension.
+   */
+  const setActive = useMutation({
+    mutationFn: ({ id, active }: { id: number; active: boolean }) =>
+      viewerApi.post<AdminUser>(
+        `/api/moderation/users/${id}/${active ? "restore" : "suspend"}`,
+      ),
+    onSuccess: (_data, variables) => {
+      notify.success(
+        variables.active ? copy.manage.restoreDone : copy.manage.suspendDone,
+      );
+      queryClient.invalidateQueries({ queryKey: ["manage", "users"] });
+    },
+    onError: (caught) => {
+      // 409 is the self-lockout guard, same shape as the role one. Naming it
+      // explains why nothing happened instead of reading as a failed request.
+      notify.error(
+        isApiError(caught) && caught.status === 409
+          ? copy.manage.suspendSelfBlocked
+          : copy.errors.generic,
+      );
+    },
+  });
+
   const ROLES = ["member", "moderator", "admin"] as const;
   const roleLabel = (key: string) =>
     ({
@@ -261,6 +291,15 @@ function RolesPanel() {
                       ({copy.manage.roleYou})
                     </span>
                   ) : null}
+                  {/* 🚨 State in FORM as well as in the button label. A row
+                      whose only signal is which button it offers reads
+                      identically at a glance whether the account is active or
+                      not, and this list is scanned rather than read. */}
+                  {!user.is_active ? (
+                    <span className="ml-1.5 inline-flex items-center rounded-pill bg-elevated px-2 py-0.5 align-middle font-mono text-[10px] tracking-[0.06em] text-primary-text uppercase">
+                      {copy.manage.suspended}
+                    </span>
+                  ) : null}
                 </span>
                 {user.handle ? (
                   <span className="block text-[11.5px] text-subtle-foreground">
@@ -285,6 +324,38 @@ function RolesPanel() {
                   </option>
                 ))}
               </select>
+
+              {/* 🚨 The reader for POST /moderation/users/{id}/suspend. This
+                  repo has shipped three endpoints with no caller before (see
+                  specs/17), and suspension is the one that matters most: it is
+                  the only way to stop a bad actor, so an API-only version would
+                  mean a moderator watching someone post and having to open a
+                  shell to stop them.
+
+                  Your own row offers no button at all - suspending yourself
+                  revokes your own token on the next request, which is worse
+                  than the role self-lockout it mirrors because there is no way
+                  back in from inside the app. The API returns 409 regardless. */}
+              {user.is_me ? null : user.is_active ? (
+                <ConfirmButton
+                  confirmLabel={copy.manage.suspendConfirmAction}
+                  question={copy.manage.suspendConfirm}
+                  disabled={setActive.isPending}
+                  onConfirm={() => setActive.mutate({ id: user.id, active: false })}
+                >
+                  {copy.manage.suspend}
+                </ConfirmButton>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  shape="pill"
+                  disabled={setActive.isPending}
+                  onClick={() => setActive.mutate({ id: user.id, active: true })}
+                >
+                  {copy.manage.restore}
+                </Button>
+              )}
             </li>
           ))}
         </ul>

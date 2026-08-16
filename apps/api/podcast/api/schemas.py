@@ -509,6 +509,10 @@ class UserAdminOut(Schema):
     role: str
     date_joined: datetime
     is_me: bool = False
+    # 🚨 Django's own `is_active`, reused as the suspension flag rather than a
+    # parallel column - see podcast/auth/backends.is_active. False means the
+    # account keeps all its content but can no longer authenticate.
+    is_active: bool = True
 
 
 class UserRoleIn(Schema):

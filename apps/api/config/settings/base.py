@@ -10,7 +10,7 @@ from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
 
-from .env import env_bool, env_list, env_str
+from .env import env_bool, env_int, env_list, env_str
 
 # apps/api/
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -40,6 +40,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
+    # 🔒 Brute-force lockout for the Django Admin login. See the AXES_* block
+    # below for why it is keyed on username rather than IP.
+    "axes",
     "podcast",
 ]
 
@@ -78,6 +81,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # 🔒 LAST, and after AuthenticationMiddleware - axes needs `request.user`
+    # to already be resolved when it inspects a login attempt.
+    "axes.middleware.AxesMiddleware",
 ]
 
 TEMPLATES = [
@@ -131,6 +137,87 @@ MEILI_MASTER_KEY = env_str("MEILI_MASTER_KEY", "")
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 🔒 Django Admin brute-force lockout
+#
+# 🚨 `/admin/` is served on the public API host and answered 200 to the whole
+# internet with no attempt limiting of any kind. The Ninja `WriteThrottle` does
+# NOT cover it - that throttle is attached to the NinjaAPI and never sees a
+# Django Admin POST - so the one account that can actually log in was exposed to
+# unlimited credential stuffing. The blast radius is a superuser with the whole
+# database behind it, and Django Admin is currently the only surface membership
+# verification lives on.
+#
+# 🚨 KEYED ON USERNAME, NOT IP, AND THAT IS THE LOAD-BEARING CHOICE - it is
+# also why axes' own `W006` check is silenced below rather than obeyed.
+#
+# The API sits behind Railway's edge, so `REMOTE_ADDR` is a proxy and the real
+# caller is only in `X-Forwarded-For`. That leaves IP keying with two options
+# and no good one: read `REMOTE_ADDR` and every visitor shares one address, so
+# the FIRST ten failed logins lock out the entire internet including the owner;
+# or read `X-Forwarded-For`, which the client sets, so an attacker rotates the
+# header and the lockout does nothing. Username keying needs no knowledge of
+# the proxy chain and cannot fail in either direction.
+#
+# W006's stated concern - "attackers bypass rate limits by rotating User-Agents
+# or Cookies" - does not apply to this configuration. Those are only lockout
+# parameters if you list them, and the only one listed is the username, which
+# an attacker targeting a specific account cannot rotate by definition.
+#
+# ⚠️ The trade-off it accepts: an attacker hammering a known username can keep
+# that account locked out. With one operator that is a nuisance, not an outage,
+# and it is strictly better than the account being brute-forceable.
+#
+# 🚨 The real answer is to put `/admin/*` behind Cloudflare Access - but note
+# that CLAUDE.md's stack table lists "Cloudflare in front" and, as of
+# 2026-08-16, THAT IS NOT TRUE OF EITHER HOST: `api.comedycommunity.club`
+# answers with `Server: railway-hikari` and the web with `Server: Vercel`, and
+# neither returns a `cf-ray` header. So there is no WAF and no DDoS layer today,
+# and "just put it behind Cloudflare Access" is a project, not a checkbox. This
+# lockout is the floor that does not depend on that project happening.
+#
+# 🔧 LOCKED OUT? `manage.py axes_reset` clears every attempt. In production run
+# it as a `preDeployCommand` (see CLAUDE.md § Production) - one command, one
+# deployment. `axes_reset_username <name>` clears just one.
+# ---------------------------------------------------------------------------
+
+AUTHENTICATION_BACKENDS = [
+    # 🚨 FIRST. Axes short-circuits a locked-out attempt here; behind
+    # ModelBackend it would authenticate first and lock afterwards.
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+# Generous on purpose: ten tries against a real password is hopeless, and the
+# owner fat-fingering it ten times running is not a scenario worth optimising
+# for at the cost of locking them out.
+AXES_FAILURE_LIMIT = env_int("AXES_FAILURE_LIMIT", 10)
+
+# Hours. Long enough to make automated guessing pointless, short enough that a
+# genuine lockout resolves itself over a coffee.
+AXES_COOLOFF_TIME = env_int("AXES_COOLOFF_HOURS", 1)
+
+AXES_LOCKOUT_PARAMETERS = ["username"]
+
+# 🚨 Silenced with a reason, not to make a warning go away. W006 says to add
+# 'ip_address'; the block above is why doing that here would either lock out
+# every visitor at once or be trivially bypassed with a header. Revisit this
+# the day a trusted proxy layer exists and `X-Forwarded-For` can be believed.
+SILENCED_SYSTEM_CHECKS = ["axes.W006"]
+
+# A successful login clears the counter, so yesterday's typos never accumulate
+# into today's lockout.
+AXES_RESET_ON_SUCCESS = True
+
+# ⚠️ Recorded for the ADMIN LOG only - never for the lockout decision, per the
+# note above. Knowing which address a burst came from is useful; trusting it to
+# decide who gets locked out is not.
+AXES_IPWARE_META_PRECEDENCE_ORDER = [
+    "HTTP_CF_CONNECTING_IP",
+    "HTTP_X_FORWARDED_FOR",
+    "REMOTE_ADDR",
+]
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
