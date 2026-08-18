@@ -885,7 +885,20 @@ If a row genuinely cannot be covered, leave it **uncovered with a written reason
 - ✅ **Guard every loop with a fixture check** (`expect(found).toBeGreaterThan(0)`), so a test cannot pass by iterating over nothing.
 - ✅ **Prove a `page.route` interception actually fired** with a hit counter. `/status` renders in a **Server Component**, so its health fetch never crosses the browser and `page.route` cannot see it - a test that intercepts it passes vacuously.
 - ✅ E2E runs at **both** 1280x800 and 390x844. Most of this audience is on a phone.
+- 🚨 **"mobile" is Desktop CHROME at 390x844. Safari lives in the `ios` project and nowhere else.** Resizing Chromium checks layout at phone width; it does not check the engine iOS ships. `e2e/ios-safari.spec.ts` is the only file that runs on WebKit - add an engine-specific assertion there, and do not assume a green `mobile` run says anything about Safari.
 - 🇧🇬 **Never issue a Cyrillic query through a shell.** Build it with `URLSearchParams` inside the test. See the Git Bash gotcha above.
+
+### iOS Safari: the engine 386 green tests never touched
+
+> 🔬 Full write-up in [`specs/19-ios-safari-compatibility/01-findings.md`](specs/19-ios-safari-compatibility/01-findings.md).
+
+- 🚨 **A form control under 16px makes Safari ZOOM THE VIEWPORT on focus, and it never zooms back** - the page is left horizontally scrolled for the rest of the session, which reads as "the layout broke when I tapped the box". Every form in the product had it: `text-small` is 13px and the profile/membership fields are 15px.
+  - 🚨 **The guard rule existed in `@layer base` and was completely inert.** Cascade layers beat specificity: Tailwind emits `theme, base, components, utilities`, so `.text-small` (components) and `text-[15px]` (utilities) outrank ANY selector written in `base`. The comment said 16px and WebKit measured 13px. It now lives **outside every layer** in `app/globals.css`, because an unlayered declaration is the only thing that outranks a utility class. **Do not tidy it back into `@layer base`** - that is the state it was already in.
+  - 🔍 **Nothing in the repo could see it.** `typecheck`/`lint`/`build` do not evaluate the cascade, Vitest has no browser, and **Chromium does not zoom on focus** - so both "mobile" projects were structurally incapable of catching it.
+- 🚨 **NEVER add `viewportFit: "cover"`.** Without it iOS insets the layout viewport to the safe area, so the fixed bottom nav and the episode action bar clear the home indicator by themselves. Turning it on extends the page into that strip and **buries both bars under the indicator** until every fixed surface grows `env(safe-area-inset-bottom)` padding. It looks like the modern default and here it creates the bug it appears to prevent.
+- 🚨 **Sheets are sized in `dvh`, never `vh`.** `vh` in Safari resolves against the LARGE viewport - toolbars collapsed - so a `vh` sheet is taller than the screen for exactly as long as the toolbars are expanded, which is the moment the user just tapped something.
+- ⚠️ **`<meta name="theme-color">` is what Safari tints its toolbars with**, and it is a single static value from the `viewport` export. `components/shell/ThemeColorMeta.tsx` rewrites it from `resolvedTheme`, or a member on the light theme gets a cream page framed in near black. **Not** a `prefers-color-scheme` pair: `ThemeProvider` runs `enableSystem={false}`, so the theme is a stored choice unrelated to the phone's setting.
+- ⚠️ **`.tap-target` grows a touch target to 44px with a pseudo-element, and the expansion is INVISIBLE** - nothing on screen shows you when two of them collide and one starts swallowing the other's taps. Measured before use: on the header at 390px, settings grows +3 a side and the avatar +5 across an 8px gap, so they meet and do not overlap. Re-measure before reusing it anywhere tighter, and always size with `max()` so an already-large control is not shrunk by its own hit area.
 
 ### Why E2E exists at all
 

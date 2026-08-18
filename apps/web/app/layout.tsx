@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { ViewerAuthProvider } from "@/components/auth/ViewerAuthProvider";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
+import { ThemeColorMeta } from "@/components/shell/ThemeColorMeta";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { SiteFooter } from "@/components/shell/SiteFooter";
 import { Toaster } from "@/components/ui/sonner";
@@ -73,14 +74,41 @@ export async function generateMetadata(): Promise<Metadata> {
       title: copy.app.name,
       description: copy.app.description,
     },
+    // 🚨 iOS does not read `display: "standalone"` out of the web manifest on
+    // every version it still ships to, so an "Add to Home Screen" install
+    // opened inside Safari chrome instead of as an app. These three tags are
+    // the Apple-specific half of the same declaration the manifest makes.
+    //
+    // `statusBarStyle` is "black" and not "black-translucent" on purpose:
+    // translucent draws the page UNDER the status bar, which would put the
+    // 54px header behind the clock unless every top surface also grew
+    // `env(safe-area-inset-top)` padding. Opaque black matches --background in
+    // the dark theme, which is the default and what an installed copy opens in.
+    appleWebApp: {
+      capable: true,
+      title: copy.app.shortName,
+      statusBarStyle: "black",
+    },
   };
 }
 
 export const viewport: Viewport = {
-  // Matches --background in the dark theme, which is the default.
+  // Matches --background in the dark theme, which is the default. Safari tints
+  // its own toolbars with this, so `ThemeColorMeta` rewrites it when a member
+  // switches to light - otherwise iOS frames a cream page in dark chrome.
+  //
+  // ⚠️ NOT a `prefers-color-scheme` pair. `ThemeProvider` runs with
+  // `enableSystem={false}`, so the active theme is a stored choice and has no
+  // relationship to the phone's system setting; keying the tint off the system
+  // would tint light for a user looking at the dark theme.
   themeColor: "#191614",
   width: "device-width",
   initialScale: 1,
+  // 🚨 NO `viewportFit: "cover"`. Without it iOS insets the layout viewport to
+  // the safe area, so the fixed bottom nav and the episode action bar land
+  // above the home indicator on their own. Turning it on extends the page into
+  // that strip and would bury both bars under the indicator until every fixed
+  // surface grows `env(safe-area-inset-bottom)` padding.
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
@@ -102,6 +130,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <Providers>
           <LocaleProvider locale={locale}>
             <ViewerAuthProvider>
+              <ThemeColorMeta />
               <AppHeader />
               {/* Bottom padding clears the fixed mobile bar. The bar is either
                   the bottom nav or, on an episode route, the action bar. */}

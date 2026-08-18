@@ -283,14 +283,6 @@
     overflow-wrap: anywhere;
   }
 
-  /* Inputs must never drop below 16px on mobile or iOS zooms the viewport on
-     focus, which then leaves the page horizontally scrolled. */
-  input,
-  textarea,
-  select {
-    font-size: 16px;
-  }
-
   :focus-visible {
     outline: 3px solid var(--gold);
     outline-offset: 2px;
@@ -411,6 +403,37 @@
     .text-numeric {
       font-size: 14px;
     }
+  }
+}
+
+/* Expands the TOUCH area of a control to Apple's 44x44 HIG minimum without
+   changing a single pixel of what is drawn.
+
+   🚨 The icon controls in the header measure 28px (logo), 34px (avatar) and
+   38px (settings) on a phone - all under the 44px minimum, and they are the
+   only chrome present on every single route. Growing the visible boxes would
+   break the 54px header the handoff specifies, so the hit area is grown with
+   a transparent pseudo-element instead: hit-testing attributes a pseudo to
+   its originating element, so the tap lands on the link either way.
+
+   ⚠️ Sized with `max()`, never a fixed 44px - a control that is ALREADY
+   larger must not be shrunk by its own hit area.
+
+   ⚠️ The expansion is INVISIBLE, so nothing on screen tells you when two of
+   them collide and one starts swallowing the other's taps. Measured on the
+   header at 390px: settings grows 38->44 (+3 a side) and the avatar 34->44
+   (+5 a side) across an 8px gap, so they meet exactly and do not overlap.
+   Re-measure before reusing this anywhere tighter. */
+@utility tap-target {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
 }
 
@@ -577,5 +600,40 @@
     transition-duration: 100ms !important;
     transition-property: opacity, color, background-color, border-color !important;
     transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   iOS FOCUS-ZOOM GUARD - deliberately OUTSIDE every @layer
+   ==========================================================================
+
+   🚨 Safari zooms the whole viewport when a form control smaller than 16px
+   takes focus, and it does NOT zoom back out on blur. The page is then left
+   horizontally scrolled for the rest of the session, which reads as "the
+   layout broke when I tapped the box". Every form in this app was hitting it:
+   `text-small` is 13px and the profile/membership fields are 15px.
+
+   🚨 THIS RULE USED TO LIVE IN `@layer base` AND DID NOTHING. Layer order
+   beats specificity: Tailwind emits `theme, base, components, utilities`, so
+   `.text-small` (components) and `text-[15px]` (utilities) both outrank
+   anything in `base` no matter how the selector is written. Measured on real
+   WebKit at an iPhone viewport, the comment claimed 16px while the browser
+   reported 13px on the moment composer and 15px on the profile editor.
+
+   An UNLAYERED declaration outranks every cascade layer, which is the only
+   placement that survives a utility class on the element. Do not move this
+   back into a layer, and do not "tidy" it into `@layer base`.
+
+   Scoped to touch pointers and narrow viewports so the desktop design keeps
+   the 13/15px sizes the handoff specifies - focus zoom is a touch-device
+   behaviour and there is nothing to fix with a mouse. 16px form text on a
+   phone is also simply more legible than 13px.
+
+   Pinned by `e2e/ios-safari.spec.ts`. */
+@media (pointer: coarse), (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
   }
 }

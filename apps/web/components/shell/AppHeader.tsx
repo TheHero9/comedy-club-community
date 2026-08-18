@@ -73,7 +73,7 @@ export function AppHeader() {
           scrolled && "shadow-raised",
         )}
       >
-        <Logo size="sm" className="md:hidden" />
+        <Logo size="sm" className="tap-target md:hidden" />
         <Logo size="md" className="hidden md:flex" />
 
         <nav className="hidden shrink-0 gap-0.5 md:flex" aria-label={copy.nav.sectionNav}>
@@ -114,7 +114,7 @@ export function AppHeader() {
             shape="rounded"
             aria-label={copy.nav.openSettings}
             onClick={() => setSettingsOpen(true)}
-            className="text-muted-foreground"
+            className="tap-target text-muted-foreground"
           >
             <Settings className="size-[17px]" aria-hidden strokeWidth={2.2} />
           </Button>
@@ -122,7 +122,7 @@ export function AppHeader() {
           <Link
             href="/me"
             aria-label={copy.nav.profile}
-            className="rounded-pill outline-none"
+            className="tap-target rounded-pill outline-none"
           >
             <PersonAvatar
               name={copy.nav.profile}

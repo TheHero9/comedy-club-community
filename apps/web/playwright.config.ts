@@ -40,17 +40,43 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
+      // The iOS spec asserts engine-specific behaviour (and a mobile-only type
+      // scale); running it here would fail on rules that are correct.
+      testIgnore: /ios-safari\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
     },
     {
       // Most of this audience is on a phone. 390x844 is an iPhone 14 viewport.
       name: "mobile",
+      testIgnore: /ios-safari\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 390, height: 844 },
         isMobile: true,
         hasTouch: true,
       },
+    },
+    {
+      /**
+       * 🚨 The REAL Safari engine, which nothing else in this suite uses.
+       *
+       * The "mobile" project above is Desktop CHROME resized to an iPhone
+       * viewport. That catches layout at 390px and nothing else: it does not
+       * have Safari's rendering, its CSS support, or - the reason this project
+       * exists - its focus-zoom behaviour. Every form control in the app
+       * computed to 13px or 15px against a `@layer base` rule that claimed to
+       * hold them at 16px, and 386 green tests across two "mobile" viewports
+       * never saw it, because Chromium simply does not zoom.
+       *
+       * `devices["iPhone 14"]` selects WebKit, which is what iOS ships.
+       *
+       * ⚠️ Scoped to `ios-safari.spec.ts` on purpose. Running the whole suite
+       * a third time is ~3 minutes for coverage the other two projects already
+       * give; this project exists for the assertions that are engine-specific.
+       */
+      name: "ios",
+      testMatch: /ios-safari\.spec\.ts/,
+      use: { ...devices["iPhone 14"] },
     },
   ],
 
