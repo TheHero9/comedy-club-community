@@ -94,6 +94,34 @@ export function printsScores(grid: Grid): boolean {
 }
 
 /**
+ * The flow grid's year blocks, NEWEST YEAR FIRST.
+ *
+ * 🚨 The API returns `seasons` oldest first, and that is right for the two
+ * places years run along a HORIZONTAL axis - the transposed mobile table and
+ * `YearSparkline` - because a time axis read right-to-left is simply wrong.
+ * The flow grid stacks years VERTICALLY, so oldest-first buried the current
+ * year at the bottom of a page that is 23 wrapped lines tall on the flagship
+ * channel. The owner's report (2026-08-18) was that reaching this year meant
+ * scrolling to the end every single visit. The years a reader wants are the
+ * recent ones, so they go first.
+ *
+ * 🚨 Carries the season's ORIGINAL index, and callers must use it. Both
+ * `seasonCells(grid, seasonIndex)` and `row.cells[seasonIndex]` are keyed by
+ * the season's position in the API's own array, so the obvious
+ * `grid.seasons.slice().reverse().map((season, i) => ...)` would hand every
+ * block a DIFFERENT year's episodes - and silently, because every cell still
+ * renders, every count is still plausible, and only the headers would be
+ * mismatched against their contents.
+ */
+export function flowSeasons(
+  grid: Grid,
+): { season: GridSeason; seasonIndex: number }[] {
+  return grid.seasons
+    .map((season, seasonIndex) => ({ season, seasonIndex }))
+    .reverse();
+}
+
+/**
  * One season's episodes, oldest first, with their position within the year.
  *
  * 🚨 The payload is a MATRIX (`rows[position].cells[season]`) padded to the

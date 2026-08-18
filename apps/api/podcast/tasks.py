@@ -279,3 +279,17 @@ def rebuild_transcript_index(drop: bool = False) -> dict:
     except Exception:
         logger.exception("Transcript index rebuild failed")
         return {"documents_indexed": 0}
+
+
+@shared_task(name="podcast.warm_search_indexes")
+def warm_search_indexes() -> dict:
+    """Keep both Meilisearch indexes resident so a reader never pays to load them.
+
+    See podcast/search/warm.py for the incident this exists for. `warm_indexes`
+    already swallows every search error, so there is nothing here to retry: a
+    warm-up that failed is a warm-up, not an outage, and a retrying one would
+    hammer an already-struggling search server.
+    """
+    from podcast.search.warm import warm_indexes
+
+    return warm_indexes()

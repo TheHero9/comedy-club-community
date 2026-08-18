@@ -14,6 +14,7 @@ import {
   cellLabel,
   FLAG_MEMBERS_ONLY,
   FLAG_STREAM,
+  flowSeasons,
   hasMobileTranspose,
   positionLabel,
   printsScores,
@@ -223,6 +224,46 @@ describe("seasonCells", () => {
 
   it("returns nothing for a season index that does not exist", () => {
     expect(seasonCells(grid(), 9)).toEqual([]);
+  });
+});
+
+/**
+ * 🚨 The whole risk of newest-first is the INDEX, not the order.
+ *
+ * `seasonCells(grid, seasonIndex)` and `row.cells[seasonIndex]` are keyed by
+ * the season's position in the API array. A reversal that renumbers as it goes
+ * still renders every cell, still shows a plausible count under every header,
+ * and quietly pairs each year's heading with a different year's episodes.
+ */
+describe("flowSeasons", () => {
+  const grid = {
+    seasons: [{ year: 2023 }, { year: 2024 }, { year: 2025 }],
+  } as unknown as Grid;
+
+  it("stacks the years newest first", () => {
+    expect(flowSeasons(grid).map((entry) => entry.season.year)).toEqual([
+      2025, 2024, 2023,
+    ]);
+  });
+
+  it("keeps each season's ORIGINAL index, not its position after reversing", () => {
+    expect(flowSeasons(grid)).toEqual([
+      { season: { year: 2025 }, seasonIndex: 2 },
+      { season: { year: 2024 }, seasonIndex: 1 },
+      { season: { year: 2023 }, seasonIndex: 0 },
+    ]);
+  });
+
+  it("does not mutate the API's own array, which mobile and the sparkline read", () => {
+    const payload = {
+      seasons: [{ year: 2023 }, { year: 2024 }],
+    } as unknown as Grid;
+    flowSeasons(payload);
+    expect(payload.seasons.map((season) => season.year)).toEqual([2023, 2024]);
+  });
+
+  it("has nothing to stack for a channel with no episodes", () => {
+    expect(flowSeasons({ seasons: [] } as unknown as Grid)).toEqual([]);
   });
 });
 

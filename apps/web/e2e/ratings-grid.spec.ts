@@ -4,14 +4,21 @@
  * 🚨 IT IS RENDERED IN TWO DIFFERENT SHAPES, and getting either one wrong would
  * still typecheck, lint and build.
  *
- *   FLOW    (`[data-grid="flow"]`)     one block per year; inside a block the
- *                                      year's episodes WRAP across the width,
- *                                      oldest first. This is the only layout
- *                                      that shows a whole channel - the matrix
- *                                      it replaced was 3,913px wide inside a
- *                                      1,150px card on the flagship channel.
- *     year blocks             === grid.seasons.length
+ *   FLOW    (`[data-grid="flow"]`)     one block per year, NEWEST YEAR FIRST;
+ *                                      inside a block the year's episodes WRAP
+ *                                      across the width, oldest first. This is
+ *                                      the only layout that shows a whole
+ *                                      channel - the matrix it replaced was
+ *                                      3,913px wide inside a 1,150px card on
+ *                                      the flagship channel.
+ *     year blocks             === grid.seasons.length, REVERSED
  *     cells in block[season]  === that season's non-null cells, in row order
+ *
+ * 🚨 The two shapes disagree about year order ON PURPOSE, so a test written
+ * against one is wrong for the other. The flow grid stacks years vertically and
+ * runs newest first, because oldest-first buried the current year at the bottom
+ * of the page (owner report, 2026-08-18). The mobile table lays years out as
+ * COLUMNS, where a right-to-left time axis would be the bug, so it is unchanged.
  *
  *   MOBILE  (`[data-grid="mobile"]`)   TRANSPOSED table, kept for channels with
  *                                      at most 4 years: positions are ROWS,
@@ -37,6 +44,7 @@ import { test, expect, apiJson, hasHorizontalOverflow } from "./fixtures";
 
 type Grid = Schema<"ChannelGridOut">;
 type GridCell = Schema<"GridCellOut">;
+type GridSeason = Schema<"GridSeasonOut">;
 
 /** The one channel small enough for the roomy grid. 71 episodes, 2024-2026. */
 const CHANNEL_SLUG = "ivan-kirkov";
@@ -129,6 +137,26 @@ function apiCell(grid: Grid, seasonIndex: number, rowIndex: number): GridCell | 
 }
 
 /**
+ * The seasons in the order the FLOW grid must stack them: newest year first,
+ * each carrying the index it had in the API's array.
+ *
+ * 🚨 Written here a second time on purpose rather than imported from
+ * `grid-model.flowSeasons` - same rule as `apiSeasonCells` below. The one bug
+ * this reversal can produce is renumbering the index as it goes, which pairs
+ * every heading with another year's episodes; importing the app's helper would
+ * make this suite reproduce that renumbering and agree with it.
+ */
+function apiFlowSeasons(
+  grid: Grid,
+): { season: GridSeason; seasonIndex: number }[] {
+  const out: { season: GridSeason; seasonIndex: number }[] = [];
+  for (let seasonIndex = grid.seasons.length - 1; seasonIndex >= 0; seasonIndex -= 1) {
+    out.push({ season: grid.seasons[seasonIndex], seasonIndex });
+  }
+  return out;
+}
+
+/**
  * The API's cells for one season, oldest first, holes dropped.
  *
  * 🚨 Written here a second time on purpose rather than imported from
@@ -167,16 +195,52 @@ test.describe("3. ratings grid", () => {
 
     expect(rendered).toHaveLength(grid.seasons.length);
 
-    for (const [seasonIndex, season] of grid.seasons.entries()) {
-      expect(rendered[seasonIndex].header).toContain(season.label);
+    for (const [position, { season }] of apiFlowSeasons(grid).entries()) {
+      expect(rendered[position].header).toContain(season.label);
       // 🚨 The count the API states for the year, not the count of cells the
       // matrix happened to pad it to. A year rendered short is exactly the bug
       // this whole layout exists to kill.
       expect(
-        rendered[seasonIndex].cells,
+        rendered[position].cells,
         `${season.label} rendered the wrong number of episodes`,
       ).toHaveLength(season.episode_count);
     }
+  });
+
+  test("3.1c the flow grid stacks years NEWEST FIRST", async ({ page }) => {
+    const grid = await apiJson<Grid>(page, GRID_API);
+    expect(
+      grid.seasons.length,
+      "a single-year channel cannot prove an order",
+    ).toBeGreaterThan(1);
+
+    await page.goto(CHANNEL_PATH);
+
+    /**
+     * 🚨 Read from the DOM's own `data-year`, and asserted as a strictly
+     * DESCENDING run rather than against a list derived from the API. A
+     * derived list can only prove the two agree; this proves the direction,
+     * which is the thing the owner asked for and the thing a stray `.reverse()`
+     * would flip back.
+     */
+    const years = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll('[data-grid="flow"] section[data-year]'),
+        (section) => Number(section.getAttribute("data-year")),
+      ),
+    );
+
+    expect(years).toHaveLength(grid.seasons.length);
+    expect(years.every(Number.isFinite), "a year block lost its data-year").toBe(true);
+    for (const [position, year] of years.slice(1).entries()) {
+      expect(year, `${years[position]} is followed by ${year}`).toBeLessThan(
+        years[position],
+      );
+    }
+    // The API is the source of the SET; only the order is this test's business.
+    expect([...years].sort((a, b) => a - b)).toEqual(
+      grid.seasons.map((season) => season.year).sort((a, b) => a - b),
+    );
   });
 
   test("3.1b every episode of the channel is on the page, and nothing is duplicated", async ({
@@ -220,10 +284,10 @@ test.describe("3. ratings grid", () => {
     const rendered = await readFlow(page);
 
     let checked = 0;
-    for (const [seasonIndex, season] of grid.seasons.entries()) {
+    for (const [block, { season, seasonIndex }] of apiFlowSeasons(grid).entries()) {
       const expectedCells = apiSeasonCells(grid, seasonIndex);
       for (const [position, cell] of expectedCells.entries()) {
-        const node = rendered[seasonIndex].cells[position];
+        const node = rendered[block].cells[position];
         expect(
           node,
           `${season.label} is missing the cell at position ${position + 1}`,
@@ -304,11 +368,11 @@ test.describe("3. ratings grid", () => {
     const rendered = await readFlow(page);
 
     let flagged = 0;
-    for (const [seasonIndex] of grid.seasons.entries()) {
+    for (const [block, { seasonIndex }] of apiFlowSeasons(grid).entries()) {
       for (const [position, cell] of apiSeasonCells(grid, seasonIndex).entries()) {
         const expectedMarkers = markerCount(cell);
         expect(
-          rendered[seasonIndex].cells[position].iconCount,
+          rendered[block].cells[position].iconCount,
           `marker count wrong on ${cell.youtube_id}`,
         ).toBe(expectedMarkers);
         if (expectedMarkers > 0) flagged += 1;
@@ -390,7 +454,7 @@ test.describe("3. ratings grid", () => {
 
     const rendered = await readFlow(page);
     const renderedScores = rendered.flatMap((year) => year.cells.map((c) => c.text));
-    const expectedScores = eliteGrid.seasons.flatMap((_season, seasonIndex) =>
+    const expectedScores = apiFlowSeasons(eliteGrid).flatMap(({ seasonIndex }) =>
       apiSeasonCells(eliteGrid, seasonIndex).map(expectedText),
     );
 
@@ -398,7 +462,7 @@ test.describe("3. ratings grid", () => {
 
     // Proves the switch actually did something, rather than the two modes
     // happening to be identical.
-    const publicScores = publicGrid.seasons.flatMap((_season, seasonIndex) =>
+    const publicScores = apiFlowSeasons(publicGrid).flatMap(({ seasonIndex }) =>
       apiSeasonCells(publicGrid, seasonIndex).map(expectedText),
     );
     if (JSON.stringify(publicScores) === JSON.stringify(expectedScores)) {
@@ -432,8 +496,8 @@ test.describe("3. ratings grid", () => {
     await page.goto(CHANNEL_PATH);
     const rendered = await readFlow(page);
 
-    for (const [seasonIndex, season] of grid.seasons.entries()) {
-      const header = rendered[seasonIndex].header;
+    for (const [position, { season }] of apiFlowSeasons(grid).entries()) {
+      const header = rendered[position].header;
       expect(
         header,
         `season ${season.label} shows the wrong episode count`,

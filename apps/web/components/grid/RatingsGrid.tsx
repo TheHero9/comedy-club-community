@@ -4,6 +4,7 @@ import { GridInteraction } from "@/components/grid/GridInteraction";
 import {
   cellDataAttributes,
   cellLabel,
+  flowSeasons,
   hasMobileTranspose,
   printsScores,
   seasonCells,
@@ -186,6 +187,12 @@ async function MobileGrid({ grid }: { grid: Grid }) {
    many per line as the container allows, at every width, with no measurement
    and no pixel constant - which is the lesson the removed fullscreen overlay
    paid for twice (never size cells with a number you computed yourself).
+
+   🚨 YEAR BLOCKS RUN NEWEST FIRST (owner call, 2026-08-18), via `flowSeasons`
+   and NOT via the API's own order - see that function for why the original
+   index has to travel with each season. Within a block the year still reads
+   oldest to newest, which is the only order in which "episode 14 of 2024"
+   means anything. Only the vertical stack of years is reversed.
    ------------------------------------------------------------------------- */
 
 async function FlowGrid({
@@ -215,7 +222,7 @@ async function FlowGrid({
       )}
     >
       <div className="flex flex-col gap-4 md:gap-5">
-        {grid.seasons.map((season, seasonIndex) => (
+        {flowSeasons(grid).map(({ season, seasonIndex }) => (
           <section key={season.year} data-year={season.year}>
             <h3 className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
               <span className="font-display text-[15px] font-bold text-foreground">

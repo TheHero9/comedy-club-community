@@ -43,6 +43,21 @@ app.conf.beat_schedule = {
         "task": "podcast.rebuild_transcript_index",
         "schedule": crontab(hour=5, minute=30),
     },
+    # 🚨 Keeps both Meilisearch indexes RESIDENT. Not a health check - the
+    # health endpoint answered fine 30 seconds before the 2026-08-18 incident,
+    # because a healthy server and a paged-in index are different claims. See
+    # podcast/search/warm.py for the 5ms-of-work-inside-14.5s-of-waiting log
+    # line that this exists for.
+    #
+    # Every 4 minutes: often enough that the transcript index has no quiet
+    # stretch to be evicted in, cheap enough that it is one round trip and a
+    # single-digit-millisecond count. On the WORKER, not in a request - the page
+    # cache it warms lives in the Meilisearch container, so it does not matter
+    # who asks.
+    "warm-search-indexes": {
+        "task": "podcast.warm_search_indexes",
+        "schedule": crontab(minute="*/4"),
+    },
 }
 
 
