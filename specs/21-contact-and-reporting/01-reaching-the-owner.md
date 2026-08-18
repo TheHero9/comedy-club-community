@@ -54,12 +54,11 @@ surface phones never render.
 
 ```ts
 export const CONTACT = {
-  instagram: "dimi.v.9",   // without the "@" - the UI adds it, the URL must not have it
   email: "dimitrios.v.2002@gmail.com",
 } as const;
 ```
 
-- 🚨 **NOT in `lib/copy.ts`.** A handle and an address read identically in
+- 🚨 **NOT in `lib/copy.ts`.** An address reads identically in
   English and in Bulgarian, so putting them in the dictionary means two
   duplicate entries that can drift apart, and changing an address becomes a
   two-file edit with one half easy to forget. **The label around a value is
@@ -85,12 +84,6 @@ a content listing.
   is no viewer, and someone who cannot sign in is precisely the person who needs
   the address. Rendering it only in the signed-in branch would have hidden it
   from the visitor it was written for.
-- 🚨 **The Instagram icon is an inline SVG, not an import.** `lucide-react` v1
-  removed every BRAND icon, so `import { Instagram }` fails typecheck outright.
-  It is drawn to lucide geometry (24 box, `currentColor`, round caps) so it
-  carries the same visual weight as the `Mail` beside it. This is not a licence
-  to hand-roll icons generally - lucide stays the source for everything it still
-  ships.
 - The `mailto:` carries a prefilled subject, so a message arriving among a
   thousand others still says which site it came from.
 
@@ -148,7 +141,7 @@ deliberately narrowed to.**
 | `npx vitest run` (incl. the copy-discipline scanner) | ✅ 231 passed |
 | `e2e/ios-safari.spec.ts` + `e2e/a11y.spec.ts`, all projects | ✅ 74 passed - incl. 14.5 header touch targets on real WebKit with the third button |
 | Driven at 390x844 against the production build | ✅ header flag opens the sheet over the page, two site-wide categories, zero console errors |
-| Both links resolved from the DOM | ✅ `https://www.instagram.com/dimi.v.9/`, `mailto:...?subject=Comedy%20Community` |
+| The link resolved from the DOM | ✅ `mailto:...?subject=Comedy%20Community` |
 | `npm run benchmark` + `tests/perf-budget.spec.ts` | ✅ 35 budgets green |
 
 ---
@@ -163,3 +156,24 @@ deliberately narrowed to.**
   would be two controls doing one thing within 400px of each other.
 - **No contact detail in the settings sheet.** Same reasoning: the header flag
   is already adjacent to the gear.
+
+---
+
+## Update, same day: Instagram out, section collapsed
+
+Owner call within the hour: **drop Instagram, keep email only, and collapse the
+card.**
+
+- `CONTACT.instagram` and `instagramUrl` are gone, and so is the hand-drawn
+  Instagram SVG - which retires the only reason this feature ever needed one.
+  (Worth keeping in mind if it comes back: `lucide-react` v1 removed every
+  BRAND icon, so `import { Instagram }` does not typecheck and an inline SVG is
+  the only route.)
+- 🚨 **`copy.profile.helpInstagram` had to go with it.** `tests/copy.spec.ts`
+  6.2 asserts every key in the dictionary is referenced somewhere, so a key left
+  behind after its only consumer is deleted **fails the suite** rather than
+  sitting there harmlessly. Deleting the component is never the whole edit.
+- The card is now a native `<details>`, closed by default, matching
+  `InstallAppGuide` immediately above it. Two open cards stacked at the bottom
+  of the profile were competing for the same attention, and this is a one-time
+  read that has to be *findable*, not *present*.

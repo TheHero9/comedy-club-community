@@ -748,7 +748,6 @@ const en = {
     helpTitle: "Help and contact",
     helpBody:
       "Something broken, or a question about the site? Write to me directly and I will answer.",
-    helpInstagram: "Instagram",
     helpEmail: "Email",
     /** Prefilled `mailto:` subject, so a message says where it came from. */
     helpEmailSubject: "Comedy Community",
@@ -1471,7 +1470,6 @@ const bg: Copy = {
     helpTitle: "Помощ и контакт",
     helpBody:
       "Нещо не работи или имаш въпрос за сайта? Пиши ми директно и ще ти отговоря.",
-    helpInstagram: "Instagram",
     helpEmail: "Имейл",
     helpEmailSubject: "Comedy Community",
     changeIcon: "Смени снимката на профила си",
