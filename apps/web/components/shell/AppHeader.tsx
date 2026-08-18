@@ -11,6 +11,7 @@ import { useCopy } from "@/components/i18n/LocaleProvider";
 import { Logo } from "@/components/shell/Logo";
 import { SettingsSheet } from "@/components/shell/SettingsSheet";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
+import { ReportSheetButton } from "@/components/shared/ReportDialog";
 import { Button } from "@/components/ui/button";
 import type { Me } from "@/lib/api/podcast";
 import { viewerApi } from "@/lib/auth";
@@ -106,6 +107,14 @@ export function AppHeader() {
         <span className="flex-1" />
 
         <div className="ml-auto flex items-center gap-2">
+          {/* 🚨 Reporting used to be reachable from the DESKTOP FOOTER and from
+              an episode page, and nowhere else - and the footer is
+              `hidden md:block`, so on a phone the only way to say "this is
+              broken" was to be standing on the broken episode. This is the
+              site-wide entry point: it carries no target, opens over the
+              current page, and is on every route at every width. */}
+          <ReportSheetButton />
+
           {/* Theme moved in here with language: a bare sun/moon icon was the
               only "setting" on the site and nobody found it. */}
           <Button

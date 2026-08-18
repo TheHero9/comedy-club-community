@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { EpisodeRow } from "@/components/episode/EpisodeCard";
+import { HelpContact } from "@/components/profile/HelpContact";
 import { InstallAppGuide } from "@/components/profile/InstallAppGuide";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
@@ -81,6 +82,13 @@ export default function ProfilePage() {
         </div>
         <div className="mt-5">
           <InstallAppGuide />
+        </div>
+        {/* 🚨 Also in the signed-out branch, deliberately. Someone who cannot
+            sign in is precisely the person who needs the address, and this
+            branch returns early - leaving it out here would hide it from the
+            only visitor it was written for. */}
+        <div className="mt-5">
+          <HelpContact />
         </div>
       </Page>
     );
@@ -299,6 +307,10 @@ export default function ProfilePage() {
 
       <div className="mt-8">
         <InstallAppGuide />
+      </div>
+
+      <div className="mt-4">
+        <HelpContact />
       </div>
 
       {/* 🚨 Sign-out lives at the very BOTTOM, past everything else.

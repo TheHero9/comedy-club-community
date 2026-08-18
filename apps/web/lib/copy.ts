@@ -740,6 +740,18 @@ const en = {
     noHandle: "Add a handle",
     unnamed: "Unnamed",
     editProfile: "Edit profile",
+    /**
+     * Help and contact, on the profile because that is the one page every
+     * signed-out AND signed-in visitor can reach from the mobile bottom bar -
+     * the desktop footer does not exist below `md`.
+     */
+    helpTitle: "Help and contact",
+    helpBody:
+      "Something broken, or a question about the site? Write to me directly and I will answer.",
+    helpInstagram: "Instagram",
+    helpEmail: "Email",
+    /** Prefilled `mailto:` subject, so a message says where it came from. */
+    helpEmailSubject: "Comedy Community",
     /** The accessible name of the avatar button that opens the editor. */
     changeIcon: "Change your profile picture",
     nameLabel: "Display name",
@@ -1456,6 +1468,12 @@ const bg: Copy = {
     noHandle: "Добави handle",
     unnamed: "Без име",
     editProfile: "Редактирай профила",
+    helpTitle: "Помощ и контакт",
+    helpBody:
+      "Нещо не работи или имаш въпрос за сайта? Пиши ми директно и ще ти отговоря.",
+    helpInstagram: "Instagram",
+    helpEmail: "Имейл",
+    helpEmailSubject: "Comedy Community",
     changeIcon: "Смени снимката на профила си",
     nameLabel: "Име за показване",
     handleLabel: "Handle",
