@@ -504,13 +504,38 @@ const en = {
     castCustomPlaceholder: "Their name",
     castRole: "Role",
     castSubmit: "Suggest",
+    /** Names the whole submission, because a batch of one is still a batch. */
+    castSubmitAll: (n: number) => (n > 1 ? `Suggest all ${n}` : "Suggest"),
+    castAddRow: "Add another",
+    castRowRemove: "Remove this line",
+    castNeedsPerson: "Every line needs a person or a typed name.",
     castPending: "Awaiting review",
     castPendingNote:
       "Suggestions are checked by a moderator before they count towards search.",
     castProposed: "Suggested - thanks",
     castWithdraw: "Withdraw",
+    castWithdrawConfirm: "Withdraw it",
+    /* --- Cast: reviewing it where it was suggested (moderators) --- */
+    castApprove: "Approve",
+    castReject: "Reject",
+    castApproveAs: "Approve as",
+    castApproved: "Approved",
+    castRejected: "Rejected",
+    castApprovePickFirst: "Choose who this is first",
     castEmpty: "Nobody listed yet",
     castSignedOut: "Sign in to suggest someone",
+  },
+
+  /**
+   * Our own person dropdown. Shared by the episode page and the review queue,
+   * so it lives at the top level rather than inside either one.
+   */
+  picker: {
+    choose: "Choose a person",
+    search: "Search people",
+    empty: "Nobody matches.",
+    custom: "Not listed? Type a name",
+    capped: (n: number) => `Showing the first ${n}. Type above to reach anyone else.`,
   },
 
   manage: {
@@ -564,8 +589,6 @@ const en = {
     reportsResolved: "Report closed",
     queueTyped: "typed",
     queueApproveAs: "Approve as",
-    queuePersonFilter: "Filter the person list",
-    queuePersonCapped: "Showing the first 100 people. Type above to reach anyone else.",
     queueApprove: "Approve",
     queueReject: "Reject",
     queueRejectNote: "Why (they will see this)",
@@ -1233,13 +1256,34 @@ const bg: Copy = {
     castCustomPlaceholder: "Името му",
     castRole: "Роля",
     castSubmit: "Предложи",
+    castSubmitAll: (n: number) => (n > 1 ? `Предложи всички ${n}` : "Предложи"),
+    castAddRow: "Добави още един",
+    castRowRemove: "Премахни реда",
+    castNeedsPerson: "На всеки ред трябва човек или написано име.",
     castPending: "Чака преглед",
     castPendingNote:
       "Предложенията се проверяват от модератор, преди да влязат в търсенето.",
     castProposed: "Предложено - благодарим",
     castWithdraw: "Оттегли",
+    castWithdrawConfirm: "Оттегли го",
+    /* --- Участници: преглед на място (модератори) --- */
+    castApprove: "Одобри",
+    castReject: "Откажи",
+    castApproveAs: "Одобри като",
+    castApproved: "Одобрено",
+    castRejected: "Отказано",
+    castApprovePickFirst: "Първо избери кой е това",
     castEmpty: "Още никой не е отбелязан",
     castSignedOut: "Влез, за да предложиш човек",
+  },
+
+  picker: {
+    choose: "Избери човек",
+    search: "Търси хора",
+    empty: "Няма съвпадение.",
+    custom: "Няма го? Напиши име",
+    capped: (n: number) =>
+      `Показани са първите ${n}. Пиши горе, за да стигнеш до друг.`,
   },
 
   manage: {
@@ -1293,8 +1337,6 @@ const bg: Copy = {
     reportsResolved: "Сигналът е затворен",
     queueTyped: "написано",
     queueApproveAs: "Одобри като",
-    queuePersonFilter: "Филтрирай списъка с хора",
-    queuePersonCapped: "Показани са първите 100 души. Пиши горе, за да стигнеш до друг.",
     queueApprove: "Одобри",
     queueReject: "Откажи",
     queueRejectNote: "Защо (човекът ще го види)",

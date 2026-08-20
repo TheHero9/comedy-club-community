@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 
 import { useCopy } from "@/components/i18n/LocaleProvider";
+import { PersonPicker } from "@/components/shared/PersonPicker";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/components/ui/toast";
@@ -17,12 +18,12 @@ import { formatDate } from "@/lib/format";
 const HISTORY_LIMIT = 30;
 
 /**
- * The persona picker's page size, which is also the API's hard `MAX_LIMIT`.
+ * The seed page handed to every persona picker, which is also the API's hard
+ * `MAX_LIMIT`.
  *
- * 🚨 A picker that silently shows the first 100 of 300 personas is a queue that
- * cannot approve the other 200, and nothing on screen would say so. So the cap
- * is stated in the UI and paired with a filter that re-queries the server -
- * the list is bounded, reaching past it is not.
+ * ⚠️ It is only a SEED now. `PersonPicker` carries its own search and states
+ * its own cap, so this list exists to make the panel non-empty the instant it
+ * opens - reaching past 100 personas is the picker's job, not this query's.
  */
 const PICKER_LIMIT = 100;
 
@@ -45,22 +46,18 @@ export function ProposalQueue() {
   const queryClient = useQueryClient();
 
   /**
-   * 🚨 The picker owns its OWN people query rather than reusing the roster
-   * above it. Sharing one list looked tidier and was a trap: filtering the
-   * roster to find one persona would also empty every "approve as" dropdown on
-   * the page, so a moderator searching for someone would silently lose the
-   * ability to approve anyone else.
+   * 🚨 UNFILTERED, and separate from the roster above it. There used to be a
+   * filter box on this page feeding every dropdown at once, which meant
+   * searching for one persona emptied every OTHER row's picker - a moderator
+   * looking someone up silently lost the ability to approve anyone else. Each
+   * picker now searches inside itself, so the shared query went back to being
+   * one plain first page.
    */
-  const [personTerm, setPersonTerm] = useState("");
-
   const people = useQuery({
-    queryKey: ["manage", "picker-people", personTerm],
+    queryKey: ["manage", "picker-people"],
     queryFn: () =>
       viewerApi.get<Person[]>("/api/people", {
-        query: {
-          limit: PICKER_LIMIT,
-          ...(personTerm.trim() ? { q: personTerm.trim() } : {}),
-        },
+        query: { limit: PICKER_LIMIT },
         cache: "no-store",
       }),
   });
@@ -99,24 +96,6 @@ export function ProposalQueue() {
   return (
     <>
       <h2 className="mt-10 text-[15px] font-semibold">{copy.manage.queueTitle}</h2>
-
-      {batches.length > 0 ? (
-        <>
-          <input
-            value={personTerm}
-            onChange={(event) => setPersonTerm(event.target.value)}
-            placeholder={copy.manage.queuePersonFilter}
-            className="mt-3 w-full max-w-[320px] rounded-pill border border-border bg-background px-3 py-2 text-small"
-          />
-          {/* Stated, never silent. A truncated picker that says nothing reads
-              as "that person does not exist yet" and invites a duplicate. */}
-          {pickerPeople.length >= PICKER_LIMIT ? (
-            <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
-              {copy.manage.queuePersonCapped}
-            </p>
-          ) : null}
-        </>
-      ) : null}
 
       {queue.isLoading ? (
         <Skeleton className="mt-3 h-20 w-full" />
@@ -212,6 +191,20 @@ function SubmissionCard({
       batch.items.map((item) => [item.id, item.person_slug ?? ""]),
     ),
   );
+  /**
+   * What each picker's trigger reads.
+   *
+   * Held beside the slug rather than looked up in `people`: the picker searches
+   * the server, so the chosen persona is routinely not in the seed page, and a
+   * lookup that misses would blank a trigger the moderator had just set.
+   */
+  const [names, setNames] = useState<Record<number, string>>(() =>
+    Object.fromEntries(
+      batch.items
+        .filter((item) => item.person_slug)
+        .map((item) => [item.id, item.display_name]),
+    ),
+  );
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -273,28 +266,26 @@ function SubmissionCard({
               </span>
             </span>
 
-            <label className="flex min-w-[170px] flex-1 flex-col gap-1">
+            <span className="flex min-w-[190px] flex-1 flex-col gap-1">
               <span className="text-[12px] text-subtle-foreground">
                 {copy.manage.queueApproveAs}
               </span>
-              <select
+              {/* 🚨 Our own dropdown, not a native `<select>`. The list is
+                  paged at 100 on the server, so a select could not reach past
+                  the first page at all - and on a phone it handed the choice
+                  to the operating system's wheel, which shows no avatar and
+                  cannot be searched. */}
+              <PersonPicker
+                aria-label={copy.manage.queueApproveAs}
                 value={slugs[item.id] ?? ""}
-                onChange={(event) =>
-                  setSlugs((current) => ({
-                    ...current,
-                    [item.id]: event.target.value,
-                  }))
-                }
-                className="rounded-pill border border-border bg-background px-3 py-2 text-small"
-              >
-                <option value="">-</option>
-                {people.map((person) => (
-                  <option key={person.slug} value={person.slug}>
-                    {person.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                valueLabel={names[item.id] ?? item.display_name}
+                initialPeople={people}
+                onSelect={(person) => {
+                  setSlugs((current) => ({ ...current, [item.id]: person.slug }));
+                  setNames((current) => ({ ...current, [item.id]: person.name }));
+                }}
+              />
+            </span>
 
             <div className="flex gap-1.5">
               <Button

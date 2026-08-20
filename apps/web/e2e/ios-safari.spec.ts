@@ -136,7 +136,28 @@ test("14.3 the cast proposer does not trigger Safari focus zoom", async ({
   await expect(add).toBeVisible();
   await add.click();
 
-  await expectNoZoomingFields(page, "cast proposer");
+  /**
+   * 🚨 THE COMPOSER AT REST NO LONGER HAS A TYPABLE CONTROL, and that is why
+   * this test opens two of them by hand. Choosing a person is our own dropdown
+   * (a button) and the role is three buttons, so the guard inside
+   * `expectNoZoomingFields` reported "no form controls" - correctly. Both
+   * fields it used to cover still exist; they are just one interaction away,
+   * and asserting on the resting state would now prove nothing.
+   */
+  const picker = page.getByRole("button", { name: copy.episode.castPick }).first();
+  await expect(picker).toBeVisible();
+  await picker.click();
+
+  // The panel's search box, which is the field a member types in most often.
+  await expect(page.getByPlaceholder(copy.picker.search)).toBeVisible();
+  await expectNoZoomingFields(page, "cast proposer, person search");
+
+  // And the free-text name, reached through the picker's last row.
+  await page.getByRole("option", { name: copy.picker.custom }).click();
+  await expect(
+    page.getByPlaceholder(copy.episode.castCustomPlaceholder),
+  ).toBeVisible();
+  await expectNoZoomingFields(page, "cast proposer, typed name");
 });
 
 // ---------------------------------------------------------------------------

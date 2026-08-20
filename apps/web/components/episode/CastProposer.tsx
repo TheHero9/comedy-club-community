@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, UserPlus } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, Clock, Plus, UserPlus, Undo2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ui/toast";
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
+import { PersonPicker } from "@/components/shared/PersonPicker";
+import { Tooltip } from "@/components/shared/Tooltip";
 import { viewerApi } from "@/lib/auth";
 import { isApiError } from "@/lib/api/client";
+import { cn } from "@/lib/utils";
 import type { Person, Proposal } from "@/lib/api/podcast";
 
 interface Props {
@@ -42,8 +45,42 @@ interface Props {
  */
 const ROLES = ["regular", "guest", "offcamera"] as const;
 
+/** One line of the form: who, and in what capacity. */
+interface CastLine {
+  /** Stable across re-orders, so React does not reuse a removed line's state. */
+  key: number;
+  /** A chosen persona's slug, or "" when nothing is chosen yet. */
+  slug: string;
+  /** The chosen persona's name, kept for the trigger's label. */
+  name: string;
+  /** True once "not listed, I will type a name" was picked. */
+  custom: boolean;
+  typedName: string;
+  role: string;
+}
+
+function emptyLine(key: number): CastLine {
+  return {
+    key,
+    slug: "",
+    name: "",
+    custom: false,
+    typedName: "",
+    // `regular` matches the API's own default, so the two cannot drift into
+    // disagreeing about what an unspecified role means.
+    role: "regular",
+  };
+}
+
 /**
- * Suggest who took part in an episode.
+ * Suggest who took part in an episode - the WHOLE cast, in one submission.
+ *
+ * 🚨 It used to be one person per trip: pick, submit, pick again, submit again.
+ * The owner's report was exactly that ("it's so slow"), and it is also how the
+ * data actually arrives - a viewer recognises three people at once, not one
+ * every thirty seconds. So the form is a list of lines and the button sends
+ * them together, through `/participants/batch`, which applies all of them or
+ * none of them.
  *
  * 🚨 A typed name is sent as free text and NEVER becomes a `Person`. A
  * moderator maps it onto a persona that already exists (creating that persona
@@ -61,16 +98,11 @@ export function CastProposer({
   const copy = useCopy();
   const { signedIn } = useViewerAuth();
 
+  const nextKey = useRef(1);
   const [open, setOpen] = useState(false);
-  const [personSlug, setPersonSlug] = useState("");
-  const [customName, setCustomName] = useState("");
-  // `regular` matches the API's own default, so the two cannot drift into
-  // disagreeing about what an unspecified role means.
-  const [role, setRole] = useState<string>("regular");
+  const [lines, setLines] = useState<CastLine[]>([emptyLine(0)]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const usingCustom = personSlug === "__custom__";
 
   function start() {
     if (!signedIn) {
@@ -80,36 +112,57 @@ export function CastProposer({
     setOpen(true);
   }
 
+  function patch(key: number, changes: Partial<CastLine>) {
+    setLines((current) =>
+      current.map((line) => (line.key === key ? { ...line, ...changes } : line)),
+    );
+  }
+
+  function addLine() {
+    nextKey.current += 1;
+    setLines((current) => [...current, emptyLine(nextKey.current)]);
+  }
+
+  function reset() {
+    nextKey.current += 1;
+    setLines([emptyLine(nextKey.current)]);
+    setError(null);
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
 
-    const body: Record<string, string> = { role };
-    if (usingCustom) {
-      if (!customName.trim()) {
-        setError(copy.episode.castCustomPlaceholder);
-        return;
-      }
-      body.name = customName.trim();
-    } else if (personSlug) {
-      body.person_slug = personSlug;
-    } else {
-      setError(copy.episode.castPick);
+    const items = lines.map((line) =>
+      line.custom
+        ? { name: line.typedName.trim(), role: line.role }
+        : { person_slug: line.slug, role: line.role },
+    );
+
+    // Checked here as well as on the server, because an empty line is a
+    // half-finished thought rather than an error worth a round trip.
+    const incomplete = items.some(
+      (item) => !("name" in item ? item.name : item.person_slug),
+    );
+    if (incomplete) {
+      setError(copy.episode.castNeedsPerson);
       return;
     }
 
     setSaving(true);
     try {
-      await viewerApi.post<Proposal>(
-        `/api/episodes/${encodeURIComponent(youtubeId)}/participants`,
-        body,
+      await viewerApi.post<Proposal[]>(
+        `/api/episodes/${encodeURIComponent(youtubeId)}/participants/batch`,
+        { items },
       );
-      setPersonSlug("");
-      setCustomName("");
+      reset();
       setOpen(false);
       notify.success(copy.episode.castProposed);
       await onProposed();
     } catch (caught) {
+      // 🚨 The lines stay exactly as they are. The batch is all-or-nothing, so
+      // nothing was saved, and clearing the form would throw away work the
+      // member still has to correct.
       setError(isApiError(caught) ? caught.userMessage : copy.errors.generic);
     } finally {
       setSaving(false);
@@ -129,58 +182,83 @@ export function CastProposer({
     <form onSubmit={submit} className="mt-3 rounded-lg border border-border bg-card p-3">
       <p className="mb-2.5 text-small font-semibold">{copy.episode.castAddTitle}</p>
 
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex min-w-[190px] flex-1 flex-col gap-1">
-          <span className="text-[12px] text-subtle-foreground">{copy.episode.castPick}</span>
-          <select
-            value={personSlug}
-            onChange={(event) => setPersonSlug(event.target.value)}
-            className="rounded-pill border border-border bg-background px-3 py-2 text-small"
-          >
-            <option value="">-</option>
-            {people.map((person) => (
-              <option key={person.slug} value={person.slug}>
-                {person.name}
-              </option>
-            ))}
-            <option value="__custom__">{copy.episode.castCustom}</option>
-          </select>
-        </label>
-
-        {usingCustom ? (
-          <label className="flex min-w-[170px] flex-1 flex-col gap-1">
-            <span className="text-[12px] text-subtle-foreground">
-              {copy.episode.castCustom}
+      <ul className="flex flex-col gap-2.5">
+        {lines.map((line) => (
+          <li key={line.key} className="flex flex-wrap items-center gap-2">
+            <span className="flex min-w-[190px] flex-1 flex-col gap-1">
+              <PersonPicker
+                aria-label={copy.episode.castPick}
+                value={line.slug}
+                valueLabel={line.name}
+                initialPeople={people}
+                customActive={line.custom}
+                onSelect={(person) =>
+                  patch(line.key, {
+                    slug: person.slug,
+                    name: person.name,
+                    custom: false,
+                    typedName: "",
+                  })
+                }
+                onCustom={() =>
+                  patch(line.key, { custom: true, slug: "", name: "" })
+                }
+              />
             </span>
-            <input
-              value={customName}
-              onChange={(event) => setCustomName(event.target.value)}
-              placeholder={copy.episode.castCustomPlaceholder}
-              maxLength={200}
-              autoFocus
-              className="rounded-pill border border-border bg-background px-3 py-2 text-small"
+
+            {line.custom ? (
+              <input
+                value={line.typedName}
+                onChange={(event) =>
+                  patch(line.key, { typedName: event.target.value })
+                }
+                placeholder={copy.episode.castCustomPlaceholder}
+                aria-label={copy.episode.castCustom}
+                maxLength={200}
+                autoFocus
+                className="min-w-[150px] flex-1 rounded-pill border border-border bg-background px-3 py-2 text-small"
+              />
+            ) : null}
+
+            <RoleChoice
+              value={line.role}
+              onChange={(role) => patch(line.key, { role })}
             />
-          </label>
-        ) : null}
 
-        <label className="flex flex-col gap-1">
-          <span className="text-[12px] text-subtle-foreground">{copy.episode.castRole}</span>
-          <select
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
-            className="rounded-pill border border-border bg-background px-3 py-2 text-small"
-          >
-            {ROLES.map((key) => (
-              <option key={key} value={key}>
-                {copy.episode.role(key)}
-              </option>
-            ))}
-          </select>
-        </label>
+            {/* Only when there is something to remove. On a single line it
+                would be a button that empties the form the Cancel button
+                already closes. */}
+            {lines.length > 1 ? (
+              <Tooltip label={copy.episode.castRowRemove} align="end">
+                <Button
+                  type="button"
+                  variant="quiet"
+                  size="icon"
+                  className="size-[34px]"
+                  aria-label={copy.episode.castRowRemove}
+                  onClick={() =>
+                    setLines((current) =>
+                      current.filter((other) => other.key !== line.key),
+                    )
+                  }
+                >
+                  <X className="size-3.5" aria-hidden strokeWidth={2.6} />
+                </Button>
+              </Tooltip>
+            ) : null}
+          </li>
+        ))}
+      </ul>
 
-        <div className="flex gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button type="button" variant="dashed" size="sm" onClick={addLine}>
+          <Plus className="h-4 w-4" />
+          {copy.episode.castAddRow}
+        </Button>
+
+        <span className="ml-auto flex gap-2">
           <Button type="submit" size="sm" disabled={saving}>
-            {copy.episode.castSubmit}
+            {copy.episode.castSubmitAll(lines.length)}
           </Button>
           <Button
             type="button"
@@ -188,12 +266,12 @@ export function CastProposer({
             size="sm"
             onClick={() => {
               setOpen(false);
-              setError(null);
+              reset();
             }}
           >
             {copy.episode.momentCancel}
           </Button>
-        </div>
+        </span>
       </div>
 
       <p className="mt-2 text-[12px] text-subtle-foreground">
@@ -210,56 +288,261 @@ export function CastProposer({
 }
 
 /**
+ * The role, as three pills rather than a fourth dropdown.
+ *
+ * There are exactly three of them and they never grow with the data, so a menu
+ * would hide a choice that fits on the line - and it would be a second tap for
+ * something the member sets on every single line they add.
+ */
+function RoleChoice({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (role: string) => void;
+}) {
+  const copy = useCopy();
+
+  return (
+    <span
+      role="radiogroup"
+      aria-label={copy.episode.castRole}
+      className="flex items-center gap-1 rounded-pill border border-border p-0.5"
+    >
+      {ROLES.map((key) => (
+        <button
+          key={key}
+          type="button"
+          role="radio"
+          aria-checked={value === key}
+          onClick={() => onChange(key)}
+          className={cn(
+            "rounded-pill px-2.5 py-1.5 text-[12.5px] outline-none transition-colors duration-120",
+            value === key
+              ? "bg-elevated font-semibold text-foreground"
+              : "text-subtle-foreground hover:text-foreground",
+          )}
+        >
+          {copy.episode.role(key)}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/**
  * A proposal awaiting review, rendered visibly distinct from confirmed cast.
  *
  * 🚨 It must never look like a confirmed participant: a pending row is NOT in
  * EpisodeParticipant, so search and `?person=` do not know about it, and
  * showing it as fact would make the page disagree with every other surface.
+ *
+ * 🚨 A MODERATOR DECIDES IT HERE. The review queue on /me/people still exists
+ * and is where a batch is read as a batch, but the person who notices a wrong
+ * cast is looking at the episode when they notice it, and making them leave the
+ * page to act on it is how a queue grows. The endpoints are the same ones, and
+ * the server re-checks the permission - the buttons below only decide what is
+ * rendered.
  */
 export function PendingCastRow({
   proposal,
   myProposalIds,
-  onWithdrawn,
+  isStaff,
+  people,
+  onChanged,
 }: {
   proposal: Proposal;
   myProposalIds: number[];
-  onWithdrawn: () => void | Promise<void>;
+  /** Moderator or admin. Decides what is RENDERED, never what is allowed. */
+  isStaff: boolean;
+  /** Seed for the "approve as" picker on a typed-name proposal. */
+  people: Person[];
+  onChanged: () => void | Promise<void>;
 }) {
   const copy = useCopy();
   const [busy, setBusy] = useState(false);
+  const [armed, setArmed] = useState(false);
+  const [slug, setSlug] = useState(proposal.person_slug ?? "");
+  const [slugLabel, setSlugLabel] = useState(
+    proposal.person_slug ? proposal.display_name : "",
+  );
+  const [error, setError] = useState<string | null>(null);
   const mine = myProposalIds.includes(proposal.id);
 
-  async function withdraw() {
+  async function run(work: () => Promise<unknown>, success?: string) {
     setBusy(true);
+    setError(null);
     try {
-      await viewerApi.delete(`/api/participant-proposals/${proposal.id}`);
-      await onWithdrawn();
-    } catch {
-      notify.error(copy.errors.generic);
+      await work();
+      if (success) notify.success(success);
+      await onChanged();
+    } catch (caught) {
+      // Inline, not a toast: the row that failed is on screen, and a toast
+      // about "a proposal" would not say which one.
+      setError(isApiError(caught) ? caught.userMessage : copy.errors.generic);
     } finally {
       setBusy(false);
     }
   }
 
+  const withdraw = () =>
+    run(() => viewerApi.delete(`/api/participant-proposals/${proposal.id}`));
+
+  const approve = () =>
+    run(
+      () =>
+        viewerApi.post(
+          `/api/moderation/participant-proposals/${proposal.id}/approve`,
+          { person_slug: slug },
+        ),
+      copy.episode.castApproved,
+    );
+
+  const reject = () =>
+    run(
+      () =>
+        viewerApi.post(
+          `/api/moderation/participant-proposals/${proposal.id}/reject`,
+          {},
+        ),
+      copy.episode.castRejected,
+    );
+
   return (
-    <li className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2">
-      <Plus className="h-3.5 w-3.5 shrink-0 text-subtle-foreground" />
-      <span className="text-small">{proposal.display_name}</span>
-      <span className="text-[11px] text-subtle-foreground">
-        {copy.episode.role(proposal.role)}
-      </span>
-      <span className="ml-auto rounded-pill border border-border px-2 py-0.5 text-[10.5px] text-subtle-foreground">
-        {copy.episode.castPending}
-      </span>
-      {mine ? (
-        <button
-          type="button"
-          onClick={withdraw}
-          disabled={busy}
-          className="text-[11px] text-subtle-foreground underline outline-none hover:text-foreground"
-        >
-          {copy.episode.castWithdraw}
-        </button>
+    <li className="rounded-lg border border-dashed border-border px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Plus className="h-3.5 w-3.5 shrink-0 text-subtle-foreground" aria-hidden />
+        <span className="text-small">{proposal.display_name}</span>
+        <span className="text-[11px] text-subtle-foreground">
+          {copy.episode.role(proposal.role)}
+        </span>
+
+        {/* The state, as a mark rather than a sentence. The row is scanned, and
+            "Awaiting review" spelled out beside every one of them was most of
+            the line. The name is still the control's accessible name, so it is
+            not lost - it is just not shouted. */}
+        <Tooltip label={copy.episode.castPending} className="ml-auto">
+          <span
+            data-testid="cast-pending-mark"
+            className="flex items-center rounded-pill border border-border px-1.5 py-1 text-subtle-foreground"
+          >
+            <Clock className="size-3.5" aria-hidden />
+            <span className="sr-only">{copy.episode.castPending}</span>
+          </span>
+        </Tooltip>
+
+        {isStaff ? (
+          <>
+            <Tooltip label={copy.episode.castApprove} align="end">
+              <Button
+                type="button"
+                variant="quiet"
+                size="icon"
+                className="size-[30px]"
+                aria-label={copy.episode.castApprove}
+                // A typed name has no persona yet, and approving one without
+                // choosing who it is would 422 on the server. The picker below
+                // is where that gets fixed, and it says so there - a hint on a
+                // disabled control is a hint nobody can hover.
+                disabled={busy || !slug}
+                onClick={approve}
+              >
+                <Check className="size-4" aria-hidden strokeWidth={2.6} />
+              </Button>
+            </Tooltip>
+            <Tooltip label={copy.episode.castReject} align="end">
+              <Button
+                type="button"
+                variant="quiet"
+                size="icon"
+                className="size-[30px]"
+                aria-label={copy.episode.castReject}
+                disabled={busy}
+                onClick={reject}
+              >
+                <X className="size-4" aria-hidden strokeWidth={2.6} />
+              </Button>
+            </Tooltip>
+          </>
+        ) : null}
+
+        {/* 🚨 Withdrawing asks first. It deletes the row outright, there is no
+            undo, and the trigger is now a 30px icon rather than a word - a
+            mis-tap that silently destroys someone's contribution is exactly
+            what shrinking a control invites. */}
+        {mine ? (
+          armed ? (
+            <span className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="primary"
+                size="xs"
+                autoFocus
+                disabled={busy}
+                onClick={() => {
+                  setArmed(false);
+                  void withdraw();
+                }}
+              >
+                {copy.episode.castWithdrawConfirm}
+              </Button>
+              <Button
+                type="button"
+                variant="quiet"
+                size="icon"
+                className="size-[30px]"
+                aria-label={copy.common.cancel}
+                onClick={() => setArmed(false)}
+              >
+                <X className="size-3.5" aria-hidden strokeWidth={2.6} />
+              </Button>
+            </span>
+          ) : (
+            <Tooltip label={copy.episode.castWithdraw} align="end">
+              <Button
+                type="button"
+                variant="quiet"
+                size="icon"
+                className="size-[30px]"
+                aria-label={copy.episode.castWithdraw}
+                disabled={busy}
+                onClick={() => setArmed(true)}
+              >
+                <Undo2 className="size-4" aria-hidden />
+              </Button>
+            </Tooltip>
+          )
+        ) : null}
+      </div>
+
+      {/* Only where a decision is actually needed: the member typed a name, so
+          somebody has to say which persona it is. A proposal that already names
+          one approves in a single click above. */}
+      {isStaff && !proposal.person_slug ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-subtle-foreground">
+            {copy.episode.castApproveAs}
+          </span>
+          <PersonPicker
+            className="min-w-[190px] flex-1"
+            placeholder={copy.episode.castApprovePickFirst}
+            aria-label={copy.episode.castApproveAs}
+            value={slug}
+            valueLabel={slugLabel}
+            initialPeople={people}
+            disabled={busy}
+            onSelect={(person) => {
+              setSlug(person.slug);
+              setSlugLabel(person.name);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {error ? (
+        <p role="alert" className="mt-1.5 text-[12.5px] text-primary-text">
+          {error}
+        </p>
       ) : null}
     </li>
   );

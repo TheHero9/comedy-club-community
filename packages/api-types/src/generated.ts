@@ -856,6 +856,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/episodes/{youtube_id}/participants/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose Participants
+         * @description Suggest SEVERAL people in one submission. All of them, or none of them.
+         *
+         *     🚨 Why this exists at all: the single-item endpoint made "who is in this
+         *     episode" a per-person round trip, and the owner's report was exactly that -
+         *     "I need to click someone, then click suggest, then click someone else, then
+         *     click suggest, it is so slow". A cast is named as a group, so it is
+         *     submitted as a group.
+         *
+         *     🚨 ONE TRANSACTION. Looping the single endpoint from the browser would half
+         *     apply a batch the moment one row is a duplicate, and nothing on screen could
+         *     say which rows survived. Here the first bad row takes the whole submission
+         *     down with a message naming it, the form still matches the database, and the
+         *     member fixes one row and sends it again.
+         *
+         *     ⚠️ The duplicate checks inside `propose` read the rows this same transaction
+         *     has just written, so suggesting the same person twice in one batch is caught
+         *     by the existing rule rather than by a second one that could drift from it.
+         */
+        post: operations["podcast_api_community_propose_participants"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/participant-proposals/{proposal_id}": {
         parameters: {
             query?: never;
@@ -2247,6 +2283,25 @@ export interface components {
              * @default guest
              */
             role: string;
+        };
+        /**
+         * ParticipantProposeBatchIn
+         * @description One submission carrying several suggestions.
+         *
+         *     🚨 ALL OR NOTHING. The single-item endpoint stays and this one loops over
+         *     the same service, but the loop lives in ONE transaction on purpose: a
+         *     partial batch applies some rows and 422s the rest, leaving the member
+         *     looking at a form that no longer matches what was saved and no way to tell
+         *     which half went through. That is the exact failure the review queue's
+         *     "approve all" is disabled to avoid, and it would be worse here because the
+         *     member cannot see the queue.
+         *
+         *     Capped at `MAX_CAST_BATCH`: this is "who is in this episode", not an import
+         *     tool, and an unbounded list is a write amplifier behind one throttle slot.
+         */
+        ParticipantProposeBatchIn: {
+            /** Items */
+            items: components["schemas"]["ParticipantProposeIn"][];
         };
         /** ProposalQueueOut */
         ProposalQueueOut: {
@@ -3641,6 +3696,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProposalOut"];
+                };
+            };
+        };
+    };
+    podcast_api_community_propose_participants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                youtube_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParticipantProposeBatchIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalOut"][];
                 };
             };
         };

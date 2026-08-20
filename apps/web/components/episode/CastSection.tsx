@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { useCopy } from "@/components/i18n/LocaleProvider";
@@ -9,7 +10,7 @@ import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { useEpisodeViewer } from "./viewer/EpisodeViewerContext";
 import { viewerApi } from "@/lib/auth";
 import { api } from "@/lib/api/client";
-import type { EpisodeCast, Person, ViewerState } from "@/lib/api/podcast";
+import type { EpisodeCast, Me, Person, ViewerState } from "@/lib/api/podcast";
 
 import { CastProposer, PendingCastRow } from "./CastProposer";
 
@@ -50,6 +51,23 @@ export function CastSection({
   // cascading renders. Signing out simply makes the derived value empty.
   const [fetchedIds, setMyProposalIds] = useState<number[]>([]);
   const myProposalIds = signedIn ? fetchedIds : EMPTY_IDS;
+
+  /**
+   * 🚨 The SAME `["me"]` key the header and the profile page use, so this is
+   * deduped rather than a second round trip - the same reason `AppHeader` had
+   * to read it instead of rendering its own idea of the viewer.
+   *
+   * 🔒 It decides what is RENDERED. Every endpoint the buttons call re-checks
+   * the role on the server, because a hidden button is not a permission.
+   */
+  const me = useQuery({
+    queryKey: ["me"],
+    enabled: signedIn,
+    retry: false,
+    queryFn: ({ signal }) =>
+      viewerApi.get<Me>("/api/me", { signal, cache: "no-store" }),
+  });
+  const isStaff = me.data?.role === "admin" || me.data?.role === "moderator";
 
   useEffect(() => {
     if (!signedIn) return;
@@ -119,7 +137,9 @@ export function CastSection({
               key={proposal.id}
               proposal={proposal}
               myProposalIds={myProposalIds}
-              onWithdrawn={reload}
+              isStaff={isStaff}
+              people={people}
+              onChanged={reload}
             />
           ))}
         </ul>

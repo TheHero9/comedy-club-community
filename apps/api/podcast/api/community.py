@@ -48,6 +48,7 @@ from .schemas import (
     MessageOut,
     MomentIn,
     MomentOut,
+    ParticipantProposeBatchIn,
     ParticipantProposeIn,
     PersonIn,
     PersonOut,
@@ -373,6 +374,63 @@ def propose_participant(request, youtube_id: str, payload: ParticipantProposeIn)
         raise HttpError(422, str(exc)) from exc
 
     return proposal_out(proposal, viewer=request.auth)
+
+
+@router.post("/episodes/{youtube_id}/participants/batch", response=list[ProposalOut])
+def propose_participants(request, youtube_id: str, payload: ParticipantProposeBatchIn):
+    """Suggest SEVERAL people in one submission. All of them, or none of them.
+
+    🚨 Why this exists at all: the single-item endpoint made "who is in this
+    episode" a per-person round trip, and the owner's report was exactly that -
+    "I need to click someone, then click suggest, then click someone else, then
+    click suggest, it is so slow". A cast is named as a group, so it is
+    submitted as a group.
+
+    🚨 ONE TRANSACTION. Looping the single endpoint from the browser would half
+    apply a batch the moment one row is a duplicate, and nothing on screen could
+    say which rows survived. Here the first bad row takes the whole submission
+    down with a message naming it, the form still matches the database, and the
+    member fixes one row and sends it again.
+
+    ⚠️ The duplicate checks inside `propose` read the rows this same transaction
+    has just written, so suggesting the same person twice in one batch is caught
+    by the existing rule rather than by a second one that could drift from it.
+    """
+    episode = get_object_or_404(Episode, youtube_id=youtube_id)
+
+    valid_roles = {choice[0] for choice in ParticipantProposal._meta.get_field("role").choices}
+    created: list[ParticipantProposal] = []
+
+    with transaction.atomic():
+        for position, item in enumerate(payload.items, start=1):
+            # What to call this row in an error. The typed name, the persona's
+            # slug, or - if they sent neither - its position, because "row 3"
+            # is still findable on screen and "" is not.
+            label = (item.name or "").strip() or item.person_slug or f"#{position}"
+
+            person = None
+            if item.person_slug:
+                person = Person.objects.filter(slug=item.person_slug).first()
+                if person is None:
+                    raise HttpError(422, f"{label}: no such person")
+
+            if item.role not in valid_roles:
+                raise HttpError(422, f"{label}: role must be one of {sorted(valid_roles)}")
+
+            try:
+                created.append(
+                    participant_service.propose(
+                        episode=episode,
+                        user=request.auth,
+                        person=person,
+                        name=item.name or "",
+                        role=item.role,
+                    )
+                )
+            except participant_service.ProposalError as exc:
+                raise HttpError(422, f"{label}: {exc}") from exc
+
+    return [proposal_out(proposal, viewer=request.auth) for proposal in created]
 
 
 @router.delete("/participant-proposals/{proposal_id}", response=MessageOut)

@@ -527,6 +527,11 @@ class PersonIn(Schema):
     avatar_url: str = Field("", max_length=200)
 
 
+#: The most people one submission may suggest at once. A cast is small; a
+#: hundred-row batch is either a mistake or an abuse of one throttle slot.
+MAX_CAST_BATCH = 20
+
+
 class ParticipantProposeIn(Schema):
     """Exactly one of `person_slug` / `name`.
 
@@ -538,6 +543,24 @@ class ParticipantProposeIn(Schema):
     person_slug: str | None = Field(None, max_length=220)
     name: str | None = Field(None, max_length=200)
     role: str = Field("guest", max_length=20)
+
+
+class ParticipantProposeBatchIn(Schema):
+    """One submission carrying several suggestions.
+
+    🚨 ALL OR NOTHING. The single-item endpoint stays and this one loops over
+    the same service, but the loop lives in ONE transaction on purpose: a
+    partial batch applies some rows and 422s the rest, leaving the member
+    looking at a form that no longer matches what was saved and no way to tell
+    which half went through. That is the exact failure the review queue's
+    "approve all" is disabled to avoid, and it would be worse here because the
+    member cannot see the queue.
+
+    Capped at `MAX_CAST_BATCH`: this is "who is in this episode", not an import
+    tool, and an unbounded list is a write amplifier behind one throttle slot.
+    """
+
+    items: list[ParticipantProposeIn] = Field(..., min_length=1, max_length=MAX_CAST_BATCH)
 
 
 class ProposalOut(Schema):

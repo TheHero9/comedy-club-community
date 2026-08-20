@@ -9,6 +9,7 @@ that test ever fails, the design has been undone.
 
 import pytest
 
+from podcast.api.schemas import MAX_CAST_BATCH
 from podcast.models import (
     EpisodeParticipant,
     ParticipantProposal,
@@ -155,6 +156,177 @@ class TestProposing:
             content_type="application/json",
         )
         assert response.status_code in (401, 403)
+
+
+class TestBatchProposing:
+    """One submission, several people - and never half of one.
+
+    The owner's report was about clicks: "I click someone, click suggest, click
+    someone else, click suggest - it is so slow." The endpoint that fixes it has
+    to keep the guarantee the single one had, which is why atomicity is what
+    most of these assert.
+    """
+
+    def test_a_member_can_suggest_several_people_at_once(
+        self, client, episode, alice, as_alice, kirkov, tonkata
+    ):
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={
+                "items": [
+                    {"person_slug": kirkov.slug, "role": "regular"},
+                    {"person_slug": tonkata.slug, "role": "guest"},
+                    {"name": "Донката", "role": "offcamera"},
+                ]
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 200, response.content
+        body = response.json()
+        assert [item["display_name"] for item in body] == [
+            "Иван Кирков",
+            "Тонката",
+            "Донката",
+        ]
+        assert [item["role"] for item in body] == ["regular", "guest", "offcamera"]
+        assert all(item["status"] == "pending" for item in body)
+        assert ParticipantProposal.objects.filter(episode=episode).count() == 3
+
+    def test_a_typed_name_in_a_batch_still_never_creates_a_person(
+        self, client, episode, alice, as_alice, kirkov
+    ):
+        """The core invariant does not get an exemption for being in a list."""
+        before = Person.objects.count()
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={
+                "items": [
+                    {"person_slug": kirkov.slug, "role": "regular"},
+                    {"name": "Донката", "role": "guest"},
+                ]
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 200, response.content
+        assert Person.objects.count() == before
+
+    def test_one_bad_row_saves_NOTHING(
+        self, client, episode, alice, as_alice, kirkov, tonkata
+    ):
+        """🚨 The whole reason this is a batch endpoint and not a client loop.
+
+        A browser looping the single endpoint would have created the first two
+        rows and then shown an error about the third, leaving the form and the
+        database disagreeing with nothing on screen to say where the boundary
+        was.
+        """
+        already = participant_service.propose(
+            episode=episode, user=alice, person=tonkata
+        )
+        assert already.pk
+
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={
+                "items": [
+                    {"person_slug": kirkov.slug, "role": "regular"},
+                    {"person_slug": tonkata.slug, "role": "guest"},
+                ]
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 422, response.content
+        # The message names the row, not just the rule.
+        assert tonkata.slug in response.json()["detail"]
+        assert not ParticipantProposal.objects.filter(
+            episode=episode, person=kirkov
+        ).exists(), "the good row must have been rolled back with the bad one"
+        assert ParticipantProposal.objects.filter(episode=episode).count() == 1
+
+    def test_the_same_person_twice_in_one_batch_is_refused(
+        self, client, episode, alice, as_alice, kirkov
+    ):
+        """Caught by `propose`'s existing duplicate rule reading its own
+        transaction, so there is no second rule to drift from the first."""
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={
+                "items": [
+                    {"person_slug": kirkov.slug, "role": "regular"},
+                    {"person_slug": kirkov.slug, "role": "guest"},
+                ]
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 422
+        assert ParticipantProposal.objects.filter(episode=episode).count() == 0
+
+    def test_an_unknown_role_anywhere_in_the_batch_is_refused(
+        self, client, episode, alice, as_alice, kirkov, tonkata
+    ):
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={
+                "items": [
+                    {"person_slug": kirkov.slug, "role": "regular"},
+                    {"person_slug": tonkata.slug, "role": "supreme-leader"},
+                ]
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 422
+        assert ParticipantProposal.objects.filter(episode=episode).count() == 0
+
+    def test_an_unknown_person_is_refused_rather_than_dropped(
+        self, client, episode, alice, as_alice
+    ):
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={"items": [{"person_slug": "nobody-at-all", "role": "guest"}]},
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 422
+        assert ParticipantProposal.objects.filter(episode=episode).count() == 0
+
+    def test_an_empty_batch_is_refused(self, client, episode, alice, as_alice):
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={"items": []},
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 422
+
+    def test_the_batch_is_capped(self, client, episode, alice, as_alice, kirkov):
+        """An unbounded list is a write amplifier behind ONE throttle slot."""
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={
+                "items": [
+                    {"name": f"Човек {index}", "role": "guest"}
+                    for index in range(MAX_CAST_BATCH + 1)
+                ]
+            },
+            content_type="application/json",
+            **as_alice,
+        )
+        assert response.status_code == 422
+        assert ParticipantProposal.objects.filter(episode=episode).count() == 0
+
+    def test_anonymous_cannot_batch_propose(self, client, episode, kirkov):
+        response = client.post(
+            f"/api/episodes/{episode.youtube_id}/participants/batch",
+            data={"items": [{"person_slug": kirkov.slug}]},
+            content_type="application/json",
+        )
+        assert response.status_code in (401, 403)
+        assert ParticipantProposal.objects.count() == 0
 
 
 class TestReview:
