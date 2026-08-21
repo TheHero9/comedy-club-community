@@ -13,7 +13,7 @@
  */
 import type { ApiOperations, OperationResponse } from "@ccc/api-types";
 
-import { copy } from "@/lib/copy";
+import { getActiveDictionary } from "@/lib/copy";
 
 /** Default when NEXT_PUBLIC_API_URL is unset, matching docker-compose local dev. */
 const FALLBACK_API_URL = "http://localhost:8000";
@@ -31,13 +31,32 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+/**
+ * Methods that carry no intent to change anything.
+ *
+ * Mirrors the API's own throttle exemption in `podcast/api/throttling.py`: the
+ * two sides must agree on what counts as a write, or a request one of them
+ * treats as harmless is the one the other guards.
+ */
+const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS"]);
+
+function isSafeMethod(method: HttpMethod): boolean {
+  return SAFE_METHODS.has(method);
+}
+
 /** Machine-readable classification carried by every ApiError. */
 export type ApiErrorKind =
   | "network"
   | "timeout"
   | "aborted"
   | "http"
-  | "parse";
+  | "parse"
+  /**
+   * A write was refused BEFORE it was sent, because the client had no viewer
+   * token. Distinct from `http` 401: that one means the server rejected us,
+   * this one means we never asked. See the guard in `request`.
+   */
+  | "unauthenticated";
 
 export type QueryValue = string | number | boolean | null | undefined;
 export type QueryParams = Record<string, QueryValue | QueryValue[]>;
@@ -130,7 +149,7 @@ export function toApiError(
       method: context.method,
       url: context.url,
       message: `Request timed out: ${context.method} ${context.url}`,
-      userMessage: copy.errors.timeout,
+      userMessage: getActiveDictionary().errors.timeout,
       cause: error,
     });
   }
@@ -142,7 +161,7 @@ export function toApiError(
       method: context.method,
       url: context.url,
       message: `Request aborted: ${context.method} ${context.url}`,
-      userMessage: copy.errors.generic,
+      userMessage: getActiveDictionary().errors.generic,
       cause: error,
     });
   }
@@ -153,18 +172,18 @@ export function toApiError(
     method: context.method,
     url: context.url,
     message: `Network request failed: ${context.method} ${context.url}`,
-    userMessage: copy.errors.network,
+    userMessage: getActiveDictionary().errors.network,
     cause: error,
   });
 }
 
 function userMessageForStatus(status: number): string {
-  if (status === 401) return copy.errors.unauthorized;
-  if (status === 403) return copy.errors.forbidden;
-  if (status === 404) return copy.errors.notFound;
-  if (status === 429) return copy.errors.rateLimited;
-  if (status >= 500) return copy.errors.server;
-  return copy.errors.generic;
+  if (status === 401) return getActiveDictionary().errors.unauthorized;
+  if (status === 403) return getActiveDictionary().errors.forbidden;
+  if (status === 404) return getActiveDictionary().errors.notFound;
+  if (status === 429) return getActiveDictionary().errors.rateLimited;
+  if (status >= 500) return getActiveDictionary().errors.server;
+  return getActiveDictionary().errors.generic;
 }
 
 function buildUrl(path: string, query?: QueryParams): string {
@@ -272,6 +291,35 @@ export function createApiClient(clientOptions: ApiClientOptions = {}): ApiClient
         ? options.token
         : ((await clientOptions.getToken?.()) ?? null);
 
+    // 🚨 A WRITE NEVER GOES OUT ANONYMOUS.
+    //
+    // `viewerToken()` returns null on every failure it can hit - Clerk not
+    // booted yet, a session that expired while the tab sat open, an offline
+    // refresh - because for a READ an anonymous request genuinely beats a
+    // crash. For a WRITE it is the opposite: the request is sent with no
+    // Authorization header, the API correctly answers 401, and the member is
+    // told "you need to sign in" about a form they were signed in to open.
+    // That is exactly what ate two cast submissions on 2026-08-20, and the
+    // only trace was a pair of 401s in the proxy log.
+    //
+    // Refusing here turns a silent round trip into a local, instant, typed
+    // failure the composer can act on - and `useDraft` has already persisted
+    // what they typed, so the retry after signing in costs one tap.
+    //
+    // ⚠️ Scoped to clients built WITH a `getToken` (that is `viewerApi`). The
+    // public `api` client has none, so its writes - there are none today, and
+    // this keeps it that way honestly - are unaffected rather than broken.
+    if (clientOptions.getToken !== undefined && token === null && !isSafeMethod(method)) {
+      throw new ApiError({
+        kind: "unauthenticated",
+        status: 0,
+        method,
+        url,
+        message: `${method} ${url} refused: the viewer has no token`,
+        userMessage: getActiveDictionary().errors.signedOut,
+      });
+    }
+
     const headers: Record<string, string> = {
       Accept: "application/json",
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
@@ -308,7 +356,7 @@ export function createApiClient(clientOptions: ApiClientOptions = {}): ApiClient
         method,
         url,
         message: `Could not parse response body: ${method} ${url}`,
-        userMessage: copy.errors.parse,
+        userMessage: getActiveDictionary().errors.parse,
         cause: error,
       });
     }

@@ -8,6 +8,9 @@ import { Sheet } from "@/components/ui/sheet";
 import { notify } from "@/components/ui/toast";
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
+import { DraftNotice } from "@/components/shared/DraftNotice";
+import { draftKey } from "@/lib/drafts";
+import { useDraft } from "@/lib/use-draft";
 import { viewerApi } from "@/lib/auth";
 import { isApiError } from "@/lib/api/client";
 import type { Report } from "@/lib/api/podcast";
@@ -58,7 +61,21 @@ function ReportForm({
   const categories = hasTarget ? [...TARGETED, ...TARGETLESS] : [...TARGETLESS];
 
   const [category, setCategory] = useState<string>(categories[0]);
-  const [reason, setReason] = useState("");
+  // 🚨 Kept across a failed send. A report is often the LAST thing a member
+  // will bother to write - "the search returns nothing" typed once and thrown
+  // away by a 401 is a bug we simply never hear about.
+  //
+  // ⚠️ Unlike the episode composers, `restored` does NOT reopen anything. This
+  // form lives inside a sheet, so it only mounts once the member has already
+  // asked for it; a report sheet that opened itself on page load would be an
+  // ambush. Mounting is the trigger, and that is enough.
+  const draft = useDraft<string>(
+    draftKey("report", targetType ?? "site", String(targetId ?? "")),
+    "",
+    (value) => value.trim().length === 0,
+  );
+  const reason = draft.value;
+  const setReason = draft.setValue;
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -92,7 +109,7 @@ function ReportForm({
     setSaving(true);
     try {
       await viewerApi.post<Report>("/api/reports", body);
-      setReason("");
+      draft.clear();
       onDone();
       notify.success(copy.report.sent);
     } catch (caught) {
@@ -121,6 +138,12 @@ function ReportForm({
           <p className="text-small font-semibold">{copy.report.title}</p>
           <p className="mt-1 text-[12px] text-subtle-foreground">{copy.report.intro}</p>
         </>
+      ) : null}
+
+      {draft.restored ? (
+        <div className={cn(inline && "mt-3")}>
+          <DraftNotice onDiscard={draft.clear} />
+        </div>
       ) : null}
 
       <label className={cn("flex flex-col gap-1", inline && "mt-3")}>

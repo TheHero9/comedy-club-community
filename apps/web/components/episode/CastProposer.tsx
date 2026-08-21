@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Check, Clock, Plus, UserPlus, Undo2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,11 @@ import { useCopy } from "@/components/i18n/LocaleProvider";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { PersonPicker } from "@/components/shared/PersonPicker";
 import { Tooltip } from "@/components/shared/Tooltip";
+import { DraftNotice } from "@/components/shared/DraftNotice";
 import { viewerApi } from "@/lib/auth";
 import { isApiError } from "@/lib/api/client";
+import { draftKey } from "@/lib/drafts";
+import { useDraft } from "@/lib/use-draft";
 import { cn } from "@/lib/utils";
 import type { Person, Proposal } from "@/lib/api/podcast";
 
@@ -45,6 +48,14 @@ interface Props {
  */
 const ROLES = ["regular", "guest", "offcamera"] as const;
 
+/**
+ * The starting form: one blank line.
+ *
+ * Module scope so its identity is stable - `useDraft` takes it as the "nothing
+ * typed" value, and a fresh array each render would make that dependency churn.
+ */
+const EMPTY_LINES: CastLine[] = [{ key: 1, slug: "", name: "", custom: false, typedName: "", role: "regular" }];
+
 /** One line of the form: who, and in what capacity. */
 interface CastLine {
   /** Stable across re-orders, so React does not reuse a removed line's state. */
@@ -57,6 +68,16 @@ interface CastLine {
   custom: boolean;
   typedName: string;
   role: string;
+}
+
+/** Nothing chosen and nothing typed - so nothing worth keeping as a draft. */
+function isLineEmpty(line: CastLine): boolean {
+  return line.slug.length === 0 && line.typedName.trim().length === 0;
+}
+
+/** One past the highest key in play, so a restored draft cannot collide. */
+function nextLineKey(lines: CastLine[]): number {
+  return lines.reduce((highest, line) => Math.max(highest, line.key), 0) + 1;
 }
 
 function emptyLine(key: number): CastLine {
@@ -96,15 +117,31 @@ export function CastProposer({
   onProposed,
 }: Props) {
   const copy = useCopy();
-  const { signedIn } = useViewerAuth();
+  // 🚨 `ready` is Clerk's `isLoaded`. Two batches were lost on 2026-08-20
+  // because this button was live while the session was still loading and
+  // `viewerToken()` was still answering null.
+  const { signedIn, ready } = useViewerAuth();
 
-  const nextKey = useRef(1);
-  const [open, setOpen] = useState(false);
-  const [lines, setLines] = useState<CastLine[]>([emptyLine(0)]);
+  // 🚨 This form is the one that provably lost work. A whole cast is minutes of
+  // recognising faces, and it used to live only in React state - so a 401, a
+  // reload or a backgrounded tab took all of it.
+  const draft = useDraft<CastLine[]>(
+    draftKey("cast", youtubeId),
+    EMPTY_LINES,
+    (lines) => lines.every(isLineEmpty),
+  );
+  const lines = draft.value;
+  const setLines = draft.setValue;
+
+  const [opened, setOpen] = useState(false);
+  const open = opened || draft.restored;
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   function start() {
+    // `!ready` is not `!signedIn` - see MomentComposer for why conflating them
+    // shows the sign-in sheet to someone already signed in.
+    if (!ready) return;
     if (!signedIn) {
       onSignInRequired();
       return;
@@ -113,20 +150,15 @@ export function CastProposer({
   }
 
   function patch(key: number, changes: Partial<CastLine>) {
-    setLines((current) =>
-      current.map((line) => (line.key === key ? { ...line, ...changes } : line)),
-    );
+    setLines(lines.map((line) => (line.key === key ? { ...line, ...changes } : line)));
   }
 
   function addLine() {
-    nextKey.current += 1;
-    setLines((current) => [...current, emptyLine(nextKey.current)]);
-  }
-
-  function reset() {
-    nextKey.current += 1;
-    setLines([emptyLine(nextKey.current)]);
-    setError(null);
+    // 🚨 Derived from the lines themselves, NOT from a `useRef` counter. A
+    // restored draft arrives with keys the ref never issued, so a ref that
+    // starts at 1 again would mint a duplicate key and React would hand the
+    // new line the removed one's state.
+    setLines([...lines, emptyLine(nextLineKey(lines))]);
   }
 
   async function submit(event: React.FormEvent) {
@@ -155,7 +187,9 @@ export function CastProposer({
         `/api/episodes/${encodeURIComponent(youtubeId)}/participants/batch`,
         { items },
       );
-      reset();
+      // Only a 2xx forgets the draft. The batch is all-or-nothing, so anything
+      // else means the whole cast still exists nowhere but this browser.
+      draft.clear();
       setOpen(false);
       notify.success(copy.episode.castProposed);
       await onProposed();
@@ -171,7 +205,7 @@ export function CastProposer({
 
   if (!open) {
     return (
-      <Button variant="outline" size="sm" className="mt-3" onClick={start}>
+      <Button variant="outline" size="sm" className="mt-3" onClick={start} disabled={!ready}>
         <UserPlus className="h-4 w-4" />
         {signedIn ? copy.episode.castAdd : copy.episode.castSignedOut}
       </Button>
@@ -181,6 +215,8 @@ export function CastProposer({
   return (
     <form onSubmit={submit} className="mt-3 rounded-lg border border-border bg-card p-3">
       <p className="mb-2.5 text-small font-semibold">{copy.episode.castAddTitle}</p>
+
+      {draft.restored ? <DraftNotice onDiscard={draft.clear} /> : null}
 
       <ul className="flex flex-col gap-2.5">
         {lines.map((line) => (
@@ -237,9 +273,7 @@ export function CastProposer({
                   className="size-[34px]"
                   aria-label={copy.episode.castRowRemove}
                   onClick={() =>
-                    setLines((current) =>
-                      current.filter((other) => other.key !== line.key),
-                    )
+                    setLines(lines.filter((other) => other.key !== line.key))
                   }
                 >
                   <X className="size-3.5" aria-hidden strokeWidth={2.6} />
@@ -265,8 +299,12 @@ export function CastProposer({
             variant="ghost"
             size="sm"
             onClick={() => {
+              // Keeps the lines. Closing a form is not consent to throw away
+              // the cast someone just spent minutes recognising - discarding
+              // is the named action on the notice above.
+              draft.acknowledge();
               setOpen(false);
-              reset();
+              setError(null);
             }}
           >
             {copy.episode.momentCancel}

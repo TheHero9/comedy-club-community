@@ -162,3 +162,27 @@ any i18n library before this is actually scheduled.
   against the Clerk path.
 - **Channels** - only `@ivankirkov1` is ingested. The remaining 5-7 channel URLs
   are needed before the grid has anything to compare.
+
+## Moment/community-content audit trail (added 2026-08-21)
+
+**Deferred:** a server-side audit trail for community content, so "my moment
+vanished" is answerable in one query instead of a multi-day sweep of the Railway
+proxy log.
+
+**Context:** `specs/23-losing-what-you-typed/01-a-write-that-never-left.md`. The
+client-side protections shipped (drafts + the anonymous-write guard) *prevent*
+loss; they cannot *explain* a row that is already missing. Answering the original
+report took windowed queries across five days of logs and still ended
+unexplained.
+
+**Shape:** a soft-delete (`deleted_at`) or a small audit row on `Moment`,
+`Comment` and `EpisodeTopic`, written by the delete endpoints and by admin
+actions.
+
+**Why it was not done now:** it is a schema change against production Postgres,
+and CLAUDE.md requires that to be asked for explicitly. The owner chose the
+client-side scope in this round.
+
+**Cheap precursor, no migration:** the next moment created in production reveals
+whether any row was ever created and deleted - id **883** means the sequence
+never moved past 882, **884+** means rows are missing and the gap counts them.

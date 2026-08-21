@@ -934,6 +934,10 @@ const en = {
     rateLimited: "Too many requests. Slow down a little.",
     server: "The API returned an error.",
     parse: "The API returned a response we cannot read.",
+    // 🚨 Deliberately NOT `unauthorized`. That one answers a 401 the server
+    // sent; this one answers a write we refused to send, and the difference
+    // the member needs is the second sentence: nothing was thrown away.
+    signedOut: "You are signed out. Sign in and save again - your text is kept.",
   },
 
   common: {
@@ -947,6 +951,11 @@ const en = {
     more: "more",
     cancel: "Cancel",
     separator: ".",
+    // Shown when a composer reopens with text it kept through a failed save,
+    // a reload or a closed tab. Said out loud so the restored text does not
+    // read as the site having submitted something on the member's behalf.
+    draftRestored: "We kept what you had typed.",
+    draftDiscard: "Discard it",
     months: MONTHS_EN,
   },
 };
@@ -1659,6 +1668,7 @@ const bg: Copy = {
     rateLimited: "Твърде много заявки. Забави малко.",
     server: "API върна грешка.",
     parse: "API върна отговор, който не можем да прочетем.",
+    signedOut: "Излязъл си от профила. Влез и запази пак - текстът ти е запазен.",
   },
 
   common: {
@@ -1672,6 +1682,8 @@ const bg: Copy = {
     more: "още",
     cancel: "Отказ",
     separator: ".",
+    draftRestored: "Запазихме това, което беше написал.",
+    draftDiscard: "Изтрий го",
     months: MONTHS_BG,
   },
 };

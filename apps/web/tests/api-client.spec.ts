@@ -708,3 +708,96 @@ describe("4.41-4.43 getHealthResult", () => {
     ).toBe(false);
   });
 });
+
+describe("4.44-4.50 a write never goes out anonymous", () => {
+  /**
+   * 🚨 THE REGRESSION THESE EXIST FOR. On 2026-08-20 two cast submissions left
+   * this client with no Authorization header, because `viewerToken()` returns
+   * null on every failure it can hit (Clerk not booted, session expired in a
+   * tab left open, an offline refresh). The API answered 401 - correctly - and
+   * the member's typed cast was gone.
+   *
+   * `null` is the RIGHT answer for a read: an anonymous request beats a crash.
+   * It is the wrong answer for a write, and the difference is what these pin.
+   *
+   * Every row asserts against `mock.requests.length`, so "the request was never
+   * sent" is a claim about bytes on a socket rather than about a stub.
+   */
+  it("4.44 refuses a POST when getToken yields null, and sends NOTHING", async () => {
+    const { createApiClient, isApiError } = await client();
+    const authed = createApiClient({ getToken: () => null });
+
+    await expect(authed.post("/api/episodes/uA41ekQ4IEE/moments", { label: "x" })).rejects.toSatisfy(
+      (error: unknown) => isApiError(error) && error.kind === "unauthenticated" && error.status === 0,
+    );
+    // The point of the guard: no round trip at all.
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("4.45 refuses every unsafe verb, not just POST", async () => {
+    const { createApiClient } = await client();
+    const authed = createApiClient({ getToken: async () => null });
+
+    await expect(authed.put("/api/me/avatar", {})).rejects.toThrow();
+    await expect(authed.patch("/api/me", {})).rejects.toThrow();
+    await expect(authed.delete("/api/moments/1")).rejects.toThrow();
+    expect(mock.requests).toHaveLength(0);
+  });
+
+  it("4.46 still sends a GET with no token - reads stay anonymous-capable", async () => {
+    // 🚨 The guard must not turn every signed-out read into an error. The
+    // episode page fetches viewer state opportunistically and a thrown read
+    // inside a Server Component is a 500 page.
+    const { createApiClient } = await client();
+    const authed = createApiClient({ getToken: () => null });
+
+    await authed.get("/api/episodes/uA41ekQ4IEE/me");
+    expect(mock.requests).toHaveLength(1);
+    expect(mock.lastRequest().headers.authorization).toBeUndefined();
+  });
+
+  it("4.47 sends the write normally once a token exists", async () => {
+    const { createApiClient } = await client();
+    const authed = createApiClient({ getToken: () => "real-token" });
+
+    await authed.post("/api/episodes/uA41ekQ4IEE/moments", { label: "x" });
+    expect(mock.requests).toHaveLength(1);
+    expect(mock.lastRequest().headers.authorization).toBe("Bearer real-token");
+  });
+
+  it("4.48 leaves a client with NO getToken alone", async () => {
+    // ⚠️ The discriminator is "was this client built to carry an identity",
+    // not "is there a token". The public `api` client has no getToken, so its
+    // requests are anonymous by design and must not start throwing.
+    const { createApiClient } = await client();
+    const anonymous = createApiClient();
+
+    await anonymous.post("/api/anything", { a: 1 });
+    expect(mock.requests).toHaveLength(1);
+  });
+
+  it("4.49 honours an explicit per-call token even when getToken is null", async () => {
+    const { createApiClient } = await client();
+    const authed = createApiClient({ getToken: () => null });
+
+    await authed.post("/api/episodes/x/moments", { label: "y" }, { token: "explicit" });
+    expect(mock.lastRequest().headers.authorization).toBe("Bearer explicit");
+  });
+
+  it("4.50 carries the localised 'your text is kept' message, not the 401 one", async () => {
+    // 🚨 Deliberately NOT copy.errors.unauthorized. That answers a 401 the
+    // server sent; this answers a write we refused, and the sentence the
+    // member needs is that nothing was thrown away.
+    const { createApiClient } = await client();
+    const authed = createApiClient({ getToken: () => null });
+
+    // ⚠️ `rejects`, never a `.catch()` carrying the assertions. A catch block
+    // that never runs is a test that passes because nothing was checked - the
+    // exact shape `e2e/fixtures.ts` and this repo's testing rules ban.
+    await expect(authed.post("/api/reports", { reason: "x" })).rejects.toMatchObject({
+      kind: "unauthenticated",
+      userMessage: copy.errors.signedOut,
+    });
+    expect(copy.errors.signedOut).not.toBe(copy.errors.unauthorized);
+  });
+});
