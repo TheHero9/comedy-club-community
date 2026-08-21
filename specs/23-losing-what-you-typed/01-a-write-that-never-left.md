@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-21
 **Trigger:** owner report - "I added a moment yesterday and now I see no moments at all on it"
-**Status:** ✅ Built. 254 Vitest + 422 E2E green, budgets unchanged.
+**Status:** ✅ Built, deployed and verified serving. 254 Vitest + 422 E2E green,
+budgets unchanged. **The original report is resolved** - see the postscript.
 
 ---
 
@@ -50,11 +51,16 @@ was deleted anywhere. What the owner *did* do on that episode on 08-20 was add
 four cast members (21:03 local) and approve them (22:14 local) - all four are
 still there.
 
-**The moment itself remains unexplained**, and the spec says so rather than
-inventing a mechanism. The one measurement that would settle it is the value of
-`podcast_moment_id_seq`: the next moment created in production will be id **883**
-if nothing was ever created after 08-16, or **884+** if rows were created and
-deleted. That check is one write away and needs no infrastructure access.
+At the time of writing **the moment itself was unexplained**, and this section
+deliberately said so rather than inventing a mechanism. The one measurement that
+would settle it is the value of `podcast_moment_id_seq`: the next moment created
+in production is id **883** if nothing was ever created after 08-16, or **884+**
+if rows were created and deleted. That check is one write away and needs no
+infrastructure access.
+
+> ✅ **Answered the same day - see the postscript at the end of this file.** The
+> next moment came back as **883**. Nothing was ever created and deleted; the
+> write simply never reached the database.
 
 ### The loss that IS explained
 
@@ -234,3 +240,50 @@ the escape hatch and then did not use it.
   soft-delete or audit row on `Moment` would make it one query - deferred because
   it is a schema change against production Postgres and was not approved in this
   round. Logged in `NEXT_TIME.md`.
+
+---
+
+## Postscript, same day: the question was answered, and a dead number removed
+
+### The id sequence closed it
+
+The owner added four moments to `uA41ekQ4IEE` right after the deploy. They came
+back as ids **883, 884, 885, 886** - contiguous, starting at exactly 883.
+
+🚨 **The sequence had never advanced past 882.** That rules out the frightening
+branch: no `Moment` row was ever created after 08-16 and then deleted.
+**Yesterday's moment never reached the database at all.** It was not lost from
+storage; the write never landed - which is exactly what the proxy log said all
+along (zero non-GET requests to any `/moments` path across 6,478 logged
+requests) and exactly what the anonymous-write path made possible.
+
+The four writes themselves were clean: `POST .../moments 200` in 135-315ms each,
+each followed by the composer's re-fetch, no 401s and no retries. The labels were
+searchable within seconds (`мушкато`, `Лайкики` and `сока на боклука` all return
+the episode with `matched_moments` populated), so the Celery reindex fired too.
+
+### `Moment.score` was a reader with no writer
+
+The owner then asked what the `0` on the right of each moment was.
+
+- `Moment.score` is a model field, `default=0`
+- **No writer anywhere in the codebase.** The only reference was the serializer
+  reading it
+- **No `MomentVote` model** - unlike `EpisodeTopicVote`, which is real
+- **No vote endpoint** on any moment route
+
+So it printed a literal `0` on every moment in the catalogue, permanently, and
+nothing could ever change it. Removed from the render.
+
+- ✅ **`score` stays on the model and in `MomentOut`.** That is where real voting
+  would land, and removing it from the schema would be an API contract change
+  for no gain. `copy.episode.momentVotes` is deleted from both dictionaries so
+  the number cannot drift back in by accident; it comes back with the feature.
+- 🚨 **This is the mirror of "an endpoint with no reader is not a feature"**
+  (spec 17). A reader with no writer is not one either, and it is worse in one
+  way: an unused endpoint is invisible, whereas an unwritten field is on screen
+  being read as meaningful. **Before rendering a field, name what writes it.**
+- ⚠️ **No local test could have caught this, or can guard it now.** The local DB
+  holds zero `Moment` rows since the demo clear on 08-13, so the moment row
+  never renders locally and any spec asserting on it passes by iterating
+  nothing. It was verified against production.

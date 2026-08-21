@@ -400,7 +400,6 @@ const en = {
     momentsEmptyBody:
       "A timestamp plus a few words. That is what makes the episode findable later.",
     momentsEmptyCta: "Add the first moment",
-    momentVotes: (n: number) => (n > 0 ? `+${n}` : String(n)),
     community: "Community ratings",
     writeReview: "Write a review",
     spoilerNotice: "Contains spoilers",
@@ -1175,7 +1174,6 @@ const bg: Copy = {
     momentsEmptyBody:
       "Час плюс няколко думи. Това прави епизода намираем по-късно.",
     momentsEmptyCta: "Добави първия момент",
-    momentVotes: (n: number) => (n > 0 ? `+${n}` : String(n)),
     community: "Оценки от общността",
     writeReview: "Напиши мнение",
     spoilerNotice: "Съдържа спойлери",

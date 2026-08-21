@@ -293,9 +293,22 @@ function MomentBody({
           </span>
         ) : null}
       </span>
-      <span className="font-mono text-[12.5px] text-muted-foreground tabular">
-        {copy.episode.momentVotes(moment.score)}
-      </span>
+      {/* 🚨 NO VOTE COUNT. `Moment.score` is a model field with a default of 0
+          and NO WRITER anywhere in the codebase - there is no `MomentVote`
+          model (unlike `EpisodeTopicVote`, which is real) and no vote endpoint
+          on any moment route. So it rendered a literal "0" on every moment in
+          the catalogue, forever, and nothing could ever change it.
+
+          Owner's question was simply "what's that number", which is the same
+          reaction the "yours" chip got: a control that restates nothing is
+          worse than an absent one, because the reader assumes it means
+          something. This is the mirror of "an endpoint with no reader is not a
+          feature" - a reader with no writer is not one either.
+
+          `score` stays on the model and in `MomentOut`: it is where a real
+          voting feature would land, and dropping it from the schema would be
+          an API contract change for no gain. If voting is ever built, the
+          count comes back HERE, with `copy.episode.momentVotes` restored. */}
     </>
   );
 
