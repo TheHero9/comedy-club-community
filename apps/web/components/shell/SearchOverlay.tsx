@@ -6,13 +6,7 @@ import { ArrowRight, Clock, Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { Thumbnail } from "@/components/shared/Thumbnail";
 import { useCopy } from "@/components/i18n/LocaleProvider";
-import { thumbnailUrl } from "@/lib/format";
-import {
-  readRecentEpisodes,
-  RECENT_EPISODES_SHOWN,
-} from "@/lib/recent-episodes";
 import { readRecentSearches, rememberSearch } from "@/lib/recent-searches";
 
 /**
@@ -60,24 +54,17 @@ export function SearchOverlay({
    * old query for a frame, and setState inside one schedules a cascading render
    * that `react-hooks/set-state-in-effect` rejects.
    */
-  const [pendingEpisode, setPendingEpisode] = useState<string | null>(null);
-
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
       setValue(initialQuery);
-      setPendingEpisode(null);
     }
   }
 
   // Recomputed whenever the sheet opens. A pure localStorage read, so it
   // belongs in render rather than in state an effect has to keep in sync.
   const recent = useMemo(() => (open ? readRecentSearches() : []), [open]);
-  const recentEpisodes = useMemo(
-    () => (open ? readRecentEpisodes().slice(0, RECENT_EPISODES_SHOWN) : []),
-    [open],
-  );
 
   const trimmed = value.trim();
 
@@ -115,21 +102,6 @@ export function SearchOverlay({
     rememberSearch(next);
     startTransition(() => {
       router.push(`/search?q=${encodeURIComponent(next)}`);
-    });
-  }
-
-  /**
-   * Same held-open navigation as `go`, pointed at an episode. `/e/[youtubeId]`
-   * cannot have a `loading.tsx` (it calls `notFound()`), so without the
-   * transition the sheet would close onto the old page for the whole round
-   * trip - the exact "it goes back for a second" the search path already fixed.
-   * `pendingEpisode` is which row was tapped, so that row can say so.
-   */
-  function goEpisode(youtubeId: string) {
-    if (pending) return;
-    setPendingEpisode(youtubeId);
-    startTransition(() => {
-      router.push(`/e/${encodeURIComponent(youtubeId)}`);
     });
   }
 
@@ -245,52 +217,6 @@ export function SearchOverlay({
         server-side suggestions - so the heading says so rather than reusing
         the old "SUGGESTIONS" label, which described something else.
       */}
-      {/*
-        The three most recently OPENED episodes, so the person who closed the
-        app mid-podcast and heard a good moment can get back to it in one tap
-        instead of re-searching the title every time (owner ask, 2026-08-29).
-
-        Same empty-field gate as the searches below - the sheet must not
-        change height while someone is typing - and rendered ABOVE them
-        because "back to the episode I was just on" is the sharper intent.
-      */}
-      {trimmed.length === 0 && recentEpisodes.length > 0 ? (
-        <div className="animate-in fade-in duration-240">
-          <p className="text-eyebrow mt-[18px]">{copy.search.recentEpisodes}</p>
-          <div className="mt-2.5 flex flex-col gap-1.5">
-            {recentEpisodes.map((item) => (
-              <button
-                key={item.youtubeId}
-                type="button"
-                onClick={() => goEpisode(item.youtubeId)}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-2 text-left outline-none transition-colors duration-120 hover:bg-elevated"
-              >
-                <Thumbnail
-                  src={thumbnailUrl(item.youtubeId)}
-                  sizes="88px"
-                  className="w-[88px] shrink-0 rounded-lg"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="line-clamp-2 block text-[13.5px] leading-snug">
-                    {item.title}
-                  </span>
-                  <span className="mt-0.5 block text-[11.5px] text-subtle-foreground">
-                    {item.channelName}
-                  </span>
-                </span>
-                {pendingEpisode === item.youtubeId && pending ? (
-                  <Loader2
-                    className="mr-1 size-4 shrink-0 animate-spin text-subtle-foreground"
-                    aria-hidden
-                    strokeWidth={2.6}
-                  />
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
       {trimmed.length === 0 && recent.length > 0 ? (
         <div className="animate-in fade-in duration-240">
           <p className="text-eyebrow mt-[18px]">{copy.search.recent}</p>

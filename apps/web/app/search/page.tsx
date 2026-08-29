@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AudioLines, CircleDashed, Tags, Type, type LucideIcon } from "lucide-react";
 import type { Metadata } from "next";
 
+import { RecentlyOpened } from "@/components/search/RecentlyOpened";
 import { SearchResultCard } from "@/components/search/SearchResultCard";
 import { SearchTrigger } from "@/components/search/SearchTrigger";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -149,6 +150,17 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
           <p className="mx-auto mt-3.5 max-w-[520px] text-small text-subtle-foreground">
             {copy.search.scopeNote}
           </p>
+
+          {/*
+            The one section that has earned a place under the field since the
+            2026-08-16 "field and nothing else" ruling (owner ask, 2026-08-29).
+            It differs from the popular-topics list that ruling deleted in the
+            way that matters: these are the viewer's OWN last-opened episodes,
+            not a machine's suggestion of what to search for, and the section
+            simply is not there for a first-time visitor - localStorage is
+            empty, the component returns null, the page stays the field alone.
+          */}
+          <RecentlyOpened className="mt-10 text-left" />
         </div>
       </Page>
     );
