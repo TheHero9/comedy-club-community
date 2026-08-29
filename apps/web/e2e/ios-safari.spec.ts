@@ -27,6 +27,37 @@ type EpisodeList = Schema<"EpisodeListOut">;
 /** Apple's Human Interface Guidelines minimum for a touch target. */
 const MIN_TAP_PX = 44;
 
+/**
+ * 🚨 Google's image CDNs are answered LOCALLY in this project, and only this
+ * one. WebKit sending an iPhone UA from an automation TLS fingerprint trips
+ * Google's bot detection - `yt3.googleusercontent.com` avatar requests started
+ * answering 429 to exactly this browser (curl with the same UA: 200; WebKit
+ * with its default UA: 200; Chromium projects: unaffected), and those 429s
+ * land in the console guard and fail tests that assert nothing about images.
+ * It is Google-side rate state, so it appears after enough suite runs in a day
+ * and lasts hours - a dependency on Google's goodwill toward spoofed-UA
+ * automation is flakiness by construction.
+ *
+ * This does not loosen what section 14 measures: its assertions are
+ * engine-specific (focus zoom, scrollWidth, touch targets, sheet height) and
+ * every image on the site sits in a CSS-sized container, so layout is
+ * identical with a one-pixel body. The real URLs stay covered elsewhere - the
+ * Chromium projects fetch them live and tests/image-loader.spec.ts pins them.
+ * ❌ Do NOT "simplify" this to a console allow-list entry: silencing the error
+ * would also silence a real 4xx from our own pages.
+ */
+const IMAGE_CDN_PATTERN = /^https:\/\/(img\.youtube\.com|yt3\.googleusercontent\.com)\//;
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+test.beforeEach(async ({ page }) => {
+  await page.route(IMAGE_CDN_PATTERN, (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: ONE_PIXEL_PNG }),
+  );
+});
+
 /** Below this, Safari zooms the viewport when the control takes focus. */
 const MIN_FIELD_FONT_PX = 16;
 

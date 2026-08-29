@@ -18,6 +18,7 @@ import {
 
 import { CommentCard } from "@/components/episode/CommentCard";
 import { EpisodeDescription } from "@/components/episode/EpisodeDescription";
+import { RecentEpisodeMark } from "@/components/episode/RecentEpisodeMark";
 import { EpisodeRailCard } from "@/components/episode/EpisodeCard";
 import { EpisodeViewerProvider } from "@/components/episode/viewer/EpisodeViewerContext";
 import { CastSection } from "@/components/episode/CastSection";
@@ -206,6 +207,13 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
         eliteBand: episode.elite_band ?? null,
       }}
     >
+      {/* Opening the page is the signal: this is what feeds the search
+          overlay's "recently opened" re-entries. */}
+      <RecentEpisodeMark
+        youtubeId={episode.youtube_id}
+        title={episode.title}
+        channelName={episode.channel_name}
+      />
       <div className="mx-auto w-full max-w-[1216px]">
         {/* Header band. The H1 is the canonical location for the title, so it
             is NOT clamped: 3 of 20 real titles need 4 lines at 390px, and
