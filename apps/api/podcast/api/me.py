@@ -51,6 +51,7 @@ from .schemas import (
     RatingIn,
     RatingOut,
     ViewerStateOut,
+    WatchCalendarOut,
     WatchIn,
     WatchSummaryOut,
 )
@@ -400,6 +401,51 @@ def delete_watch_event(request, event_id: int):
 
 
 WATCH_HISTORY_LIMIT = 50
+
+# A year of one person's viewings. Nobody logs three a day for a year, but the
+# cap exists so a scripted client cannot make this endpoint serialize an
+# unbounded table; `total` in the response is what makes the cap visible.
+WATCH_CALENDAR_LIMIT = 1000
+
+
+@router.get("/me/watch-days", response=WatchCalendarOut)
+def watch_calendar(request, year: int | None = Query(None, ge=1970, le=2100)):
+    """Every viewing this user logged in one year, for the profile calendar.
+
+    Grouping by day is the client's job - the payload is a flat, dated list
+    with just enough of each episode to render a link. No default year magic
+    beyond "this year": the calendar navigates by month and asks again when it
+    crosses into another year.
+    """
+    user = request.auth
+    resolved_year = year or timezone.localdate().year
+
+    years = [
+        d.year
+        for d in WatchEvent.objects.filter(user=user).dates("watched_on", "year")
+    ]
+
+    queryset = (
+        WatchEvent.objects.filter(user=user, watched_on__year=resolved_year)
+        .select_related("episode", "episode__channel")
+        .order_by("watched_on", "id")
+    )
+
+    return {
+        "year": resolved_year,
+        "total": queryset.count(),
+        "years": years,
+        "events": [
+            {
+                "id": event.id,
+                "watched_on": event.watched_on,
+                "youtube_id": event.episode.youtube_id,
+                "title": event.episode.title,
+                "channel_name": event.episode.channel.name,
+            }
+            for event in queryset[:WATCH_CALENDAR_LIMIT]
+        ],
+    }
 
 
 def _watch_summary(user, episode) -> dict:

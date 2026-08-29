@@ -123,6 +123,61 @@ def test_watching_is_a_log_not_a_flag(client, episode, alice, as_alice):
     assert WatchEvent.objects.count() == 3
 
 
+def _log(client, episode, iso_day, headers):
+    return client.post(
+        f"{BASE}/episodes/{episode.youtube_id}/watch",
+        data={"watched_on": iso_day},
+        content_type="application/json",
+        **headers,
+    )
+
+
+def test_watch_calendar_returns_one_year_with_episode_context(
+    client, episode, alice, bob, as_alice
+):
+    """The profile calendar: a flat dated list, filtered to the asked year."""
+    _log(client, episode, "2026-03-05", as_alice)
+    _log(client, episode, "2026-03-05", as_alice)  # a rewatch on the same day is data
+    _log(client, episode, "2025-12-31", as_alice)
+
+    body = client.get(f"{BASE}/me/watch-days?year=2026", **as_alice).json()
+
+    assert body["year"] == 2026
+    assert body["total"] == 2
+    assert body["years"] == [2025, 2026]
+    assert [e["watched_on"] for e in body["events"]] == ["2026-03-05", "2026-03-05"]
+    assert body["events"][0]["youtube_id"] == episode.youtube_id
+    assert body["events"][0]["title"] == episode.title
+    assert body["events"][0]["channel_name"] == episode.channel.name
+
+
+def test_watch_calendar_defaults_to_the_current_year(client, episode, alice, as_alice):
+    from django.utils import timezone
+
+    today = timezone.localdate()
+    _log(client, episode, str(today), as_alice)
+    _log(client, episode, "2019-01-01", as_alice)
+
+    body = client.get(f"{BASE}/me/watch-days", **as_alice).json()
+
+    assert body["year"] == today.year
+    assert body["total"] == 1
+    assert body["events"][0]["watched_on"] == str(today)
+
+
+def test_watch_calendar_is_scoped_to_the_actor(
+    client, episode, alice, bob, as_alice, as_bob
+):
+    """🔒 Bob's calendar must never show Alice's viewings."""
+    _log(client, episode, "2026-02-02", as_alice)
+
+    body = client.get(f"{BASE}/me/watch-days?year=2026", **as_bob).json()
+
+    assert body["total"] == 0
+    assert body["events"] == []
+    assert body["years"] == []
+
+
 def test_viewer_state_reports_everything_in_one_call(client, episode, alice, as_alice):
     _rate(client, episode, 7, as_alice)
     client.post(

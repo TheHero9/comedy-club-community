@@ -23,6 +23,7 @@ import { HelpContact } from "@/components/profile/HelpContact";
 import { InstallAppGuide } from "@/components/profile/InstallAppGuide";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { SignedOutNotice } from "@/components/profile/SignedOutNotice";
+import { WatchCalendar } from "@/components/profile/WatchCalendar";
 import { MyReports } from "@/components/shared/MyReports";
 import { PersonAvatar } from "@/components/shared/PersonAvatar";
 import { Page, PageHeading, StatTile } from "@/components/shell/Page";
@@ -303,6 +304,13 @@ export default function ProfilePage() {
             </p>
           )}
         </section>
+      </div>
+
+      {/* The year recap. Full width and OUTSIDE the desktop sidebar, because
+          the sidebar is `hidden md:block` and most of this audience is on a
+          phone - a calendar only desktop can see is not a recap. */}
+      <div className="mt-8 md:max-w-[420px]">
+        <WatchCalendar />
       </div>
 
       <div className="mt-8">

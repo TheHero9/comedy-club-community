@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Check, Plus } from "lucide-react";
 
 import { useEpisodeViewer } from "@/components/episode/viewer/EpisodeViewerContext";
 import { notify } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { ConfirmIconButton } from "@/components/shared/ConfirmButton";
+import { MonthCalendar } from "@/components/shared/MonthCalendar";
 import { Sheet } from "@/components/ui/sheet";
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { formatDate, relativeDay, toIsoDay } from "@/lib/format";
@@ -19,8 +20,14 @@ import { cn } from "@/lib/utils";
  * backdated ones, which is why the button says "Гледано 3x" rather than
  * carrying a checkmark.
  *
+ * The picker is a real calendar (Monday-first, month navigation) rather than
+ * the flat 1-31 strip it started as - a viewing from June is reachable by
+ * walking back, not only through the quick-offset chips.
+ *
  * 🚨 Future days refuse the tap and say so. Silently ignoring the press reads
  * as a broken button; greying them out with no explanation reads as a bug.
+ * Future MONTHS simply are not navigable - the forward chevron stops at the
+ * current one, so the toast only ever fires inside the current month.
  */
 
 function shiftDays(from: Date, days: number): Date {
@@ -44,20 +51,21 @@ export function WatchLogSheet() {
   // server output, so it cannot cause a hydration mismatch.
   const today = useMemo(() => new Date(), []);
   const todayIso = toIsoDay(today);
+  const thisMonth = { year: today.getFullYear(), month: today.getMonth() };
+
+  const [view, setView] = useState(thisMonth);
+
+  // Reopening starts back at the current month - a sheet left on last January
+  // by an earlier backdate would otherwise open there next time and read as
+  // the calendar being broken. Adjust-during-render, never in an effect
+  // (`react-hooks/set-state-in-effect` is an error in this repo).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setView(thisMonth);
+  }
 
   const logged = new Set(viewer.watchEvents.map((event) => event.watched_on));
-
-  const days = useMemo(() => {
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const count = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: count }, (_, index) => {
-      const date = new Date(year, month, index + 1);
-      return { day: index + 1, iso: toIsoDay(date) };
-    });
-  }, [today]);
-
-  const monthLabel = `${copy.common.months[today.getMonth()]} ${today.getFullYear()}`;
 
   return (
     <Sheet
@@ -84,8 +92,13 @@ export function WatchLogSheet() {
       </div>
 
       <p className="text-eyebrow mt-4.5">{copy.watchLog.pickDate}</p>
-      <div className="mt-2.5 grid grid-cols-7 gap-[5px]">
-        {days.map((entry) => {
+      <MonthCalendar
+        className="mt-2.5"
+        year={view.year}
+        month={view.month}
+        max={thisMonth}
+        onNavigate={(year, month) => setView({ year, month })}
+        renderDay={(entry) => {
           const isLogged = logged.has(entry.iso);
           const isFuture = entry.iso > todayIso;
           const isPending = viewer.pendingDay === entry.iso;
@@ -121,10 +134,9 @@ export function WatchLogSheet() {
               {entry.day}
             </button>
           );
-        })}
-      </div>
-      <p className="mt-2 text-[11.5px] text-subtle-foreground">{monthLabel}</p>
-      <p className="mt-1 text-[11.5px] text-faint-foreground">
+        }}
+      />
+      <p className="mt-2 text-[11.5px] text-faint-foreground">
         {copy.watchLog.toggleOffHint}
       </p>
 

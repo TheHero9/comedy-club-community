@@ -146,7 +146,14 @@ async function waitForResults(page: Page): Promise<void> {
 }
 
 async function regionIds(page: Page, testId: string): Promise<string[]> {
-  const region = page.getByTestId(testId);
+  // 🚨 `.first()`, because the h1 guard in `waitForResults` cannot fully close
+  // the streaming window: it can pass in the instant BEFORE React flushes the
+  // completed boundary into its `<div hidden>` staging area, and an unscoped
+  // read taken in that window sees every region TWICE and reports doubled ids
+  // (caught live 2026-08-29: regions=2, links=2, h1s=2, settling to 1 every
+  // time). Both copies are renders of the same server payload, so reading the
+  // first is reading the answer - nothing about WHICH ids render is loosened.
+  const region = page.getByTestId(testId).first();
   if ((await region.count()) === 0) return [];
   const hrefs = await region
     .locator('a[href^="/e/"]')

@@ -482,6 +482,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/watch-days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Watch Calendar
+         * @description Every viewing this user logged in one year, for the profile calendar.
+         *
+         *     Grouping by day is the client's job - the payload is a flat, dated list
+         *     with just enough of each episode to render a link. No default year magic
+         *     beyond "this year": the calendar navigates by month and asks again when it
+         *     crosses into another year.
+         */
+        get: operations["podcast_api_me_watch_calendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/episodes/{youtube_id}/favorite": {
         parameters: {
             query?: never;
@@ -2046,6 +2071,39 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /**
+         * WatchCalendarEventOut
+         * @description One logged viewing with just enough of the episode to link and label it.
+         */
+        WatchCalendarEventOut: {
+            /** Id */
+            id: number;
+            /**
+             * Watched On
+             * Format: date
+             */
+            watched_on: string;
+            /** Youtube Id */
+            youtube_id: string;
+            /** Title */
+            title: string;
+            /** Channel Name */
+            channel_name: string;
+        };
+        /** WatchCalendarOut */
+        WatchCalendarOut: {
+            /** Year */
+            year: number;
+            /** Total */
+            total: number;
+            /** Years */
+            years: number[];
+            /**
+             * Events
+             * @default []
+             */
+            events: components["schemas"]["WatchCalendarEventOut"][];
+        };
         /** FavoriteOut */
         FavoriteOut: {
             /** Episode Id */
@@ -3098,6 +3156,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+        };
+    };
+    podcast_api_me_watch_calendar: {
+        parameters: {
+            query?: {
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchCalendarOut"];
                 };
             };
         };

@@ -214,6 +214,28 @@ class WatchSummaryOut(Schema):
     events: list[WatchEventOut] = []
 
 
+class WatchCalendarEventOut(Schema):
+    """One logged viewing with just enough of the episode to link and label it."""
+
+    id: int
+    watched_on: date
+    youtube_id: str
+    title: str
+    channel_name: str
+
+
+class WatchCalendarOut(Schema):
+    year: int
+    # `total` is the year's real count; `events` is capped at
+    # WATCH_CALENDAR_LIMIT, so a difference between the two is visible rather
+    # than a silent truncation.
+    total: int
+    # Every year this user has at least one viewing in, so the client offers
+    # only years that can show something.
+    years: list[int]
+    events: list[WatchCalendarEventOut] = []
+
+
 class FavoriteOut(Schema):
     episode_id: int
     is_favorite: bool

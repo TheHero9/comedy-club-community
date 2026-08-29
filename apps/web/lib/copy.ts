@@ -80,6 +80,17 @@ const MONTHS_EN: Months = [
 ];
 
 /**
+ * Weekday abbreviations for calendar headers, MONDAY FIRST. The week starting
+ * on Monday is a product requirement, not a locale preference - both
+ * dictionaries share the order and only the letters differ.
+ */
+type Weekdays = readonly string[];
+
+const WEEKDAYS_BG: Weekdays = ["пн", "вт", "ср", "чт", "пт", "сб", "нд"];
+
+const WEEKDAYS_EN: Weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/**
  * "6th", "21st", "3rd" - English only, and used only by the membership preview.
  *
  * 🚨 Deliberately NOT shared with the Bulgarian dictionary. Bulgarian ordinals
@@ -750,6 +761,14 @@ const en = {
     linkTags: "My labels",
     linkMemberships: "My memberships",
     historyTitle: "Watch history",
+    watchCalendarTitle: "Watch calendar",
+    watchCalendarHint:
+      "Days with a logged viewing are marked. Tap one to see what you watched.",
+    watchCalendarYearTotal: (n: number, year: number) =>
+      n === 1 ? `1 viewing in ${year}` : `${n} viewings in ${year}`,
+    watchCalendarEmpty:
+      "Nothing logged yet. Mark an episode as watched and the day will light up here.",
+    watchCalendarDayTitle: (date: string) => `Watched on ${date}`,
     ratingsEmptyTitle: "No ratings yet",
     ratingsEmptyBody:
       "You have not rated anything yet. Every episode page has a rate button.",
@@ -956,6 +975,9 @@ const en = {
     draftRestored: "We kept what you had typed.",
     draftDiscard: "Discard it",
     months: MONTHS_EN,
+    weekdaysShort: WEEKDAYS_EN,
+    prevMonth: "Previous month",
+    nextMonth: "Next month",
   },
 };
 
@@ -1505,6 +1527,14 @@ const bg: Copy = {
     linkTags: "Моите етикети",
     linkMemberships: "Моите членства",
     historyTitle: "История на гледане",
+    watchCalendarTitle: "Календар на гледанията",
+    watchCalendarHint:
+      "Дните със записано гледане са отбелязани. Натисни ден, за да видиш какво си гледал.",
+    watchCalendarYearTotal: (n: number, year: number) =>
+      n === 1 ? `1 гледане през ${year}` : `${n} гледания през ${year}`,
+    watchCalendarEmpty:
+      "Още нищо не е записано. Отбележи епизод като гледан и денят ще светне тук.",
+    watchCalendarDayTitle: (date: string) => `Гледано на ${date}`,
     ratingsEmptyTitle: "Още няма оценки",
     ratingsEmptyBody:
       "Още не си оценил нищо. Всяка страница на епизод има бутон за оценка.",
@@ -1683,6 +1713,9 @@ const bg: Copy = {
     draftRestored: "Запазихме това, което беше написал.",
     draftDiscard: "Изтрий го",
     months: MONTHS_BG,
+    weekdaysShort: WEEKDAYS_BG,
+    prevMonth: "Предишен месец",
+    nextMonth: "Следващ месец",
   },
 };
 

@@ -31,6 +31,7 @@ export type Membership = Schema<"MembershipOut">;
 export type AvatarIcon = Schema<"AvatarIconOut">;
 export type ViewerState = Schema<"ViewerStateOut">;
 export type WatchSummary = Schema<"WatchSummaryOut">;
+export type WatchCalendar = Schema<"WatchCalendarOut">;
 export type RatingResult = Schema<"RatingOut">;
 export type FavoriteResult = Schema<"FavoriteOut">;
 export type EpisodeCast = Schema<"EpisodeCastOut">;
