@@ -7,7 +7,6 @@ import {
   LayoutGrid,
   MessageSquare,
   Play,
-  Plus,
   Radio,
   Sparkles,
   Star,
@@ -298,10 +297,19 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
               system account `import_topic_labels` attributes its work to, not
               a second stored column that could drift. Auto chips take the
               `dashed` variant, which already means "provisional" everywhere
-              else in this design (the unrated grid cell, the add-a-topic
-              placeholder), plus a spark. Community chips keep the solid
-              border they always had.
+              else in this design (the unrated grid cell), plus a spark.
+              Community chips keep the solid border they always had.
+
+              🚨 HIDDEN when the episode has no topics (owner call,
+              2026-09-22). The empty state used to be an "Add the first topic"
+              chip that was a <span> styled as a button - no handler, no link -
+              and it read as a broken control on every episode the labeller
+              had nothing for. There is no topic composer in the web app yet
+              (the API's add/suggest/vote/delete endpoints have no caller; see
+              NEXT_TIME.md), so until there is, a section that can only be
+              empty is a section that should not be there.
             */}
+            {episode.topics.length > 0 ? (
             <Section title={copy.episode.topics} icon={Tags}>
               <div className="mt-3 flex flex-wrap gap-[7px]">
                 {episode.topics.map((topic) => (
@@ -326,17 +334,6 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
                     <LinkPending />
                   </LinkButton>
                 ))}
-                {episode.topics.length === 0 ? (
-                  <span
-                    className={cn(
-                      buttonVariants({ variant: "dashed", size: "xs" }),
-                      "cursor-default",
-                    )}
-                  >
-                    <Plus className="size-3.5" aria-hidden strokeWidth={2.4} />
-                    {copy.episode.addFirstTopic}
-                  </span>
-                ) : null}
               </div>
               {/* Only when there is actually a spark on screen to explain. */}
               {episode.topics.some((topic) => topic.is_auto) ? (
@@ -345,6 +342,7 @@ export default async function EpisodePage({ params }: PageProps<"/e/[youtubeId]"
                 </p>
               ) : null}
             </Section>
+            ) : null}
 
             {/* The raw description, never a placeholder: an episode with none
                 renders nothing here rather than a toggle onto an apology. */}

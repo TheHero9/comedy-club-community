@@ -369,7 +369,6 @@ const en = {
     stream: "Stream",
     playOnYouTube: "Watch on YouTube",
     watchOnYouTube: "Watch on YouTube",
-    addFirstTopic: "Add the first topic",
     /** Section heading over the topic chips. */
     topics: "Topics",
     /**
@@ -1180,7 +1179,6 @@ const bg: Copy = {
     stream: "Стрийм",
     playOnYouTube: "Гледай в YouTube",
     watchOnYouTube: "Гледай в YouTube",
-    addFirstTopic: "Добави първата тема",
     descriptionMore: "още",
     descriptionLess: "по-малко",
     descriptionToggle: "Описание",

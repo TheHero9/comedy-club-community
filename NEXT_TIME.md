@@ -186,3 +186,32 @@ client-side scope in this round.
 **Cheap precursor, no migration:** the next moment created in production reveals
 whether any row was ever created and deleted - id **883** means the sequence
 never moved past 882, **884+** means rows are missing and the gap counts them.
+
+## 🏷️ Topic labels: a composer for the web (added 2026-09-22)
+
+**Context:** an owner report that "Add the first topic" on the episode page did
+nothing. It was a `<span>` styled as a button - no handler, no link - so it read
+as broken on every episode the auto-labeller had nothing for. The section is now
+**hidden when an episode has no topics** (`app/e/[youtubeId]/page.tsx`), which is
+the interim ruling, not the feature.
+
+**What is deferred:** the web has NO way to add a community topic label. The API
+side is complete and tested with no caller:
+
+- `POST /api/episodes/{id}/topics` - free text resolves to one canonical `Topic`
+  by unicode slug (`services/topics.py`), idempotent per (episode, topic), capped
+  at `MAX_TOPICS_PER_EPISODE = 40`
+- `GET /api/topics/suggest?q=` - existing topics as you type, the main defence
+  against near-duplicate spellings
+- `POST /api/episode-topics/{id}/vote`, `DELETE /api/episode-topics/{id}`
+
+**Shape when built:** a client-owned `TopicsSection` like `MomentsSection`
+(the episode fetch is `PUBLIC_CACHE`, so the section must re-read after a
+write); one text field with suggestions, `useDraft` for the typed text, sign-in
+gating through `requireIdentity`; a remove control on the member's own labels,
+which needs the viewer-state call to return the member's `EpisodeTopic` link ids
+(`TopicBriefOut.id` is the TOPIC id, not the link, so delete cannot be wired
+from the chip alone). Voting on chips is a separate design question.
+
+**Dependencies:** none. Types regenerate from the OpenAPI schema; copy in both
+dictionaries; `tests/copy.spec.ts` will catch any literal.
