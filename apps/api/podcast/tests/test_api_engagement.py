@@ -277,3 +277,34 @@ def test_removing_a_verified_membership_recomputes_elite_scores(
     episode.refresh_from_db()
     assert episode.elite_score is None
     assert episode.public_score == 10.0  # public standing is unaffected
+
+
+def test_watch_history_carries_every_logged_date_newest_first(
+    client, episode, alice, as_alice
+):
+    """The history page has to SAY when: one card, all of its dates."""
+    _log(client, episode, "2025-12-30", as_alice)
+    _log(client, episode, "2026-03-05", as_alice)
+    _log(client, episode, "2026-03-05", as_alice)  # a same-day rewatch is data
+
+    body = client.get(f"{BASE}/me/watched", **as_alice).json()
+
+    assert body["meta"]["total"] == 1
+    assert len(body["items"]) == 1
+    card = body["items"][0]
+    assert card["youtube_id"] == episode.youtube_id
+    assert card["watch_count"] == 3
+    assert card["watched_on"] == ["2026-03-05", "2026-03-05", "2025-12-30"]
+
+
+def test_watch_history_dates_are_scoped_to_the_actor(
+    client, episode, alice, bob, as_alice, as_bob
+):
+    """🔒 Bob's viewing of the same episode must not appear on Alice's card."""
+    _log(client, episode, "2026-01-10", as_alice)
+    _log(client, episode, "2026-02-20", as_bob)
+
+    body = client.get(f"{BASE}/me/watched", **as_alice).json()
+
+    assert body["items"][0]["watched_on"] == ["2026-01-10"]
+    assert body["items"][0]["watch_count"] == 1

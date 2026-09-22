@@ -549,7 +549,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Watched */
+        /**
+         * List Watched
+         * @description Watch history: one card per episode, most recently watched first, with
+         *     every logged date on it.
+         *
+         *     The dates come from a second query over just the page's episodes, not from
+         *     a join - a join would multiply the episode rows by their viewings and break
+         *     the pagination, and a per-card lookup would be the N+1 the list endpoints
+         *     are built to avoid.
+         */
         get: operations["podcast_api_me_list_watched"];
         put?: never;
         post?: never;
@@ -2112,6 +2121,63 @@ export interface components {
             is_favorite: boolean;
         };
         /**
+         * WatchedEpisodeOut
+         * @description A history card: the episode plus EVERY date the viewer logged it.
+         *
+         *     Newest first. The history page used to render the plain brief, so a
+         *     rewatch was invisible there - the card looked identical whether it had
+         *     been watched once or five times, and never said when. The dates are the
+         *     reason the page exists.
+         */
+        WatchedEpisodeOut: {
+            /** Id */
+            id: number;
+            /** Youtube Id */
+            youtube_id: string;
+            /** Title */
+            title: string;
+            /** Slug */
+            slug: string;
+            /** Channel Id */
+            channel_id: number;
+            /** Channel Name */
+            channel_name: string;
+            /** Channel Slug */
+            channel_slug: string;
+            /** Upload Date */
+            upload_date: string | null;
+            /** Duration Sec */
+            duration_sec: number | null;
+            /** Thumbnail Url */
+            thumbnail_url: string;
+            /** Content Kind */
+            content_kind: string;
+            /** Members Only */
+            members_only: boolean;
+            /** Public Score */
+            public_score: number | null;
+            /** Elite Score */
+            elite_score: number | null;
+            /** Rating Count */
+            rating_count: number;
+            /** Elite Rating Count */
+            elite_rating_count: number;
+            /** Band */
+            band?: string | null;
+            /** Elite Band */
+            elite_band?: string | null;
+            /** Watched On */
+            watched_on: string[];
+            /** Watch Count */
+            watch_count: number;
+        };
+        /** WatchedListOut */
+        WatchedListOut: {
+            /** Items */
+            items: components["schemas"]["WatchedEpisodeOut"][];
+            meta: components["schemas"]["PaginatedMeta"];
+        };
+        /**
          * PersonalTagOut
          * @description 🔒 Private to the owning user. Never returned on a public endpoint.
          */
@@ -3267,7 +3333,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EpisodeListOut"];
+                    "application/json": components["schemas"]["WatchedListOut"];
                 };
             };
         };

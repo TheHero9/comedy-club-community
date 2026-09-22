@@ -704,6 +704,7 @@ const en = {
     historyEmptyBody:
       "Mark an episode as watched and rewatches will stack up here by date.",
     historyEmptyCta: "Browse the episodes",
+    historyWatchedOn: (dates: string) => `Watched: ${dates}`,
     confirmClearTitle: "Remove from watched?",
     confirmClearBody: "Every logged date for this episode is deleted.",
     confirmClearCta: "Remove it",
@@ -764,12 +765,13 @@ const en = {
     historyTitle: "Watch history",
     watchCalendarTitle: "Watch calendar",
     watchCalendarHint:
-      "Days with a logged viewing are marked. Tap one to see what you watched.",
+      "Days with a logged viewing are marked, with a count when there was more than one. Tap a day to see what you watched.",
     watchCalendarYearTotal: (n: number, year: number) =>
       n === 1 ? `1 viewing in ${year}` : `${n} viewings in ${year}`,
     watchCalendarEmpty:
       "Nothing logged yet. Mark an episode as watched and the day will light up here.",
     watchCalendarDayTitle: (date: string) => `Watched on ${date}`,
+    watchCalendarDayCount: (n: number) => `${n} viewings`,
     ratingsEmptyTitle: "No ratings yet",
     ratingsEmptyBody:
       "You have not rated anything yet. Every episode page has a rate button.",
@@ -1472,6 +1474,7 @@ const bg: Copy = {
     historyEmptyBody:
       "Отбележи епизод като гледан и преслушванията ще се трупат тук по дати.",
     historyEmptyCta: "Разгледай епизодите",
+    historyWatchedOn: (dates: string) => `Гледано: ${dates}`,
     confirmClearTitle: "Да го махнем ли от гледаните?",
     confirmClearBody: "Всички записани дати за този епизод се изтриват.",
     confirmClearCta: "Премахни",
@@ -1531,12 +1534,13 @@ const bg: Copy = {
     historyTitle: "История на гледане",
     watchCalendarTitle: "Календар на гледанията",
     watchCalendarHint:
-      "Дните със записано гледане са отбелязани. Натисни ден, за да видиш какво си гледал.",
+      "Дните със записано гледане са отбелязани, с брой, когато са повече от едно. Натисни ден, за да видиш какво си гледал.",
     watchCalendarYearTotal: (n: number, year: number) =>
       n === 1 ? `1 гледане през ${year}` : `${n} гледания през ${year}`,
     watchCalendarEmpty:
       "Още нищо не е записано. Отбележи епизод като гледан и денят ще светне тук.",
     watchCalendarDayTitle: (date: string) => `Гледано на ${date}`,
+    watchCalendarDayCount: (n: number) => `${n} гледания`,
     ratingsEmptyTitle: "Още няма оценки",
     ratingsEmptyBody:
       "Още не си оценил нищо. Всяка страница на епизод има бутон за оценка.",

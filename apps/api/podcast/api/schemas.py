@@ -236,6 +236,24 @@ class WatchCalendarOut(Schema):
     events: list[WatchCalendarEventOut] = []
 
 
+class WatchedEpisodeOut(EpisodeBriefOut):
+    """A history card: the episode plus EVERY date the viewer logged it.
+
+    Newest first. The history page used to render the plain brief, so a
+    rewatch was invisible there - the card looked identical whether it had
+    been watched once or five times, and never said when. The dates are the
+    reason the page exists.
+    """
+
+    watched_on: list[date]
+    watch_count: int
+
+
+class WatchedListOut(Schema):
+    items: list[WatchedEpisodeOut]
+    meta: PaginatedMeta
+
+
 class FavoriteOut(Schema):
     episode_id: int
     is_favorite: bool

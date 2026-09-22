@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { useCopy } from "@/components/i18n/LocaleProvider";
 import { toIsoDay } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 /**
  * A real month calendar: weekday header, weeks that START ON MONDAY, and

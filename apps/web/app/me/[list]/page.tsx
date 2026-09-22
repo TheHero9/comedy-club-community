@@ -11,7 +11,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Page, PageHeading } from "@/components/shell/Page";
 import { LinkButton } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { EpisodeList } from "@/lib/api/podcast";
+import type { EpisodeBrief, EpisodeList, WatchedList } from "@/lib/api/podcast";
+import { formatDate } from "@/lib/format";
 import type { Schema } from "@ccc/api-types";
 import { useViewerAuth } from "@/components/auth/ViewerAuthProvider";
 import { viewerApi } from "@/lib/auth";
@@ -96,7 +97,7 @@ export default function ProfileListPage({ params }: PageProps<"/me/[list]">) {
     enabled: signedIn,
     retry: false,
     queryFn: ({ signal }) =>
-      viewerApi.get<EpisodeList | PersonalTag[]>(config.path, {
+      viewerApi.get<EpisodeList | WatchedList | PersonalTag[]>(config.path, {
         query: isTags ? undefined : { limit: 24 },
         signal,
         cache: "no-store",
@@ -115,7 +116,17 @@ export default function ProfileListPage({ params }: PageProps<"/me/[list]">) {
   }
 
   const tags = isTags ? ((query.data ?? []) as PersonalTag[]) : [];
-  const episodes = isTags ? [] : ((query.data as EpisodeList | undefined)?.items ?? []);
+  const episodes: EpisodeBrief[] = isTags
+    ? []
+    : ((query.data as EpisodeList | WatchedList | undefined)?.items ?? []);
+  // Only the history endpoint returns the logged dates. A rewatched episode
+  // used to render as one card indistinguishable from a single viewing, with
+  // no date at all - so the page called "watch history" carried no history.
+  const watchedDates = new Map<string, string[]>(
+    key === "history" && query.data
+      ? (query.data as WatchedList).items.map((item) => [item.youtube_id, item.watched_on])
+      : [],
+  );
   const empty = query.isSuccess && (isTags ? tags.length === 0 : episodes.length === 0);
 
   return (
@@ -160,15 +171,33 @@ export default function ProfileListPage({ params }: PageProps<"/me/[list]">) {
 
       {!isTags && episodes.length > 0 ? (
         <div className="mt-4.5 grid grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-4">
-          {episodes.map((episode, index) => (
-            <EpisodeCard
-              key={episode.youtube_id}
-              episode={episode}
-              showRatingCount
-              sizes="(min-width: 768px) 280px, 50vw"
-              priority={index < 2}
-            />
-          ))}
+          {episodes.map((episode, index) => {
+            const dates = watchedDates.get(episode.youtube_id);
+            return (
+              <div key={episode.youtube_id}>
+                <EpisodeCard
+                  episode={episode}
+                  showRatingCount
+                  sizes="(min-width: 768px) 280px, 50vw"
+                  priority={index < 2}
+                />
+                {dates && dates.length > 0 ? (
+                  <p className="mt-1.5 flex items-start gap-1.5 text-[11.5px] leading-snug text-foreground">
+                    <History
+                      className="mt-[1px] size-3 shrink-0 text-subtle-foreground"
+                      aria-hidden
+                      strokeWidth={2.2}
+                    />
+                    <span>
+                      {copy.watchLog.historyWatchedOn(
+                        dates.map((day) => formatDate(day, copy.common.months)).join(", "),
+                      )}
+                    </span>
+                  </p>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </Page>

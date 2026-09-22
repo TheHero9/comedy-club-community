@@ -88,18 +88,25 @@ export function WatchCalendar() {
           const dayEvents = byDay.get(entry.iso) ?? [];
           const hasEvents = dayEvents.length > 0;
           const isSelected = selected === entry.iso;
+          const dayLabel = formatDate(entry.iso, months);
           return (
             <button
               key={entry.iso}
               type="button"
-              aria-label={formatDate(entry.iso, months)}
+              // The badge is aria-hidden so the accessible name is not read
+              // as "52" for the 5th with two viewings; the count goes here.
+              aria-label={
+                dayEvents.length > 1
+                  ? `${dayLabel}, ${copy.profile.watchCalendarDayCount(dayEvents.length)}`
+                  : dayLabel
+              }
               aria-pressed={isSelected}
               // Empty days are not tappable: there is nothing to show, and a
               // tap that visibly does nothing reads as a broken calendar.
               disabled={!hasEvents}
               onClick={() => setSelected(isSelected ? null : entry.iso)}
               className={cn(
-                "h-[38px] rounded-[9px] border font-mono text-[12.5px] tabular",
+                "relative h-[38px] rounded-[9px] border font-mono text-[12.5px] tabular",
                 hasEvents
                   ? "border-transparent bg-band-awesome font-bold text-ink"
                   : "border-border-2 bg-card font-medium text-faint-foreground",
@@ -107,6 +114,18 @@ export function WatchCalendar() {
               )}
             >
               {entry.day}
+              {dayEvents.length > 1 ? (
+                // A day with two viewings used to look exactly like a day
+                // with one. The count is a corner badge rather than a deeper
+                // shade of green: band colours carry meaning elsewhere, and a
+                // second green would read as a different score, not a count.
+                <span
+                  aria-hidden
+                  className="absolute top-[3px] right-[3px] flex h-[13px] min-w-[13px] items-center justify-center rounded-pill bg-ink px-[3px] text-[9px] leading-none font-bold text-[#F7F4F0]"
+                >
+                  {dayEvents.length}
+                </span>
+              ) : null}
             </button>
           );
         }}

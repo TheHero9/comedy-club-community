@@ -7,6 +7,8 @@ or a query parameter - that would let anyone act as anyone.
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Max
 from django.shortcuts import get_object_or_404
@@ -52,6 +54,7 @@ from .schemas import (
     RatingOut,
     ViewerStateOut,
     WatchCalendarOut,
+    WatchedListOut,
     WatchIn,
     WatchSummaryOut,
 )
@@ -508,18 +511,45 @@ def list_favorites(request, limit: int = Query(24, ge=1, le=100), offset: int = 
     }
 
 
-@router.get("/me/watched", response=EpisodeListOut)
+@router.get("/me/watched", response=WatchedListOut)
 def list_watched(request, limit: int = Query(24, ge=1, le=100), offset: int = Query(0, ge=0)):
+    """Watch history: one card per episode, most recently watched first, with
+    every logged date on it.
+
+    The dates come from a second query over just the page's episodes, not from
+    a join - a join would multiply the episode rows by their viewings and break
+    the pagination, and a per-card lookup would be the N+1 the list endpoints
+    are built to avoid.
+    """
+    user = request.auth
     queryset = (
         episode_list_queryset()
-        .filter(watch_events__user=request.auth)
+        .filter(watch_events__user=user)
         .annotate(_last=Max("watch_events__watched_on"))
         .order_by("-_last")
         .distinct()
     )
     total = queryset.count()
+    page = list(queryset[offset : offset + limit])
+
+    dates_by_episode: dict[int, list] = defaultdict(list)
+    viewings = (
+        WatchEvent.objects.filter(user=user, episode_id__in=[e.id for e in page])
+        .order_by("-watched_on", "-id")
+        .values_list("episode_id", "watched_on")
+    )
+    for episode_id, watched_on in viewings:
+        dates_by_episode[episode_id].append(watched_on)
+
     return {
-        "items": [episode_brief(e) for e in queryset[offset : offset + limit]],
+        "items": [
+            {
+                **episode_brief(e),
+                "watched_on": dates_by_episode[e.id],
+                "watch_count": len(dates_by_episode[e.id]),
+            }
+            for e in page
+        ],
         "meta": paginated_meta(total, limit, offset),
     }
 
