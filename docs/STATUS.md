@@ -1,7 +1,7 @@
 # 📊 STATUS
 
-**Updated:** 2026-08-16
-**Overall:** 🚀 **LIVE IN PRODUCTION at https://comedycommunity.club** (2026-08-15). Web on Vercel, API + Celery + Postgres + Redis + Meilisearch on Railway, Clerk production auth, 7 channels / **1,862** episodes / 579 transcripts served (100 non-podcast clips removed 08-15). Launch smoke test 13/13. Full topology and the six deployment gotchas: [`specs/10-deployment/`](../specs/10-deployment/01-production-setup.md).
+**Updated:** 2026-10-13
+**Overall:** ⏸️ **SWITCHED OFF 2026-10-13** to stop the Railway bill (no real users; the traffic was AI crawlers). Nothing deleted, Postgres backed up and verified, turn-on runbook in [`specs/10-deployment/03-switched-off.md`](../specs/10-deployment/03-switched-off.md). Before that: 🚀 **LIVE IN PRODUCTION at https://comedycommunity.club** (2026-08-15). Web on Vercel, API + Celery + Postgres + Redis + Meilisearch on Railway, Clerk production auth, 7 channels / **1,862** episodes / 579 transcripts served (100 non-podcast clips removed 08-15). Launch smoke test 13/13. Full topology and the six deployment gotchas: [`specs/10-deployment/`](../specs/10-deployment/01-production-setup.md).
 
 > ⚠️ Still deferred before the membership-verification flow is used by real users:
 > R2 + signed URLs for verification screenshots (`NEXT_TIME.md` § Security).

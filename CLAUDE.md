@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Audience:** ~1,000+ users. Small data, low traffic. Bulgarian-language content and UI.
 - **Core value:** searchability. YouTube search across these channels is bad. Community labels + timestamps + canonical topics fix that.
-- **Status:** 🚀 **LIVE IN PRODUCTION at https://comedycommunity.club** since 2026-08-15. See § Production below.
+- **Status:** ⏸️ **SWITCHED OFF since 2026-10-13** (owner decision, to stop the Railway bill: zero real users, the traffic was AI crawlers). Was live at https://comedycommunity.club from 2026-08-15. Nothing deleted; see § Production below.
 
 ### 🚫 Explicit Non-Goals for v1
 
@@ -28,7 +28,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 🚀 Production (LIVE since 2026-08-15)
+## 🚀 Production (LIVE 2026-08-15, ⏸️ SWITCHED OFF 2026-10-13)
+
+> ⏸️ **PRODUCTION IS OFF.** All 6 Railway services have no running deployment (services,
+> config, variables and the 3 volumes are kept), the Vercel project is **paused** (503),
+> and `deploy-api.yml` is **disabled**, so a push to `main` deploys nothing and the
+> Vercel build for it fails (it prerenders against the dead API; harmless, not a bug).
+> Do not "fix" any of that by accident. Why, the verified backup, and the exact
+> turn-it-back-on order: [`specs/10-deployment/03-switched-off.md`](specs/10-deployment/03-switched-off.md).
 
 > 📖 Full topology, service IDs and the **six deployment gotchas** live in
 > [`specs/10-deployment/01-production-setup.md`](specs/10-deployment/01-production-setup.md).
