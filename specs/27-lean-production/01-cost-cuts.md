@@ -52,9 +52,23 @@ member) instead of the imagined one.
    deleted and **verified closed with `pg_isready`** - the delete call's own response
    still said `ACTIVE`, and a raw TCP connect still succeeded at Railway's edge for a few
    seconds afterwards, so neither is proof.
-3. API deployed with `preDeployCommand` temporarily set to `reindex --drop` (migrations
-   were already 39/39), then set back to `migrate --noinput`.
-4. Website unpaused and rebuilt against the live API.
+3. API deployed with `preDeployCommand` temporarily set to a reindex (migrations were
+   already 39/39), then set back to `migrate --noinput` and read back.
+   - ❌ First attempt, `reindex --drop`: episodes 1,883 = 1,883 in 4s, then the transcript
+     rebuild died at **37,500 of 64,093** with `MeilisearchTimeoutError ... read timeout=5`.
+     Batches slowed from ~2s to 7-20s each as the index grew on Railway's CPU, and one
+     answer came late. Nothing served, nothing broken - the deployment simply failed.
+   - ✅ Fix: `reindex --timeout` (this command only; readers keep 5s). Second attempt,
+     `reindex --only transcripts --drop --timeout 60`: **64,093 = 64,093 in 1,437s**
+     (24 minutes, 45 docs/s - the same rebuild takes about a minute on the dev PC).
+   - ✅ `/api/health` reported `ac06f4d`, database and Redis ok; the log showed
+     `Search keep-warm started: every 240s` once per gunicorn worker (3).
+4. Website unpaused (`paused: False` read back) and the blocked `ac06f4d` deployment
+   rebuilt for production - while paused, Vercel BLOCKS builds rather than failing them.
+5. Smoke test on comedycommunity.club: home, two of the new episodes (titles present),
+   `/search?q=пица`, `/channels` all 200; `/e/BADID` and `/channels/does-not-exist` a
+   real 404; `robots.txt` lists the blocked training crawlers. Live API: 1,883 episodes,
+   search on `meilisearch` (not the fallback), transcript search available.
 
 ### 3.1 ⚠️ The GitHub deploy token is dead
 
