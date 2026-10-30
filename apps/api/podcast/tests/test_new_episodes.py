@@ -251,3 +251,42 @@ def test_enrich_writes_nothing_from_a_degraded_response(episode):
 
 def test_result_summary_reports_exclusions():
     assert "2 excluded" in IngestionResult(excluded=2).summary()
+
+
+# ---------------------------------------------------------------------------
+# The review gate: short videos are asked about, never added silently
+# ---------------------------------------------------------------------------
+
+
+def test_short_videos_follow_the_answers_given_up_front(channel, monkeypatch):
+    """With no terminal to ask in (the skill runs it), `--add` / `--exclude` are the answers.
+
+    A short video with no answer is held for the next run - never added by default.
+    """
+    from podcast.management.commands.sync_new_episodes import ADD, EXCLUDE, LATER, Command
+    from podcast.services.ingestion import UploadCandidate, UploadListing
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    listing = UploadListing(channel=channel, candidates=[
+        UploadCandidate("longEpisode", "video", _details("longEpisode", duration=7200), True),
+        UploadCandidate("shortYes001", "video", _details("shortYes001", duration=300), True),
+        UploadCandidate("shortNo0001", "video", _details("shortNo0001", duration=90), True),
+        UploadCandidate("shortUnsure", "video", _details("shortUnsure", duration=400), True),
+        UploadCandidate(
+            "premiere001", "stream", _details("premiere001", duration=0, live_status="upcoming"),
+            True,
+        ),
+    ])
+    options = {
+        "ask_under": 15, "yes": False, "add": ["shortYes001"], "exclude": ["shortNo0001"],
+    }
+
+    decisions = Command()._decide([listing], options)
+
+    assert decisions == {
+        "longEpisode": ADD,
+        "shortYes001": ADD,
+        "shortNo0001": EXCLUDE,
+        "shortUnsure": LATER,
+        "premiere001": LATER,
+    }

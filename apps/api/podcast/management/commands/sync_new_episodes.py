@@ -4,7 +4,8 @@
     python manage.py sync_new_episodes                        # asks about short videos, then does everything
     python manage.py sync_new_episodes --channel @ivankirkov1
     python manage.py sync_new_episodes --limit 200            # look past the newest 50 per tab
-    python manage.py sync_new_episodes --exclude ID ID --yes  # decide without prompts
+    python manage.py sync_new_episodes --add ID --exclude ID  # answer the short ones without prompts
+    python manage.py sync_new_episodes --yes                  # add every new video, short ones too
 
 Per active channel:
 
@@ -79,6 +80,13 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--yes", action="store_true", help="Add every new video without asking"
+        )
+        parser.add_argument(
+            "--add",
+            nargs="+",
+            default=[],
+            metavar="YOUTUBE_ID",
+            help="Short new videos to add without asking (the answer 'yes', given up front)",
         )
         parser.add_argument(
             "--exclude",
@@ -220,11 +228,15 @@ class Command(BaseCommand):
     def _decide(self, listings, options):
         ask_under_sec = options["ask_under"] * 60
         excluded_now = set(options["exclude"])
+        added_now = set(options["add"])
+        both = sorted(excluded_now & added_now)
+        if both:
+            raise CommandError(f"Both --add and --exclude given for: {', '.join(both)}")
         new_ids = {c.youtube_id for listing in listings for c in listing.new}
-        stray = sorted(excluded_now - new_ids)
+        stray = sorted((excluded_now | added_now) - new_ids)
         if stray:
             self.stdout.write(self.style.WARNING(
-                f"--exclude ignored for {len(stray)} id(s) that are not new uploads: "
+                f"--add/--exclude ignored for {len(stray)} id(s) that are not new uploads: "
                 f"{', '.join(stray)}. For an episode already in, use remove_episodes."
             ))
 
@@ -237,6 +249,8 @@ class Command(BaseCommand):
                     decisions[candidate.youtube_id] = EXCLUDE
                 elif candidate.is_unfinished:
                     decisions[candidate.youtube_id] = LATER
+                elif candidate.youtube_id in added_now:
+                    decisions[candidate.youtube_id] = ADD
                 elif not self._is_short(candidate, ask_under_sec) or options["yes"]:
                     decisions[candidate.youtube_id] = ADD
                 elif interactive:
@@ -248,7 +262,7 @@ class Command(BaseCommand):
         if held_for_answer:
             self.stdout.write(self.style.WARNING(
                 f"\n{held_for_answer} short video(s) held back: no terminal to ask in. "
-                "Re-run with --exclude <ids> for the promo clips and --yes for the rest."
+                "Re-run with --add <ids> for real episodes and --exclude <ids> for promo clips."
             ))
         return decisions
 
