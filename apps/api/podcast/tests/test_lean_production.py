@@ -83,3 +83,22 @@ def test_keep_warm_runs_on_a_daemon_thread(settings):
 
     assert thread.call_args.kwargs["daemon"] is True
     thread.return_value.start.assert_called_once()
+
+
+def test_reindex_timeout_is_raised_for_the_command_only(settings):
+    """A busy production Meilisearch killed a rebuild at 5s on 2026-10-30.
+
+    `--timeout` lengthens it for the rebuild process; the reader's default stays 5s.
+    """
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    from podcast.search import client as search_client
+
+    settings.MEILI_TIMEOUT = search_client.DEFAULT_TIMEOUT_SECONDS
+    with mock.patch.object(search_client, "is_available", return_value=False):
+        with pytest.raises(CommandError, match="unreachable"):
+            call_command("reindex", "--only", "transcripts", "--timeout", "60")
+
+    assert settings.MEILI_TIMEOUT == 60
+    assert search_client.DEFAULT_TIMEOUT_SECONDS == 5

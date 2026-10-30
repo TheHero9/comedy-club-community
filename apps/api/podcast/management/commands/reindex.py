@@ -5,6 +5,7 @@
     python manage.py reindex --only episodes      # skip transcripts (much faster)
     python manage.py reindex --only transcripts
     python manage.py reindex --batch-size 200
+    python manage.py reindex --timeout 60         # a busy production Meilisearch
 
 🚨 Postgres is the source of truth. A wiped Meilisearch must be fully
 rebuildable with this ONE command - that is what `--drop` proves. That promise
@@ -18,6 +19,13 @@ scale against ~1.4k episodes - so `--only episodes` exists for the common case.
 ⚠️ Output is deliberately ASCII only. The Windows console is cp1252 and dies on
 Cyrillic, so this command never prints an episode title. Anything that does
 needs `PYTHONIOENCODING=utf-8`.
+
+🚨 `--timeout` exists because the 5s client timeout is right for a READER and
+wrong for a rebuild. On 2026-10-30 a production `reindex --drop` died at 37,500 of
+64,093 transcript segments with `MeilisearchTimeoutError ... read timeout=5`: a
+Meilisearch busy indexing a large batch answered one request late. A batch job can
+wait; a visitor cannot - so the longer timeout is set on THIS command only, never
+in settings, where it would also hold every live search for that long.
 
 📌 Celery wrappers this command shares its code path with (owned by tasks.py,
 see the wave report): `reindex_episode`, `remove_episode_from_index`,
@@ -51,6 +59,15 @@ class Command(BaseCommand):
             default=None,
             help="Rebuild just one index. Default: both.",
         )
+        parser.add_argument(
+            "--timeout",
+            type=int,
+            default=None,
+            help=(
+                "Seconds to wait for each Meilisearch answer during the rebuild "
+                f"(default {search_client.DEFAULT_TIMEOUT_SECONDS}, the reader's timeout)"
+            ),
+        )
 
     def handle(self, *args, **options):
         batch_size = options["batch_size"]
@@ -59,6 +76,16 @@ class Command(BaseCommand):
 
         drop = options["drop"]
         only = options["only"]
+
+        if options["timeout"] is not None:
+            if options["timeout"] < 1:
+                raise CommandError("--timeout must be at least 1")
+            from django.conf import settings
+
+            # This process only. The client is built lazily, so reset it to make
+            # the next call pick the new value up.
+            settings.MEILI_TIMEOUT = options["timeout"]
+            search_client.reset_client()
 
         # The CLI is the one place that wants a loud failure, so check up front
         # instead of silently no-opping like the request path does.

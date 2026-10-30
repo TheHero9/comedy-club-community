@@ -1,4 +1,8 @@
-# ⏸️ Production is SWITCHED OFF (2026-10-13)
+# ⏸️ Production was SWITCHED OFF (2026-10-13 to 2026-10-30)
+
+> ✅ **Back on since 2026-10-30, in a lean setup** (no worker, no Beat). What was run, and
+> what changed, is in [`specs/27-lean-production/01-cost-cuts.md`](../27-lean-production/01-cost-cuts.md).
+> This file stays as the record of the off period and the general turn-on order.
 
 > Owner decision, 2026-10-13: *"switch it off for now"*. Nothing was deleted.
 > Every service, its config, its variables, its domains and all three volumes are

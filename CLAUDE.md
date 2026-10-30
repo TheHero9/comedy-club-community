@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Audience:** ~1,000+ users. Small data, low traffic. Bulgarian-language content and UI.
 - **Core value:** searchability. YouTube search across these channels is bad. Community labels + timestamps + canonical topics fix that.
-- **Status:** ⏸️ **SWITCHED OFF since 2026-10-13** (owner decision, to stop the Railway bill: zero real users, the traffic was AI crawlers). Was live at https://comedycommunity.club from 2026-08-15. Nothing deleted; see § Production below.
+- **Status:** 🚀 **LIVE at https://comedycommunity.club, in a LEAN setup since 2026-10-30** (no Celery worker, no Beat, no nightly index rebuilds, AI training crawlers blocked - `specs/27-lean-production/01-cost-cuts.md`). First live 2026-08-15; switched off 2026-10-13 to stop a ~$26/month bill that was serving AI crawlers; back on, being promoted, from 2026-10-30.
 
 ### 🚫 Explicit Non-Goals for v1
 
@@ -28,14 +28,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
-## 🚀 Production (LIVE 2026-08-15, ⏸️ SWITCHED OFF 2026-10-13)
+## 🚀 Production (LIVE 2026-08-15, off 10-13, LIVE AGAIN 2026-10-30)
 
-> ⏸️ **PRODUCTION IS OFF.** All 6 Railway services have no running deployment (services,
-> config, variables and the 3 volumes are kept), the Vercel project is **paused** (503),
-> and `deploy-api.yml` is **disabled**, so a push to `main` deploys nothing and the
-> Vercel build for it fails (it prerenders against the dead API; harmless, not a bug).
-> Do not "fix" any of that by accident. Why, the verified backup, and the exact
-> turn-it-back-on order: [`specs/10-deployment/03-switched-off.md`](specs/10-deployment/03-switched-off.md).
+> 🚀 **PRODUCTION IS LIVE AGAIN (2026-10-30), LEAN.** Running: `api`, Postgres, Redis,
+> Meilisearch. **`celery-worker` and `celery-beat` exist on Railway but are deliberately NOT
+> deployed** - tasks run inline (`CELERY_TASK_ALWAYS_EAGER = True` in prod.py) and keep-warm
+> runs in gunicorn. Do not "restore" them by accident. Production is the MASTER copy again;
+> the local DB is a dev copy. 🚨 **`deploy-api.yml` is DISABLED: the `RAILWAY_TOKEN` secret
+> is invalid** (`Invalid RAILWAY_TOKEN`, 2026-10-30), so a push deploys the web only. Until a
+> new project token is set, deploy the API by hand: stamp `apps/api/BUILD_SHA`, `railway up
+> --service api --environment production --ci` from the repo root, restore `BUILD_SHA` to
+> `dev`, check `/api/health`. Write-up: [`specs/27-lean-production/01-cost-cuts.md`](specs/27-lean-production/01-cost-cuts.md);
+> the off period: [`specs/10-deployment/03-switched-off.md`](specs/10-deployment/03-switched-off.md).
 
 > 📖 Full topology, service IDs and the **six deployment gotchas** live in
 > [`specs/10-deployment/01-production-setup.md`](specs/10-deployment/01-production-setup.md).
@@ -45,16 +49,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | ----- | ----- | ------- |
 | Next.js web | Vercel (`comedy-club-community`) | https://comedycommunity.club (+ `www`) |
 | Django API | Railway `api` | https://api.comedycommunity.club |
-| Celery worker + beat | Railway, same image, custom start commands | - |
+| Celery worker + beat | Railway services kept but **NOT deployed** since 2026-10-30 (tasks run inline) | - |
 | Postgres 18 / Redis / Meilisearch **v1.11** | Railway, volumes, **private network only** | `*.railway.internal` |
 | Auth | Clerk **production** instance | issuer `https://clerk.comedycommunity.club` |
 | DNS | Porkbun (`comedycommunity.club`) | A→Vercel, `api`→Railway CNAME+TXT, 5 Clerk CNAMEs |
 
 ### Rules that keep production healthy
 
-- ✅ **ARMED since 2026-08-16: a push to `main` deploys the WHOLE app.** Vercel rebuilds the web on the push; `.github/workflows/deploy-api.yml` deploys the API after CI goes green on that exact commit (`workflow_run` gate, `RAILWAY_TOKEN` secret set). A red CI run deploys nothing. Full write-up and the rejected alternatives: [`specs/10-deployment/02-auto-deploy.md`](specs/10-deployment/02-auto-deploy.md).
+- ⚠️ **ARMED 2026-08-16, DISARMED 2026-10-30 (dead `RAILWAY_TOKEN`, see the box above): a push to `main` deploys the WHOLE app once re-armed.** Vercel rebuilds the web on the push; `.github/workflows/deploy-api.yml` deploys the API after CI goes green on that exact commit (`workflow_run` gate, `RAILWAY_TOKEN` secret set). A red CI run deploys nothing. Full write-up and the rejected alternatives: [`specs/10-deployment/02-auto-deploy.md`](specs/10-deployment/02-auto-deploy.md).
   - 🚨 **Deliberately NOT the Railway GitHub App**, even though that is one click and needs no token. This repo commits straight to `main` with no PR, and the api service's `preDeployCommand` is `migrate --noinput` - so a webhook deploy would run an unreviewed schema change against production Postgres seconds after a typo was typed, with `makemigrations --check` finding out afterwards. The workflow is gated on CI via `workflow_run` and checks out the sha CI actually passed. **If the app is ever installed as well, delete the workflow** or every push deploys twice.
-  - 🚨 **Deploy order is `api` first, then `celery-worker`, then `celery-beat`, never in parallel.** Only `api` carries the migration, and the workers bake code into their own images - a worker left behind runs old task code against a new schema, which is how the nightly sync degraded 1,171 rows on 2026-08-13. Beat also fires overdue jobs the moment it starts.
+  - 🚨 **Since 2026-10-30 only `api` is deployed.** If the worker and Beat ever come back, the old rule returns with them: `api` first, then `celery-worker`, then `celery-beat`, never in parallel - only `api` carries the migration, and a worker left on an old image runs old task code against a new schema (how the nightly sync degraded 1,171 rows on 2026-08-13). They also need `CELERY_TASK_ALWAYS_EAGER` back to False in prod.py, or they sit idle.
 - 🚨 **`redeploy` is NOT a deploy.** It re-runs the most recent deployment *reusing that deployment's build AND its config*, so a service-config change you just made is silently ignored. A `startCommand` set via `update-service` followed by `redeploy` ran the OLD command: Celery started, the management command never executed, and the only evidence was the absence of its output between "Starting Container" and Celery's banner. The workflow uses `railway up`, which creates a genuine new build; anything manual must do the same.
 - 🚨 **VERIFY WITH `/api/health`, not with the deployment list.** `railway up` uploads a source snapshot and carries **no `commitHash`**, so the old advice ("`list-deployments` must show your commit") does not work on this path - and it was always the weaker check anyway, because it says what Railway was *asked to build*, not what is *serving*.
   ```bash
@@ -399,7 +403,7 @@ The rule above is correct and was **over-applied into "loading files are dangero
   - ✅ `manage.py export_review_page` writes a single self-contained HTML file - every episode as a clickable card grouped by channel, filters by kind/duration/text, marks kept in `localStorage` so a 1,962-item pass survives a closed tab. It **marks**; it never deletes.
   - ✅ `manage.py remove_episodes <file>` deletes, from Postgres and BOTH Meilisearch indexes, dumping every affected row to JSON first. It prints the cascade before acting - the 100 episodes also took 119 transcript segments, 51 topic links and 15 now-orphaned topics.
   - 🚨 **A deletion only sticks because every ingestion path reads the exclusion list.** Ingestion is `update_or_create(youtube_id=...)`, so a sync listing a purged clip recreates it with a `created` count that reads as good news. Since 2026-10-30 `list_channel_uploads` (Data API) and `backfill_channel` (yt-dlp) both filter through `podcast.data.removed_episode_ids()`, and **`remove_episodes` APPENDS what it deletes to the list** - before that, a removal was undone by the next sync. Never add a third ingestion path without the same filter; `test_new_episodes.py` pins both.
-- ✅ **New uploads come in with ONE command: `manage.py sync_new_episodes`**, or the `/sync-episodes` skill, which asks the owner about the short ones and passes the answers as `--add` / `--exclude` (2026-10-30; spec `specs/26-new-episode-pipeline/02-implementation-plan.md`). Data API listing (videos + streams, never shorts) → exclusion list → **asks about anything under 15 min** (all 100 removed promo clips were under 12) → write → one serial yt-dlp request per episode for the members-only flag, chapters and the captions → both indexes synchronously → closes on counts and exits non-zero if a check fails. `--dry-run` first. Run it on the PC: the home IP is the one YouTube tolerates for yt-dlp, and while production is off the local DB is the master copy.
+- ✅ **New uploads come in with ONE command: `manage.py sync_new_episodes`**, or the `/sync-episodes` skill, which asks the owner about the short ones and passes the answers as `--add` / `--exclude` (2026-10-30; spec `specs/26-new-episode-pipeline/02-implementation-plan.md`). Data API listing (videos + streams, never shorts) → exclusion list → **asks about anything under 15 min** (all 100 removed promo clips were under 12) → write → one serial yt-dlp request per episode for the members-only flag, chapters and the captions → both indexes synchronously → closes on counts and exits non-zero if a check fails. `--dry-run` first. 🚨 **It runs on the PC but against PRODUCTION** (the master copy since 2026-10-30): the home IP is the one YouTube tolerates for yt-dlp, so `apps/api/scripts/with-prod.sh` points the command at production through two TEMPORARY endpoints the `/sync-episodes` skill opens and then closes - a TCP proxy for Postgres (`sslmode=require`) and a generated HTTPS domain for Meilisearch (never a raw TCP proxy: the master key would travel in clear text). A plain local run only updates the dev copy.
   - 🚨 **A fresh upload is not caption-less yet.** YouTube adds the ASR track hours to days after upload, and an `unavailable` row is not re-checked for 90 days. Inside `TRANSCRIPT_FRESH_UPLOAD_DAYS` (7) `fetch_and_store` writes nothing and returns `waiting`, so the next run asks again.
   - ⚠️ **Scheduled premieres and live-now streams sit in the uploads playlist with a duration of 0.** `UploadCandidate.is_unfinished` (`liveBroadcastContent`) holds them back until they air. Two channels carry stale "upcoming" streams from 2024-2025 that will show as held forever; that is harmless.
   - ⚠️ The sync's yt-dlp step only touches episodes with **no transcript row**. The 90-day re-check of caption-less episodes stays with `backfill_transcripts`, run on purpose - folded in, it would be ~1,400 requests the day those records come due.
@@ -525,7 +529,7 @@ estimate is wrong by an order of magnitude. Budget search, sync quota and page s
   - 📏 Page sizes live in `apps/web/lib/search-limits.ts`, imported by the page AND the e2e specs. Never restate one in a test.
 - 🚨 **`/api/search/suggest` uses Meilisearch for the ORDER and Postgres for the TEXT.** It fires on nearly every keystroke, so the old `title__icontains` was a sequential scan per keystroke with no typo tolerance (`девствна` suggested nothing). But titles are re-read from Postgres by id, exactly like `_meilisearch_search` does: the index is eventually consistent, and suggesting a renamed episode's stale title sends the user to a zero-result page. Postgres stays the fallback when the index is down or empty.
 - 🚨 **A HEALTHY MEILISEARCH AND A RESIDENT INDEX ARE DIFFERENT CLAIMS.** On 2026-08-18 a live search rendered "transcript search is unavailable" while everything was green. The API logged `MeilisearchTimeoutError ... read timeout=5`; Meilisearch's own log for that SAME request said `POST /multi-search status_code=200 time.busy=5.13ms time.idle=14.5s` - it searched in five milliseconds and took fourteen and a half seconds to answer. In that same instant the 1,862-document `episodes` query returned in 14.6ms and the 61,452-segment transcript one stalled: small index resident, big index paged out. `is_available()` had passed 30 seconds earlier and would have passed again.
-  - ✅ **The fix is `podcast.warm_search_indexes` on Beat every 4 minutes** (`podcast/search/warm.py`), NOT a longer timeout. `DEFAULT_TIMEOUT_SECONDS = 5` stays: 5s is generous for work that measures in single-digit ms, and a longer one only turns a wrong answer into a wrong answer that also holds a gunicorn worker.
+  - ✅ **The fix is keeping the index warm every 4 minutes** (`podcast/search/warm.py`), NOT a longer timeout. Since 2026-10-30 it runs on a daemon thread in each gunicorn worker (`gunicorn.conf.py` `post_worker_init`, `SEARCH_KEEP_WARM_SECONDS = 240` in prod), because Beat is gone; before that it was a Beat entry. `DEFAULT_TIMEOUT_SECONDS = 5` stays: 5s is generous for work that measures in single-digit ms, and a longer one only turns a wrong answer into a wrong answer that also holds a gunicorn worker.
   - 🚨 **A keep-warm task warms nothing in two silent ways.** 🇧🇬 A stop-word query is erased at index time, so it matches nothing, touches nothing, and still returns 200 - `WARM_QUERY` is asserted against `STOP_WORDS`. And timing `processingTimeMs` instead of wall clock would have reported the 5ms-inside-14.5s request as perfectly healthy. It also reports per-index `totalHits`, so a warm-up against a WIPED index is distinguishable from a healthy one - same lesson as "a reindex closes on COUNTS".
   - ⚠️ **This is probabilistic, and the spec says so.** It makes the index unlikely to GO cold; it cannot make a cold one fast. If the banner returns with this scheduled and Meilisearch again shows a large `time.idle` against a tiny `time.busy`, the next suspect is the container being descheduled - a hosting question, not a code one. Full write-up: [`specs/20-search-index-warmth/01-the-index-that-went-cold.md`](specs/20-search-index-warmth/01-the-index-that-went-cold.md).
 - ✅ Meilisearch index updates happen in **Celery tasks**, never inline in a request.
@@ -800,8 +804,8 @@ uv run python manage.py repair_metadata --probe 10               # 🚨 ALWAYS a
 uv run python manage.py repair_metadata --api                    # ⚡ Data API repair: block-immune, 50 rows/quota unit
 uv run python manage.py repair_metadata --channel @handle        # yt-dlp re-fetch (states availability; API cannot)
 uv run python manage.py refresh_channel_meta                     # avatars, banners, sub counts
-uv run python manage.py sync_new_episodes --dry-run              # what is new on the channels; writes nothing
-uv run python manage.py sync_new_episodes                        # add new uploads + transcripts + search, closes on counts
+uv run python manage.py sync_new_episodes --dry-run              # LOCAL dev copy only; for the live site use /sync-episodes
+bash scripts/with-prod.sh <pg host:port> https://<meili> sync_new_episodes   # against PRODUCTION (endpoints: see the skill)
 uv run python manage.py backfill_transcripts --probe 10          # free captions: is it worth it?
 uv run python manage.py backfill_transcripts --since 2024-01-01  # where the captions actually are
 uv run python manage.py backfill_transcripts --tracks <VIDEO_ID> # what tracks exist on one video
