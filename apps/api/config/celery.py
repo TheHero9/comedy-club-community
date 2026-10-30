@@ -2,6 +2,12 @@
 
 Tasks are thin wrappers over podcast/services/ - never put logic in a task body, so
 the management command and the scheduler always run identical code.
+
+🚨 PRODUCTION RUNS NO WORKER AND NO BEAT since 2026-10-30 (cost cut,
+specs/27-lean-production/). There, tasks execute inline (CELERY_TASK_ALWAYS_EAGER)
+and the schedule below never fires: the score sweep is not needed (ratings
+recompute on write) and keep-warm runs inside gunicorn instead. The schedule stays
+for `docker compose --profile workers`, which still exercises the queue locally.
 """
 
 import os
@@ -23,7 +29,7 @@ app.conf.beat_schedule = {
     # silently undo that pass. Re-enabling this entry without an exclusion list
     # first WILL resurrect them - see `remove_episodes` and tmp/to-remove.txt.
     #
-    # New episodes are pulled deliberately instead: `manage.py sync_channels`.
+    # New episodes are pulled deliberately instead: `manage.py sync_new_episodes`.
     # The trade-off is a catalogue that goes stale until someone runs it.
     # Self-healing score sweep. Ratings recompute on write, so this only repairs
     # drift from a missed signal or a verification change - hourly is plenty.
@@ -31,18 +37,12 @@ app.conf.beat_schedule = {
         "task": "podcast.recompute_all_scores",
         "schedule": crontab(minute=20),
     },
-    # Keep the search index honest even if an indexing task was lost.
-    "reindex-search-nightly": {
-        "task": "podcast.rebuild_search_index",
-        "schedule": crontab(hour=5, minute=0),
-    },
-    # Same self-heal for the transcript index. Without it, segments of a deleted
-    # episode (or a transcript later marked unavailable) would linger in
-    # /search/transcripts until someone manually ran `manage.py reindex`.
-    "reindex-transcripts-nightly": {
-        "task": "podcast.rebuild_transcript_index",
-        "schedule": crontab(hour=5, minute=30),
-    },
+    # ❌ The two NIGHTLY full index rebuilds are gone (2026-10-30). Each lifted
+    # Meilisearch from 0.93 GB to 2.65 GB for ~10 hours a day - about $5 a month
+    # to re-index content that had not changed. Writes index themselves through
+    # services/indexing.py, `sync_new_episodes` and `remove_episodes` index
+    # synchronously and check the counts, and `manage.py reindex` rebuilds both
+    # from Postgres whenever a count disagrees.
     # 🚨 Keeps both Meilisearch indexes RESIDENT. Not a health check - the
     # health endpoint answered fine 30 seconds before the 2026-08-18 incident,
     # because a healthy server and a paged-in index are different claims. See

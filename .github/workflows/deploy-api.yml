@@ -55,7 +55,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Railway - api, celery-worker, celery-beat
+    name: Railway - api
     runs-on: ubuntu-latest
     # A red CI run must never reach production. `workflow_dispatch` has no
     # `workflow_run` payload, so that branch of the condition lets a manual run
@@ -111,10 +111,13 @@ jobs:
       # silently ignored. `up` creates a genuinely new deployment from the
       # checked-out source, which is this commit.
       #
-      # 🚨 `api` FIRST, and not in parallel. It is the only service carrying
-      # `preDeployCommand: migrate --noinput`, so the schema has to land before
-      # the worker and beat start running task code against it. (Beat also
-      # fires overdue jobs immediately on container start.)
+      # 🚨 `api` ONLY since 2026-10-30. Production has no Celery worker and no
+      # Beat any more (cost cut, specs/27-lean-production/): tasks run inline in
+      # the api process, so there is no second image that could fall behind the
+      # schema. The celery-worker and celery-beat services still exist on
+      # Railway, stopped. Bringing them back means BOTH setting
+      # CELERY_TASK_ALWAYS_EAGER back to False in prod.py AND re-adding them
+      # here after `api` - with eager on, a running worker would sit idle.
       #
       # No `--detach`: we want the command to wait, so a failed build or a
       # failed migration fails this job instead of being reported as a
@@ -130,22 +133,6 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service api --environment production --ci
-
-      - name: Deploy celery-worker and celery-beat
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          set -euo pipefail
-          # ⚠️ Both MUST be redeployed even when only the API "changed". They
-          # bake the code into their own image with no source mount, so a
-          # worker left on an old image runs old task code against a new
-          # schema - which is how the nightly sync degraded 1,171 rows on
-          # 2026-08-13.
-          for service in celery-worker celery-beat; do
-            echo "::group::$service"
-            railway up --service "$service" --environment production --ci
-            echo "::endgroup::"
-          done
 
       # 🚨 The job does not pass until the deployed code ANSWERS. A built
       # container is not a serving one, and every incident in this project's

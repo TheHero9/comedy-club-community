@@ -9,7 +9,7 @@ import os
 from config.version import DEPLOYED_SHA
 
 from .base import *  # noqa: F403
-from .env import env_bool, env_float, env_list, env_str
+from .env import env_bool, env_float, env_int, env_list, env_str
 
 DEBUG = False
 
@@ -34,7 +34,19 @@ X_FRAME_OPTIONS = "DENY"
 
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", CORS_ALLOWED_ORIGINS)
 
-CELERY_TASK_ALWAYS_EAGER = False
+# 🚨 NO Celery worker and NO Beat in production since 2026-10-30. They held ~0.4 GB
+# around the clock to run work that is milliseconds inline at this traffic, and
+# their permanent Redis connection kept every service awake. Tasks run in the
+# request: a failing one makes ONE attempt and raises (an eager retry does not
+# re-run), and the services/indexing.py helpers swallow it so a search outage
+# never fails a member's write. The nightly index rebuilds are gone; keep-warm
+# moved into gunicorn.
+# Full write-up: specs/27-lean-production/01-cost-cuts.md.
+CELERY_TASK_ALWAYS_EAGER = True
+
+# Keep both Meilisearch indexes resident (podcast/search/warm.py), from a thread
+# in each gunicorn worker now that Beat is gone. Four minutes, as before.
+SEARCH_KEEP_WARM_SECONDS = env_int("SEARCH_KEEP_WARM_SECONDS", 240)
 
 # 🔒 No interactive docs and no raw OpenAPI schema in production. Overridable so
 # it can be turned back on briefly to debug, but the default is off.

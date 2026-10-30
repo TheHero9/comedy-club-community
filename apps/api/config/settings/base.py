@@ -131,6 +131,11 @@ CELERY_TIMEZONE = "Europe/Sofia"
 # this off so the suite never depends on a running Meilisearch.
 SEARCH_INDEXING_ENABLED = env_bool("SEARCH_INDEXING_ENABLED", True)
 
+# Seconds between keep-warm queries run inside each gunicorn worker, or 0 for
+# none. Off by default: only production serves through gunicorn. See
+# podcast/search/warm.py and apps/api/gunicorn.conf.py.
+SEARCH_KEEP_WARM_SECONDS = 0
+
 MEILI_URL = env_str("MEILI_URL", "http://localhost:7700")
 MEILI_MASTER_KEY = env_str("MEILI_MASTER_KEY", "")
 

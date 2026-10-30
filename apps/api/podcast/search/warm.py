@@ -39,6 +39,7 @@ not a code one.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -116,3 +117,34 @@ def warm_indexes() -> dict[str, Any]:
         logger.debug("Search warm-up: %s", payload)
 
     return payload
+
+
+def start_keep_warm_thread() -> bool:
+    """Run `warm_indexes` forever on a daemon thread. Returns whether it started.
+
+    🚨 This replaced the Beat entry on 2026-10-30, when production dropped its
+    Celery worker and Beat. It is started by gunicorn's `post_worker_init`
+    (apps/api/gunicorn.conf.py), so ONLY a serving process runs it - never a
+    management command, a test or `runserver`.
+
+    ⚠️ One thread per gunicorn worker, so three workers warm three times per
+    interval. That is deliberate: each is one single-digit-millisecond count,
+    and coordinating them would cost more than it saves.
+    """
+    from django.conf import settings
+
+    interval = getattr(settings, "SEARCH_KEEP_WARM_SECONDS", 0)
+    if not interval:
+        return False
+
+    def loop() -> None:
+        while True:
+            time.sleep(interval)
+            try:
+                warm_indexes()
+            except Exception:  # noqa: BLE001 - a warm-up must never kill the thread
+                logger.exception("Search keep-warm failed")
+
+    threading.Thread(target=loop, name="search-keep-warm", daemon=True).start()
+    logger.info("Search keep-warm started: every %ss", interval)
+    return True

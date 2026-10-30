@@ -22,7 +22,31 @@ import { SITE_URL, absoluteUrl } from "@/lib/site";
  *
  * ⚠️ Deliberately NOT disallowed: `/e/`, `/channels/` and `/episodes`. Those are
  * the whole catalogue and the reason this file exists.
+ *
+ * 🤖 AI TRAINING crawlers are shut out entirely (2026-10-30). In the week before
+ * production was switched off they were essentially ALL of the traffic - ~5,000
+ * API calls a day, every one a server render plus 5-6 API round trips - and
+ * they bring no reader back. The AI SEARCH agents are deliberately NOT on the
+ * list (OAI-SearchBot, ChatGPT-User, Claude-SearchBot, Claude-User,
+ * PerplexityBot, DuckAssistBot): they fetch a page to answer a person's
+ * question and cite it, which is a way to be found, and they fall under `*`.
+ *
+ * ⚠️ robots.txt is a request, not a wall. Bytespider in particular is known to
+ * ignore it; the Vercel Firewall's bot rules are the enforcement if one keeps
+ * coming.
  */
+const AI_TRAINING_CRAWLERS = [
+  "GPTBot",
+  "ClaudeBot",
+  "anthropic-ai",
+  "CCBot",
+  "Bytespider",
+  "Meta-ExternalAgent",
+  "Amazonbot",
+  "Google-Extended",
+  "Applebot-Extended",
+];
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
@@ -31,6 +55,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         disallow: ["/me", "/me/", "/search", "/status"],
       },
+      { userAgent: AI_TRAINING_CRAWLERS, disallow: "/" },
     ],
     sitemap: absoluteUrl("/sitemap.xml"),
     host: SITE_URL,

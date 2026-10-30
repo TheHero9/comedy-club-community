@@ -3,9 +3,12 @@
 🚨 The ONE place application code asks for a re-index. Call sites use these instead
 of touching podcast.search directly, so:
 
-  - indexing always goes through Celery, never inline in a web request
+  - indexing always goes through a Celery task, so CLI and requests share one path
   - a Meilisearch outage can never break a rating, a comment or an ingestion run
-  - CELERY_TASK_ALWAYS_EAGER=True in dev still exercises the same code path
+  - CELERY_TASK_ALWAYS_EAGER=True runs that task inline. That is dev, and since
+    2026-10-30 PRODUCTION too (no worker; specs/27-lean-production/). An eager
+    task that fails raises `Retry` once out of `.delay()` - the `except` in every
+    helper below is what keeps that out of the member's request. Never narrow it.
 
 ⚠️ Never call podcast.search.index_episode() from a view.
 """
