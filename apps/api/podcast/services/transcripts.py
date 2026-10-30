@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import transaction
@@ -58,16 +58,35 @@ class TranscriptBackfillResult:
     throttled: int = 0
     aborted: bool = False
 
+    # No captions YET on an upload too new for that to mean anything. Nothing
+    # written; the episode stays pending. See `is_fresh_upload`.
+    waiting: int = 0
+
     def summary(self) -> str:
         return (
             f"{self.stored} stored ({self.segments_created} segments, {self.words:,} words), "
-            f"{self.unavailable} without captions, {self.throttled} throttled, "
-            f"{len(self.errors)} errors (of {self.attempted} attempted)"
+            f"{self.unavailable} without captions, {self.waiting} too new to tell, "
+            f"{self.throttled} throttled, {len(self.errors)} errors "
+            f"(of {self.attempted} attempted)"
         )
 
 
 def _segment_seconds() -> int:
     return int(getattr(settings, "TRANSCRIPT_SEGMENT_SECONDS", DEFAULT_SEGMENT_SECONDS))
+
+
+def is_fresh_upload(episode: Episode, *, today: date | None = None) -> bool:
+    """Too new for "no captions" to be a fact yet.
+
+    🚨 YouTube generates the `bg-orig` ASR track hours to days AFTER upload. An
+    episode synced on its upload day finds no track, and recording that as
+    `unavailable` keeps it out of `pending_queryset` for TRANSCRIPT_RECHECK_DAYS -
+    three months without a transcript that appeared the next morning.
+    """
+    if episode.upload_date is None:
+        return False
+    today = today or timezone.localdate()
+    return (today - episode.upload_date).days < settings.TRANSCRIPT_FRESH_UPLOAD_DAYS
 
 
 def _recheck_days() -> int:
@@ -155,16 +174,23 @@ def mark_unavailable(episode: Episode) -> Transcript:
     return transcript
 
 
-def fetch_and_store(episode: Episode, *, window_sec: int | None = None) -> tuple[Transcript, str]:
+def fetch_and_store(
+    episode: Episode, *, window_sec: int | None = None, info: dict | None = None
+) -> tuple[Transcript | None, str]:
     """Fetch one episode's captions and persist the outcome.
 
-    Returns (transcript, outcome) where outcome is "stored" or "unavailable".
-    Raises `TranscriptThrottled` untouched so the caller can back off - that
-    case writes nothing at all.
+    Returns (transcript, outcome) where outcome is "stored", "unavailable", or
+    "waiting" - no captions yet on a fresh upload, nothing written, transcript
+    None. Raises `TranscriptThrottled` untouched so the caller can back off -
+    that case writes nothing at all.
+
+    Pass `info` to reuse a yt-dlp metadata response the caller already paid for.
     """
     try:
-        payload = fetch_transcript(episode.youtube_id)
+        payload = fetch_transcript(episode.youtube_id, info=info)
     except TranscriptUnavailable:
+        if is_fresh_upload(episode):
+            return None, "waiting"
         return mark_unavailable(episode), "unavailable"
 
     return store_transcript(episode, payload, window_sec=window_sec), "stored"
@@ -277,6 +303,8 @@ def backfill_transcripts(
                 result.segments_created += transcript.segment_count
                 result.words += transcript.word_count
                 touched.append(episode.pk)
+            elif outcome == "waiting":
+                result.waiting += 1
             else:
                 result.unavailable += 1
 

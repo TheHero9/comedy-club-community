@@ -37,6 +37,9 @@ class IngestionResult:
     # signal a backfill has; `len(errors)` says nothing. See services/metadata_repair.py.
     degraded: int = 0
 
+    # Listed on the channel but on `podcast/data/removed-episodes.txt`, so not written.
+    excluded: int = 0
+
     @property
     def total(self) -> int:
         return self.created + self.updated
@@ -49,7 +52,7 @@ class IngestionResult:
         return (
             f"{self.total} episodes ({self.created} created, {self.updated} updated), "
             f"{self.chapters_created} chapters, {len(self.errors)} errors, "
-            f"{self.degraded} degraded"
+            f"{self.degraded} degraded, {self.excluded} excluded"
         )
 
 
@@ -205,7 +208,14 @@ def upsert_episode(channel: Channel, data: dict) -> tuple[Episode, bool, int]:
         youtube_id=data["youtube_id"], defaults=defaults
     )
 
-    # ⚠️ Opportunistic only - the probe found 0 of 12 episodes with chapters.
+    return episode, created, upsert_chapters(episode, chapters)
+
+
+def upsert_chapters(episode: Episode, chapters: list[dict]) -> int:
+    """Write chapters keyed on their start second. Returns how many are new.
+
+    ⚠️ Opportunistic only - the probe found 0 of 12 episodes with chapters.
+    """
     chapters_created = 0
     for chapter in chapters:
         _, made = Chapter.objects.update_or_create(
@@ -214,43 +224,86 @@ def upsert_episode(channel: Channel, data: dict) -> tuple[Episode, bool, int]:
             defaults={"title": chapter["title"][:300], "end_sec": chapter.get("end_sec")},
         )
         chapters_created += int(made)
+    return chapters_created
 
-    return episode, created, chapters_created
+
+@dataclass
+class UploadCandidate:
+    """One video the Data API listed on a channel's videos or streams tab."""
+
+    youtube_id: str
+    kind: str
+    details: dict  # one `youtube_api.video_details` entry
+    is_new: bool
+
+    @property
+    def title(self) -> str:
+        return self.details.get("title") or ""
+
+    @property
+    def duration_sec(self) -> int | None:
+        return self.details.get("duration_sec")
+
+    @property
+    def upload_date(self) -> str | None:
+        return self.details.get("upload_date")
+
+    @property
+    def is_unfinished(self) -> bool:
+        """A scheduled premiere or a stream that is live right now: listed, not an episode yet."""
+        return self.details.get("live_status") in ("upcoming", "live")
 
 
-def sync_channel_via_api(channel: Channel, *, limit: int | None = 50) -> IngestionResult:
-    """Daily sync of one KNOWN channel through the YouTube Data API.
+@dataclass
+class UploadListing:
+    """What a channel's tabs hold right now, before anything is written."""
 
-    🎯 The intended steady state for the recurring sync: quota-based (a few
-    units per channel per day), immune to the yt-dlp soft-block, and TOS-blessed.
-    The yt-dlp path remains for one-time backfills and metadata repair.
+    channel: Channel
+    candidates: list[UploadCandidate] = field(default_factory=list)
+    # On the exclusion list - never written, and never asked about again.
+    excluded: list[str] = field(default_factory=list)
+    # Listed in the playlist but absent from `videos.list`: deleted or private.
+    invisible: list[str] = field(default_factory=list)
+    # Tabs where EVERY listed id was new, so older uploads may sit past `limit`.
+    window_full: list[str] = field(default_factory=list)
+
+    @property
+    def new(self) -> list[UploadCandidate]:
+        return [candidate for candidate in self.candidates if candidate.is_new]
+
+
+def list_channel_uploads(channel: Channel, *, limit: int | None = 50) -> UploadListing:
+    """List the newest uploads of one KNOWN channel through the Data API. Writes nothing.
 
     Uses the derived `UULF` (videos tab) / `UULV` (streams tab) playlists, so
     Shorts stay structurally excluded - same guarantee as yt-dlp's tab listing.
-
-    ⚠️ The API never STATES availability (it returns members-only videos but
-    nothing in the response says so - measured 2026-08-13). Existing rows keep
-    their stored availability via `upsert_episode`'s absent-means-unknown
-    guards; a brand-new members-only episode would arrive here flagged public
-    until the next yt-dlp pass corrects it.
+    Costs ~1 quota unit per playlist page plus 1 per 50 ids.
     """
-    from podcast.ingestion.thumbnails import best_thumbnail_url
+    from podcast.data import removed_episode_ids
     from podcast.ingestion.youtube_api import (
         playlist_video_ids,
         uploads_playlists,
         video_details,
     )
 
-    result = IngestionResult(channel=channel)
+    listing = UploadListing(channel=channel)
     playlists = uploads_playlists(channel.youtube_channel_id)
 
     kind_by_id: dict[str, str] = {}
+    listed_by_kind: dict[str, list[str]] = {}
     for kind, playlist_id in (
         (Episode.ContentKind.VIDEO, playlists["videos"]),
         (Episode.ContentKind.STREAM, playlists["streams"]),
     ):
-        for video_id in playlist_video_ids(playlist_id, limit=limit):
+        listed = playlist_video_ids(playlist_id, limit=limit)
+        listed_by_kind[kind] = listed
+        for video_id in listed:
             kind_by_id.setdefault(video_id, kind)
+
+    excluded = removed_episode_ids()
+    listing.excluded = [video_id for video_id in kind_by_id if video_id in excluded]
+    for video_id in listing.excluded:
+        del kind_by_id[video_id]
 
     details = video_details(kind_by_id)
     known_ids = set(
@@ -262,45 +315,95 @@ def sync_channel_via_api(channel: Channel, *, limit: int | None = 50) -> Ingesti
     for video_id, kind in kind_by_id.items():
         info = details.get(video_id)
         if not info:
-            continue  # invisible to the API (members-only/deleted) - never guess
+            listing.invisible.append(video_id)  # deleted/private - never guess
+            continue
+        listing.candidates.append(
+            UploadCandidate(
+                youtube_id=video_id, kind=kind, details=info, is_new=video_id not in known_ids
+            )
+        )
 
+    for kind, listed in listed_by_kind.items():
+        if limit and len(listed) >= limit and not known_ids.intersection(listed):
+            listing.window_full.append(kind)
+
+    return listing
+
+
+def persist_uploads(
+    channel: Channel, candidates: list[UploadCandidate], result: IngestionResult
+) -> list[Episode]:
+    """Upsert listed uploads into `result`. Returns the episodes CREATED.
+
+    ⚠️ The API never STATES availability (it returns members-only videos but
+    nothing in the response says so - measured 2026-08-13). Existing rows keep
+    their stored availability via `upsert_episode`'s absent-means-unknown
+    guards; a brand-new members-only episode lands flagged public until a
+    yt-dlp pass states otherwise (`services/new_episodes.enrich_episode`).
+    """
+    from podcast.ingestion.thumbnails import best_thumbnail_url
+
+    created_episodes: list[Episode] = []
+    for candidate in candidates:
+        info = candidate.details
         data = {
-            "youtube_id": video_id,
+            "youtube_id": candidate.youtube_id,
             "title": info["title"],
             "description": info["description"],
             "upload_date": info["upload_date"],
             "duration_sec": info["duration_sec"],
-            "url": f"https://www.youtube.com/watch?v={video_id}",
-            "content_kind": kind,
+            "url": f"https://www.youtube.com/watch?v={candidate.youtube_id}",
+            "content_kind": candidate.kind,
             "view_count": info["view_count"],
             "like_count": info["like_count"],
             "yt_comment_count": info["yt_comment_count"],
-            # availability deliberately absent - the API cannot see it, and
-            # upsert_episode keeps the stored value for existing rows. A NEW
-            # row visible to the public API is public by definition.
+            # availability deliberately absent for existing rows - the API cannot
+            # see it, and upsert_episode keeps the stored value.
         }
-        if video_id not in known_ids:
-            # ⚠️ Provisional: the API cannot distinguish members-only, so a new
-            # episode lands as public until a yt-dlp pass states otherwise.
+        if candidate.is_new:
             data["availability"] = Episode.Availability.PUBLIC
-            data["thumbnail_url"] = best_thumbnail_url(video_id)
+            data["thumbnail_url"] = best_thumbnail_url(candidate.youtube_id)
 
         try:
-            _, created, chapters = upsert_episode(channel, data)
+            episode, created, chapters = upsert_episode(channel, data)
         except Exception as exc:
-            logger.exception("Sync failed to persist %s", video_id)
-            result.errors.append({"youtube_id": video_id, "error": str(exc)})
+            logger.exception("Sync failed to persist %s", candidate.youtube_id)
+            result.errors.append({"youtube_id": candidate.youtube_id, "error": str(exc)})
             continue
         result.created += int(created)
         result.updated += int(not created)
         result.chapters_created += chapters
+        if created:
+            created_episodes.append(episode)
+    return created_episodes
 
+
+def finish_channel_sync(channel: Channel, result: IngestionResult) -> None:
+    """Measure what was written, and stamp the channel as synced."""
     from podcast.services.metadata_repair import degraded_queryset
 
     result.degraded = degraded_queryset(channel).count()
-
     channel.last_synced_at = timezone.now()
     channel.save(update_fields=["last_synced_at"])
+
+
+def sync_channel_via_api(channel: Channel, *, limit: int | None = 50) -> IngestionResult:
+    """Daily sync of one KNOWN channel through the YouTube Data API.
+
+    🎯 The intended steady state for the recurring sync: quota-based (a few
+    units per channel per day), immune to the yt-dlp soft-block, and TOS-blessed.
+    The yt-dlp path remains for one-time backfills and metadata repair.
+
+    Writes every listed upload except excluded ones, with no review step. A
+    person reviewing new uploads first uses `manage.py sync_new_episodes`.
+    """
+    listing = list_channel_uploads(channel, limit=limit)
+    result = IngestionResult(channel=channel, excluded=len(listing.excluded))
+    # A premiere still counting down would land with a duration of 0. The run
+    # after it airs picks it up as an ordinary new upload.
+    ready = [c for c in listing.candidates if not (c.is_new and c.is_unfinished)]
+    persist_uploads(channel, ready, result)
+    finish_channel_sync(channel, result)
 
     from podcast.services.indexing import schedule_channel_reindex
 
@@ -323,20 +426,28 @@ def backfill_channel(
     Safe to re-run: `update_or_create` on youtube_id means a second pass changes no
     row counts.
     """
+    from podcast.data import removed_episode_ids
+
     payload = fetch_channel(
         target, limit=limit, verify_thumbnails=verify_thumbnails, progress=progress
     )
     result = IngestionResult(errors=list(payload.errors))
 
+    # 🚨 Same guard as the Data API path: a purged promo clip still sits on its
+    # channel's videos tab, and this loop would otherwise recreate it.
+    excluded = removed_episode_ids()
+    videos = [data for data in payload.videos if data.get("youtube_id") not in excluded]
+    result.excluded = len(payload.videos) - len(videos)
+
     if dry_run:
-        result.skipped = len(payload.videos)
-        logger.info("Dry run: would upsert %d episodes", len(payload.videos))
+        result.skipped = len(videos)
+        logger.info("Dry run: would upsert %d episodes", len(videos))
         return result
 
     channel = upsert_channel(payload)
     result.channel = channel
 
-    for data in payload.videos:
+    for data in videos:
         try:
             _, created, chapters = upsert_episode(channel, dict(data))
         except Exception as exc:
@@ -351,12 +462,7 @@ def backfill_channel(
     # 🚨 The completeness check the 2026-08-09 backfill did not have. A throttled run
     # finishes with 0 errors while silently dropping duration/availability, so the run
     # MUST measure what it actually wrote rather than trusting its own error count.
-    from podcast.services.metadata_repair import degraded_queryset
-
-    result.degraded = degraded_queryset(channel).count()
-
-    channel.last_synced_at = timezone.now()
-    channel.save(update_fields=["last_synced_at"])
+    finish_channel_sync(channel, result)
 
     # Newly ingested episodes are invisible to search until indexed.
     from podcast.services.indexing import schedule_channel_reindex

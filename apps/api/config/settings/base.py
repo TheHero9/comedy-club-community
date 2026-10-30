@@ -320,6 +320,12 @@ TRANSCRIPT_FETCH_DELAY = float(env_str("TRANSCRIPT_FETCH_DELAY", "1.0"))
 # "no captions" is true on a date, not forever.
 TRANSCRIPT_RECHECK_DAYS = 90
 
+# Days after upload during which "no captions" is NOT recorded. YouTube adds the
+# ASR track hours to days after upload, and an `unavailable` row is not looked
+# at again for TRANSCRIPT_RECHECK_DAYS. Inside this window nothing is written,
+# so the next run simply asks again. See services/transcripts.is_fresh_upload.
+TRANSCRIPT_FRESH_UPLOAD_DAYS = 7
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------

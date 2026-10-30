@@ -131,6 +131,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  segments created : {result.segments_created}")
         self.stdout.write(f"  words            : {result.words}")
         self.stdout.write(f"  no captions      : {result.unavailable}")
+        self.stdout.write(f"  too new to tell  : {result.waiting}")
         self.stdout.write(f"  throttled        : {result.throttled}")
         self.stdout.write(f"  errors           : {len(result.errors)}")
 

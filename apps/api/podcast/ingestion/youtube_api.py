@@ -116,6 +116,10 @@ def video_details(video_ids: Iterable[str]) -> dict[str, dict]:
                     int(stats["commentCount"]) if "commentCount" in stats else None
                 ),
                 "is_stream": "liveStreamingDetails" in item,
+                # "upcoming" (a scheduled premiere or stream), "live", or "none".
+                # The first two are already in the uploads playlist, with a
+                # duration of 0 and no captions - not an episode yet.
+                "live_status": snippet.get("liveBroadcastContent") or "none",
             }
     return out
 

@@ -74,8 +74,15 @@ def repair_episode(episode: Episode) -> tuple[bool, bool]:
 
     Returns (repaired, availability_changed).
     """
-    info = fetch_video_info(episode.youtube_id)
+    return apply_full_response(episode, fetch_video_info(episode.youtube_id))
 
+
+def apply_full_response(episode: Episode, info: dict) -> tuple[bool, bool]:
+    """Write the yt-dlp-only facts from a response, only if it is a full one.
+
+    Returns (repaired, availability_changed). Also refreshes the in-memory
+    `episode`, so a caller holding it does not save a stale availability back.
+    """
     if not is_full_response(info):
         return False, False
 
@@ -108,6 +115,8 @@ def repair_episode(episode: Episode) -> tuple[bool, bool]:
             updates[target] = value
 
     Episode.objects.filter(pk=episode.pk).update(**updates)
+    for field_name, value in updates.items():
+        setattr(episode, field_name, value)
     return True, availability_changed
 
 

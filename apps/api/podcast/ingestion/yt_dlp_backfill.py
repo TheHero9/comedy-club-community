@@ -231,16 +231,21 @@ def shape_video(info: dict, video_id: str, tab: str, *, verify_thumbnail: bool =
         "view_count": info.get("view_count"),
         "like_count": info.get("like_count"),
         "yt_comment_count": info.get("comment_count"),
-        "chapters": [
-            {
-                "title": (chapter.get("title") or "").strip(),
-                "start_sec": int(chapter.get("start_time") or 0),
-                "end_sec": int(chapter["end_time"]) if chapter.get("end_time") else None,
-            }
-            for chapter in (info.get("chapters") or [])
-            if chapter.get("title")
-        ],
+        "chapters": shape_chapters(info),
     }
+
+
+def shape_chapters(info: dict) -> list[dict]:
+    """yt-dlp chapters as `upsert_chapters` takes them. Absent means none."""
+    return [
+        {
+            "title": (chapter.get("title") or "").strip(),
+            "start_sec": int(chapter.get("start_time") or 0),
+            "end_sec": int(chapter["end_time"]) if chapter.get("end_time") else None,
+        }
+        for chapter in (info.get("chapters") or [])
+        if chapter.get("title")
+    ]
 
 
 # ---------------------------------------------------------------------------

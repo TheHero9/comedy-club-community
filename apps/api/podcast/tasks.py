@@ -224,8 +224,8 @@ def fetch_episode_transcript(self, episode_id: int) -> dict:
     return {
         "episode_id": episode_id,
         "outcome": outcome,
-        "segments": transcript.segment_count,
-        "words": transcript.word_count,
+        "segments": transcript.segment_count if transcript else 0,
+        "words": transcript.word_count if transcript else 0,
     }
 
 

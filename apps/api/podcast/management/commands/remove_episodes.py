@@ -13,6 +13,10 @@ moments, chapters and watch events with it. The command counts all of that up
 front and prints it, because "delete 100 episodes" and "delete 100 episodes and
 14,000 transcript segments" are different decisions.
 
+🚨 Every deleted id is APPENDED to `podcast/data/removed-episodes.txt`. Without
+that, the next sync lists the same video on its channel and recreates it, and the
+removal silently undoes itself. An id already on the list is not added twice.
+
 ✅ A full JSON dump of every deleted row is written BEFORE anything is removed.
 There is no undo otherwise: re-running the backfill is the only other way back,
 and it would not restore community data.
@@ -30,6 +34,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from podcast.data import add_removed_episodes, exclusion_note, ids_in
 from podcast.models import (
     Chapter,
     Comment,
@@ -52,12 +57,7 @@ def parse_ids(path: Path) -> list[str]:
         payload = json.loads(text)
         return [row["youtube_id"] for row in payload.get("excluded", [])]
 
-    ids = []
-    for line in text.splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line:
-            ids.append(line)
-    return ids
+    return ids_in(text)
 
 
 class Command(BaseCommand):
@@ -173,6 +173,20 @@ class Command(BaseCommand):
             self.stdout.write(f"  {model_label:34s} {count:6d}")
         if orphan_deleted:
             self.stdout.write(f"  orphan topics                      {orphan_deleted:6d}")
+
+        added = add_removed_episodes(
+            (
+                (
+                    episode.youtube_id,
+                    exclusion_note(episode.channel.slug, episode.duration_sec, episode.title),
+                )
+                for episode in episodes
+            ),
+            reason="Removed with manage.py remove_episodes",
+        )
+        self.stdout.write(
+            f"exclusion list: {len(added)} id(s) added, so no sync recreates them"
+        )
         self.stdout.write("")
         self.stdout.write(f"episodes remaining: {Episode.objects.count()}")
 

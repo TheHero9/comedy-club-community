@@ -49,6 +49,16 @@ because it prerenders against the live API. This is harmless (a failed build nev
 replaces the current deployment, and the project is paused anyway), but do not chase
 it as a bug.
 
+## 🚨 Since 2026-10-30 the LOCAL database is the master copy
+
+The 10-13 dump was restored into local Postgres (the old local DB is kept as
+`podcast_local_20261030`), and `manage.py sync_new_episodes` has been adding new
+uploads there since. So the Railway volume is now **behind**. Turning production
+back on means restoring a fresh `pg_dump` of LOCAL into production (the "If a volume
+did not survive" path below, with the local dump), then `reindex`. That is safe for
+one reason only: production cannot take a write while it is off. See
+`specs/26-new-episode-pipeline/02-implementation-plan.md` § 5.
+
 ## ▶️ Turning it back ON (in this order, never in parallel)
 
 1. **Data services first: Postgres, then Redis, then Meilisearch.** These are image
